@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Make `DeferredEntity::new` and `DeferredChanges` public.
+- Make `DeferredEntity::new`, `DeferredEntity::flush` and `DeferredChanges` public.
 
 ## [0.34.3] - 2025-07-01
 
