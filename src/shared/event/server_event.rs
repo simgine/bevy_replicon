@@ -29,7 +29,9 @@ use crate::{
     shared::{postcard_utils, replication::client_ticks::ClientTicks},
 };
 
-/// An extension trait for [`App`] for creating client events.
+/// An extension trait for [`App`] for creating server events.
+///
+/// See also [`ClientEventAppExt`] for client events and [`ServerTriggerAppExt`] for triggers.
 pub trait ServerEventAppExt {
     /// Registers a remote server event.
     ///
@@ -45,8 +47,7 @@ pub trait ServerEventAppExt {
     /// Unlike client events, server events are tied to replication. See [`Self::make_event_independent`]
     /// for more details.
     ///
-    /// See also [`ServerTriggerAppExt::add_server_trigger`], [`Self::add_server_event_with`] and the
-    /// [corresponding section](../index.html#from-server-to-client) from the quick start guide.
+    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
     fn add_server_event<E: Event + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
@@ -56,8 +57,8 @@ pub trait ServerEventAppExt {
 
     /// Same as [`Self::add_server_event`], but additionally maps server entities to client inside the event after receiving.
     ///
-    /// Always use it for events that contain entities.
-    /// See also [`Self::add_server_event`].
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
+    /// For details, see [`Component::map_entities`].
     fn add_mapped_server_event<E: Event + Serialize + DeserializeOwned + MapEntities>(
         &mut self,
         channel: Channel,

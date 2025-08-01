@@ -17,6 +17,8 @@ use super::{
 use crate::{prelude::*, shared::postcard_utils};
 
 /// An extension trait for [`App`] for creating client events.
+///
+/// See also [`ServerEventAppExt`] for server events and [`ClientTriggerAppExt`] for triggers.
 pub trait ClientEventAppExt {
     /// Registers a remote client event.
     ///
@@ -30,8 +32,7 @@ pub trait ClientEventAppExt {
     /// previously registered. But be careful, since on listen servers all events `E` are drained,
     /// which could break other Bevy or third-party plugin systems that listen for `E`.
     ///
-    /// See also [`ClientTriggerAppExt::add_client_trigger`], [`Self::add_client_event_with`] and the
-    /// [corresponding section](../index.html#from-client-to-server) from the quick start guide.
+    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
     fn add_client_event<E: Event + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
@@ -41,24 +42,11 @@ pub trait ClientEventAppExt {
 
     /// Same as [`Self::add_client_event`], but additionally maps client entities to server inside the event before sending.
     ///
-    /// Always use it for events that contain entities.
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
+    /// For details, see [`Component::map_entities`].
     ///
     /// [`Clone`] is required because, before sending, we need to map entities from the client to the server without
     /// modifying the original component.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use bevy::{prelude::*, ecs::entity::MapEntities};
-    /// # use bevy_replicon::prelude::*;
-    /// # use serde::{Deserialize, Serialize};
-    /// # let mut app = App::new();
-    /// # app.add_plugins(RepliconPlugins);
-    /// app.add_mapped_client_event::<MappedEvent>(Channel::Ordered);
-    ///
-    /// #[derive(Debug, Deserialize, Event, Serialize, Clone, MapEntities)]
-    /// struct MappedEvent(#[entities] Entity);
-    /// ```
     fn add_mapped_client_event<E: Event + Serialize + DeserializeOwned + MapEntities + Clone>(
         &mut self,
         channel: Channel,
