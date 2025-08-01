@@ -19,7 +19,8 @@ use crate::{
 
 /// An extension trait for [`App`] for creating client triggers.
 ///
-/// See also [`ClientTriggerExt`].
+/// See also [`ClientTriggerExt`] for triggering, [`ServerTriggerAppExt`] for server triggers
+/// and [`ClientEventAppExt`] for events.
 pub trait ClientTriggerAppExt {
     /// Registers a remote event that can be triggered using [`ClientTriggerExt::client_trigger`].
     ///
@@ -28,8 +29,7 @@ pub trait ClientTriggerAppExt {
     /// If [`ServerEventPlugin`] is enabled and [`RepliconClient`] is inactive, the event will also be triggered
     /// locally as [`FromClient<E>`] event with [`FromClient::client`] equal to [`SERVER`].
     ///
-    /// See also [`ClientEventAppExt::add_client_event`], [`Self::add_client_trigger_with`] and the
-    /// [corresponding section](../index.html#from-client-to-server) from the quick start guide.
+    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
     fn add_client_trigger<E: Event + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
@@ -43,7 +43,8 @@ pub trait ClientTriggerAppExt {
 
     /// Same as [`Self::add_client_trigger`], but additionally maps client entities to server inside the event before sending.
     ///
-    /// Always use it for events that contain entities.
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities].
+    /// For details, see [`Component::map_entities`].
     fn add_mapped_client_trigger<E: Event + Serialize + DeserializeOwned + MapEntities + Clone>(
         &mut self,
         channel: Channel,

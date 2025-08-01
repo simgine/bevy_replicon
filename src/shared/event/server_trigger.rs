@@ -19,7 +19,8 @@ use crate::{
 
 /// An extension trait for [`App`] for creating server triggers.
 ///
-/// See also [`ServerTriggerExt`].
+/// See also [`ServerTriggerExt`] for triggering, [`ClientTriggerAppExt`] for client triggers
+/// and [`ServerEventAppExt`] for events.
 pub trait ServerTriggerAppExt {
     /// Registers a remote event that can be triggered using [`ServerTriggerExt::server_trigger`].
     ///
@@ -28,8 +29,7 @@ pub trait ServerTriggerAppExt {
     /// If [`ClientEventPlugin`] is enabled and [`SERVER`] is a recipient of the event
     /// (not to be confused with trigger target), then `E` event will be emitted on the server as well.
     ///
-    /// See also [`Self::add_server_trigger_with`] and the [corresponding section](../index.html#from-server-to-client)
-    /// from the quick start guide.
+    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
     fn add_server_trigger<E: Event + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
@@ -43,7 +43,8 @@ pub trait ServerTriggerAppExt {
 
     /// Same as [`Self::add_server_trigger`], but additionally maps client entities to server inside the event before receiving.
     ///
-    /// Always use it for events that contain entities.
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities].
+    /// For details, see [`Component::map_entities`].
     fn add_mapped_server_trigger<E: Event + Serialize + DeserializeOwned + MapEntities>(
         &mut self,
         channel: Channel,
