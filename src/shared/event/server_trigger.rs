@@ -43,7 +43,7 @@ pub trait ServerTriggerAppExt {
 
     /// Same as [`Self::add_server_trigger`], but additionally maps client entities to server inside the event before receiving.
     ///
-    /// Always use it for events that contain entities. Entities must be annotated with `#[entities].
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
     fn add_mapped_server_trigger<E: Event + Serialize + DeserializeOwned + MapEntities>(
         &mut self,

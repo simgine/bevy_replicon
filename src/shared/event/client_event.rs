@@ -42,7 +42,7 @@ pub trait ClientEventAppExt {
 
     /// Same as [`Self::add_client_event`], but additionally maps client entities to server inside the event before sending.
     ///
-    /// Always use it for events that contain entities. Entities must be annotated with `#[entities].
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
     ///
     /// [`Clone`] is required because, before sending, we need to map entities from the client to the server without

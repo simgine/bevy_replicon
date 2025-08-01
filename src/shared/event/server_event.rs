@@ -57,7 +57,7 @@ pub trait ServerEventAppExt {
 
     /// Same as [`Self::add_server_event`], but additionally maps server entities to client inside the event after receiving.
     ///
-    /// Always use it for events that contain entities. Entities must be annotated with `#[entities].
+    /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
     fn add_mapped_server_event<E: Event + Serialize + DeserializeOwned + MapEntities>(
         &mut self,
