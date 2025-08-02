@@ -40,7 +40,7 @@ let mut scene = scene_deserializer
 
 // Re-insert `Replicated` component.
 for entity in &mut scene.entities {
-    entity.components.push(Replicated.clone_value());
+    entity.components.push(Replicated.to_dynamic());
 }
 ```
 */
