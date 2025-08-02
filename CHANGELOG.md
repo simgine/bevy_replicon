@@ -14,10 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - All contexts now store `AppTypeRegistry` instead of `TypeRegistry`. To get `TypeRegistry`, call `AppTypeRegistry::read`.
+- All events now use `ClientId` wrapper instead of `Entity`.
 - `AppTypeRegistry` now available on replication for observers.
-- Rename `FromClient::client_entity` into `FromClient::client`.
+- Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
 - Rename `replicon_channels` module into `channels`.
+
+## Removed
+
+- `SERVER`. Use `ClientId::Server` instead.
 
 ## [0.34.4] - 2025-07-29
 

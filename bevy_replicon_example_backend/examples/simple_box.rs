@@ -45,7 +45,7 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
                 PlayerBox {
                     color: GREEN.into(),
                 },
-                BoxOwner(SERVER),
+                BoxOwner(ClientId::Server),
             ));
         }
         Cli::Server { port } => {
@@ -64,7 +64,7 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
                 PlayerBox {
                     color: GREEN.into(),
                 },
-                BoxOwner(SERVER),
+                BoxOwner(ClientId::Server),
             ));
         }
         Cli::Client { port } => {
@@ -109,7 +109,7 @@ fn spawn_clients(trigger: Trigger<OnAdd, ConnectedClient>, mut commands: Command
         PlayerBox {
             color: Color::srgb(r, g, b),
         },
-        BoxOwner(trigger.target()),
+        BoxOwner(trigger.target().into()),
     ));
 }
 
@@ -121,7 +121,7 @@ fn despawn_clients(
 ) {
     let (entity, _) = boxes
         .iter()
-        .find(|&(_, owner)| **owner == trigger.target())
+        .find(|&(_, owner)| **owner == trigger.target().into())
         .expect("all clients should have entities");
     commands.entity(entity).despawn();
 }
@@ -157,15 +157,15 @@ fn apply_movement(
     mut boxes: Query<(&BoxOwner, &mut BoxPosition)>,
 ) {
     const MOVE_SPEED: f32 = 300.0;
-    info!("received movement from `{}`", trigger.client);
+    info!("received movement from `{}`", trigger.client_id);
 
     // Find the sender entity. We don't include the entity as a trigger target to save traffic, since the server knows
     // which entity to apply the input to. We could have a resource that maps connected clients to controlled entities,
     // but we didn't implement it for the sake of simplicity.
     let (_, mut position) = boxes
         .iter_mut()
-        .find(|&(owner, _)| **owner == trigger.client)
-        .unwrap_or_else(|| panic!("`{}` should be connected", trigger.client));
+        .find(|&(owner, _)| **owner == trigger.client_id)
+        .unwrap_or_else(|| panic!("`{}` should be connected", trigger.client_id));
 
     **position += *trigger.event * time.delta_secs() * MOVE_SPEED;
 }
@@ -228,7 +228,7 @@ struct BoxPosition(Vec2);
 ///
 /// It's not replicated and present only on server or singleplayer.
 #[derive(Component, Clone, Copy, Deref)]
-struct BoxOwner(Entity);
+struct BoxOwner(ClientId);
 
 /// A movement event for the controlled box.
 #[derive(Deserialize, Deref, Event, Serialize)]

@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod client_id;
 pub mod common_conditions;
 pub mod entity_serde;
 pub mod event;
@@ -161,13 +162,6 @@ impl Plugin for RepliconSharedPlugin {
         app.world_mut().insert_resource(protocol_hasher.finish());
     }
 }
-
-/// A placeholder entity for a connected client that refers to the listen server (when the server is also a client).
-///
-/// Equal to [`Entity::PLACEHOLDER`].
-///
-/// See also [`ToClients`] and [`FromClient`] events.
-pub const SERVER: Entity = Entity::PLACEHOLDER;
 
 /// Configures the insertion of [`AuthorizedClient`].
 ///

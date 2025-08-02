@@ -631,7 +631,7 @@ pub mod prelude {
     pub use super::{
         RepliconPlugins,
         shared::{
-            AuthMethod, RepliconSharedPlugin, SERVER,
+            AuthMethod, RepliconSharedPlugin,
             backend::{
                 DisconnectRequest,
                 channels::{Channel, RepliconChannels},
@@ -639,6 +639,7 @@ pub mod prelude {
                 replicon_client::{RepliconClient, RepliconClientStatus},
                 replicon_server::RepliconServer,
             },
+            client_id::ClientId,
             common_conditions::*,
             event::{
                 client_event::{ClientEventAppExt, FromClient},

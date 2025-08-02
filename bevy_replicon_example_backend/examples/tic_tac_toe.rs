@@ -247,15 +247,12 @@ fn apply_pick(
     players: Query<&Symbol>,
 ) {
     // It's good to check the received data because client could be cheating.
-    if trigger.client != SERVER {
+    if let ClientId::Client(client) = trigger.client_id {
         let symbol = *players
-            .get(trigger.client)
+            .get(client)
             .expect("all clients should have assigned symbols");
         if symbol != **turn_symbol {
-            error!(
-                "`{}` chose cell {} at wrong turn",
-                trigger.client, trigger.index
-            );
+            error!("`{client}` chose cell {} at wrong turn", trigger.index);
             return;
         }
     }
@@ -263,7 +260,7 @@ fn apply_pick(
     let Some((entity, _)) = cells.iter().find(|(_, cell)| cell.index == trigger.index) else {
         error!(
             "`{}` has chosen occupied or invalid cell {}",
-            trigger.client, trigger.index
+            trigger.client_id, trigger.index
         );
         return;
     };
@@ -330,18 +327,21 @@ fn init_client(
     cells: Query<(Entity, &Cell)>,
     server_symbol: Single<&Symbol, With<LocalPlayer>>,
 ) {
+    let client = trigger
+        .client_id
+        .entity()
+        .expect("protocol hash sent only from clients");
+
     // Since we using custom authorization,
     // we need to verify the protocol manually.
     if trigger.protocol != *protocol {
         // Notify client about the problem. No delivery
         // guarantee since we disconnect after sending.
         commands.server_trigger(ToClients {
-            mode: SendMode::Direct(trigger.client),
+            mode: SendMode::Direct(trigger.client_id),
             event: ProtocolMismatch,
         });
-        events.write(DisconnectRequest {
-            client: trigger.client,
-        });
+        events.write(DisconnectRequest { client });
     }
 
     // Sort local square entities to match them with the received.
@@ -357,19 +357,16 @@ fn init_client(
     }
 
     // Utilize client entity as a player for convenient lookups by `client`.
-    commands.entity(trigger.client).insert((
-        Player,
-        server_symbol.next(),
-        AuthorizedClient,
-        entity_map,
-    ));
+    commands
+        .entity(client)
+        .insert((Player, server_symbol.next(), AuthorizedClient, entity_map));
 
     commands.server_trigger_targets(
         ToClients {
-            mode: SendMode::Direct(trigger.client),
+            mode: SendMode::Direct(trigger.client_id),
             event: MakeLocal,
         },
-        trigger.client,
+        client,
     );
 
     commands.set_state(GameState::InGame);

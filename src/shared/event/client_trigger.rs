@@ -122,14 +122,14 @@ impl ClientTrigger {
     unsafe fn trigger_typed<E: Event>(commands: &mut Commands, client_events: PtrMut) {
         let client_events: &mut Events<FromClient<ClientTriggerEvent<E>>> =
             unsafe { client_events.deref_mut() };
-        for FromClient { client, event } in client_events.drain() {
+        for FromClient { client_id, event } in client_events.drain() {
             debug!(
-                "triggering `{}` from `{client}`",
+                "triggering `{}` from `{client_id}`",
                 any::type_name::<FromClient<E>>()
             );
             commands.trigger_targets(
                 FromClient {
-                    client,
+                    client_id,
                     event: event.event,
                 },
                 event.targets,

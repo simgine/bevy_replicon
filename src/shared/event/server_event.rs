@@ -374,15 +374,15 @@ impl ServerEvent {
                     server.send(client_entity, self.channel_id, message.clone());
                 }
             }
-            SendMode::BroadcastExcept(client) => {
-                for client_entity in clients {
-                    if client_entity != client {
-                        server.send(client_entity, self.channel_id, message.clone());
+            SendMode::BroadcastExcept(ignored_id) => {
+                for client in clients {
+                    if ignored_id != client.into() {
+                        server.send(client, self.channel_id, message.clone());
                     }
                 }
             }
-            SendMode::Direct(client) => {
-                if client != SERVER {
+            SendMode::Direct(client_id) => {
+                if let ClientId::Client(client) = client_id {
                     server.send(client, self.channel_id, message.clone());
                 }
             }
@@ -542,13 +542,13 @@ impl ServerEvent {
                 SendMode::Broadcast => {
                     events.send(event);
                 }
-                SendMode::BroadcastExcept(entity) => {
-                    if entity != SERVER {
+                SendMode::BroadcastExcept(ignored_id) => {
+                    if ignored_id != ClientId::Server {
                         events.send(event);
                     }
                 }
-                SendMode::Direct(entity) => {
-                    if entity == SERVER {
+                SendMode::Direct(client_id) => {
+                    if client_id == ClientId::Server {
                         events.send(event);
                     }
                 }
@@ -805,44 +805,47 @@ impl BufferedServerEvents {
             for mut event in set.events.drain(..) {
                 match event.mode {
                     SendMode::Broadcast => {
-                        for (client_entity, ticks) in
+                        for (client, ticks) in
                             clients.iter().filter(|(e, _)| !set.excluded.contains(e))
                         {
                             if let Some(ticks) = ticks {
-                                event.send(server, client_entity, ticks)?;
+                                event.send(server, client, ticks)?;
                             } else {
                                 debug!(
-                                    "ignoring broadcast for channel {} for non-authorized client `{client_entity}`",
+                                    "ignoring broadcast for channel {} for non-authorized client `{client}`",
                                     event.channel_id
                                 );
                             }
                         }
                     }
-                    SendMode::BroadcastExcept(client) => {
-                        for (client_entity, ticks) in
-                            clients.iter().filter(|(e, _)| !set.excluded.contains(e))
+                    SendMode::BroadcastExcept(ignored_id) => {
+                        for (client, ticks) in
+                            clients.iter().filter(|(c, _)| !set.excluded.contains(c))
                         {
-                            if client_entity == client {
+                            if ignored_id == client.into() {
                                 continue;
                             }
+
                             if let Some(ticks) = ticks {
-                                event.send(server, client_entity, ticks)?;
+                                event.send(server, client, ticks)?;
                             } else {
                                 debug!(
-                                    "ignoring broadcast except `{client}` for channel {} for non-authorized client `{client_entity}`",
+                                    "ignoring broadcast except `{ignored_id}` for channel {} for non-authorized client `{client}`",
                                     event.channel_id
                                 );
                             }
                         }
                     }
-                    SendMode::Direct(client) => {
-                        if client != SERVER && !set.excluded.contains(&client) {
-                            if let Ok((client_entity, ticks)) = clients.get(client) {
+                    SendMode::Direct(client_id) => {
+                        if let ClientId::Client(client) = client_id
+                            && !set.excluded.contains(&client)
+                        {
+                            if let Ok((_, ticks)) = clients.get(client) {
                                 if let Some(ticks) = ticks {
-                                    event.send(server, client_entity, ticks)?;
+                                    event.send(server, client, ticks)?;
                                 } else {
                                     error!(
-                                        "ignoring direct event for non-authorized client `{client_entity}`, \
+                                        "ignoring direct event for non-authorized client `{client}`, \
                                          mark it as independent to allow this"
                                     );
                                 }
@@ -881,9 +884,9 @@ pub enum SendMode {
     /// Send to every client.
     Broadcast,
     /// Send to every client except the specified connected client.
-    BroadcastExcept(Entity),
+    BroadcastExcept(ClientId),
     /// Send only to the specified client.
-    Direct(Entity),
+    Direct(ClientId),
 }
 
 /// Default event serialization function.
