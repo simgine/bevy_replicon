@@ -37,7 +37,7 @@ pub trait ServerEventAppExt {
     ///
     /// After emitting [`ToClients<E>`] event on the server, `E` event  will be emitted on clients.
     ///
-    /// If [`ClientEventPlugin`] is enabled and [`SERVER`] is a recipient of the event, then
+    /// If [`ClientEventPlugin`] is enabled and [`ClientId::Server`] is a recipient of the event, then
     /// [`ToClients<E>`] event will be drained after sending to clients and `E` event will be emitted
     /// on the server as well.
     ///

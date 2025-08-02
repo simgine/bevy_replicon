@@ -25,8 +25,8 @@ pub trait ClientEventAppExt {
     /// After emitting `E` event on the client, [`FromClient<E>`] event will be emitted on the server.
     ///
     /// If [`ServerEventPlugin`] is enabled and [`RepliconClient`] is inactive, the event will be drained
-    /// right after sending and re-emitted locally as [`FromClient<E>`] event with [`FromClient::client`]
-    /// equal to [`SERVER`].
+    /// right after sending and re-emitted locally as [`FromClient<E>`] event with [`FromClient::client_id`]
+    /// equal to [`ClientId::Server`].
     ///
     /// Calling [`App::add_event`] is not necessary. Can used for regular events that were
     /// previously registered. But be careful, since on listen servers all events `E` are drained,

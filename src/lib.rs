@@ -450,8 +450,8 @@ only if [`client_connected`]. This way for singleplayer replication systems won'
 for listen server replication will only be sending (server world is already in the correct state).
 
 For events it's a bit trickier. For all client events we internally drain events as `E` and re-emit
-them as [`FromClient<E>`] locally with a special [`SERVER`] entity if [`server_or_singleplayer`].
-For server events we drain [`ToClients<E>`] and, if the [`SERVER`] entity is the recipient of the event,
+them as [`FromClient<E>`] locally with [`ClientId::Server`] if [`server_or_singleplayer`] is `true`.
+For server events we drain [`ToClients<E>`] and, if the [`ClientId::Server`] is the recipient of the event,
 re-emit it as `E` locally.
 
 ## Organizing your game code
