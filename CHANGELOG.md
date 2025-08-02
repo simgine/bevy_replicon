@@ -10,15 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `ClientSet::PrepareSend` and `ServerSet::PrepareSend` system sets. Backends should use these sets to add `PostUpdate` logic that needs to run before sending data on clients and servers.
+- `compact_entity` with functions for `serde` to pack `Entity` more efficienly.
+- `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` helpers that use `compact_entity`.
 
 ### Changed
 
+- Make custom entity ser/de compatible with `serde` attributes.
 - All contexts now store `AppTypeRegistry` instead of `TypeRegistry`. To get `TypeRegistry`, call `AppTypeRegistry::read`.
 - `AppTypeRegistry` now available on replication for observers.
 - Made `postcard_utils` a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
 - Rename `FromClient::client_entity` into `FromClient::client`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
 - Rename `replicon_channels` module into `channels`.
+
+## Removed
+
+- `entity_serde::serialize_entity` and `entity_serde::deserialize_entity`. Use `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` respectively; just swap the argument order.
 
 ## [0.34.4] - 2025-07-29
 

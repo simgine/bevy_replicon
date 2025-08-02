@@ -5,11 +5,8 @@ use bevy::{prelude::*, ptr::Ptr};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::{
-        entity_serde,
-        replication::replication_registry::{
-            FnsId, component_fns::ComponentFns, ctx::SerializeCtx, rule_fns::UntypedRuleFns,
-        },
+    shared::replication::replication_registry::{
+        FnsId, component_fns::ComponentFns, ctx::SerializeCtx, rule_fns::UntypedRuleFns,
     },
 };
 
@@ -74,7 +71,7 @@ impl SerializedData {
     pub(crate) fn write_entity(&mut self, entity: Entity) -> Result<Range<usize>> {
         let start = self.len();
 
-        entity_serde::serialize_entity(&mut self.0, entity)?;
+        postcard_utils::entity_to_extend_mut(&entity, &mut self.0)?;
 
         let end = self.len();
 

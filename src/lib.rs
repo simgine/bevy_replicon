@@ -570,6 +570,12 @@ A tick for an entity is confirmed if one of the following is true:
   messages have been received.
 - [`SendRate::send_mutations`] returns `false` for all replicated components on the entity for every tick prior to the current one.
 
+### Optimizing entity serialization
+
+Serialization of [`Entity`] is optimized for use in scenes, but it’s not very efficient for networking. Because of this, we use our own implementation.
+See the [`compact_entity`] module if you want to apply this optimization to entities in your own types. You can also use
+[`postcard_utils::entity_to_extend_mut`] and [`postcard_utils::entity_from_buf`] for manual writing.
+
 # Eventual consistency
 
 All events, inserts, removals and despawns will be applied to clients in the same order as on the server.
@@ -619,6 +625,7 @@ extern crate alloc;
 
 #[cfg(feature = "client")]
 pub mod client;
+pub mod compact_entity;
 pub mod postcard_utils;
 #[cfg(feature = "scene")]
 pub mod scene;

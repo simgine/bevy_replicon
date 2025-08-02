@@ -1,6 +1,5 @@
 pub mod backend;
 pub mod common_conditions;
-pub mod entity_serde;
 pub mod event;
 pub mod protocol;
 pub mod replication;

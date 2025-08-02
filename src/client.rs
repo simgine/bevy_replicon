@@ -14,7 +14,6 @@ use crate::{
     prelude::*,
     shared::{
         backend::channels::{ClientChannel, ServerChannel},
-        entity_serde,
         replication::{
             command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},
@@ -390,8 +389,8 @@ fn apply_entity_mapping(
     params: &mut ReceiveParams,
     message: &mut Bytes,
 ) -> Result<()> {
-    let server_entity = entity_serde::deserialize_entity(message)?;
-    let client_entity = entity_serde::deserialize_entity(message)?;
+    let server_entity = postcard_utils::entity_from_buf(message)?;
+    let client_entity = postcard_utils::entity_from_buf(message)?;
 
     if let Ok(mut entity) = world.get_entity_mut(client_entity) {
         debug!("applying mapping from {server_entity:?} to {client_entity:?}");
@@ -417,7 +416,7 @@ fn apply_despawn(
     // The entity might have already been despawned because of hierarchy or
     // with the last replication message, but the server might not yet have received confirmation
     // from the client and could include the deletion in the this message.
-    let server_entity = entity_serde::deserialize_entity(message)?;
+    let server_entity = postcard_utils::entity_from_buf(message)?;
     if let Some(client_entity) = params
         .entity_map
         .server_entry(server_entity)
@@ -439,7 +438,7 @@ fn apply_removals(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
-    let server_entity = entity_serde::deserialize_entity(message)?;
+    let server_entity = postcard_utils::entity_from_buf(message)?;
 
     let mut client_entity = match params.entity_map.server_entry(server_entity) {
         EntityEntry::Occupied(entry) => {
@@ -495,7 +494,7 @@ fn apply_changes(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
-    let server_entity = entity_serde::deserialize_entity(message)?;
+    let server_entity = postcard_utils::entity_from_buf(message)?;
 
     let world_cell = world.as_unsafe_world_cell();
     let entities = world_cell.entities();
@@ -618,7 +617,7 @@ fn apply_mutations(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
-    let server_entity = entity_serde::deserialize_entity(message)?;
+    let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
     let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
