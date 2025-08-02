@@ -10,10 +10,11 @@ use log::{debug, error, trace};
 use postcard::experimental::max_size::MaxSize;
 
 use crate::{
+    postcard_utils,
     prelude::*,
     shared::{
         backend::channels::{ClientChannel, ServerChannel},
-        entity_serde, postcard_utils,
+        entity_serde,
         replication::{
             command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},

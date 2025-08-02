@@ -619,6 +619,7 @@ extern crate alloc;
 
 #[cfg(feature = "client")]
 pub mod client;
+pub mod postcard_utils;
 #[cfg(feature = "scene")]
 pub mod scene;
 #[cfg(feature = "server")]

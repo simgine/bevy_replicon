@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// ```
 /// use bevy::prelude::*;
-/// use bevy_replicon::shared::postcard_utils;
+/// use bevy_replicon::postcard_utils;
 ///
 /// let transform = Transform::default();
 /// let mut message = Vec::new();
@@ -47,7 +47,7 @@ pub fn to_extend_mut<T: Serialize + ?Sized, W: Extend<u8>>(
 ///     prelude::*,
 ///     reflect::{serde::ReflectSerializer, TypeRegistry},
 /// };
-/// use bevy_replicon::shared::postcard_utils::ExtendMutFlavor;
+/// use bevy_replicon::postcard_utils::ExtendMutFlavor;
 /// use postcard::Serializer;
 /// use serde::Serialize;
 ///
@@ -99,7 +99,7 @@ impl<T: Extend<u8>> SerFlavor for ExtendMutFlavor<'_, T> {
 ///
 /// ```
 /// use bevy::prelude::*;
-/// use bevy_replicon::{bytes::Bytes, shared::postcard_utils};
+/// use bevy_replicon::{bytes::Bytes, postcard_utils};
 ///
 /// # let transform = Transform::default();
 /// # let mut message = Vec::new();
@@ -126,11 +126,11 @@ pub fn from_buf<'de, T: Deserialize<'de>, B: Buf>(buf: &'de mut B) -> postcard::
 ///
 /// ```
 /// # use bevy::{prelude::*, reflect::{serde::ReflectSerializer, TypeRegistry}};
-/// # use bevy_replicon::{shared::postcard_utils::ExtendMutFlavor};
+/// # use bevy_replicon::postcard_utils::ExtendMutFlavor;
 /// # use postcard::Serializer;
 /// # use serde::Serialize;
 /// use bevy::reflect::serde::ReflectDeserializer;
-/// use bevy_replicon::{bytes::Bytes, shared::postcard_utils::BufFlavor};
+/// use bevy_replicon::{bytes::Bytes, postcard_utils::BufFlavor};
 /// use postcard::Deserializer;
 /// use serde::de::DeserializeSeed;
 ///

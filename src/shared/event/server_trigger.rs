@@ -12,10 +12,7 @@ use super::{
     remote_targets::RemoteTargets,
     server_event::{self, ServerEvent},
 };
-use crate::{
-    prelude::*,
-    shared::{entity_serde, postcard_utils},
-};
+use crate::{postcard_utils, prelude::*, shared::entity_serde};
 
 /// An extension trait for [`App`] for creating server triggers.
 ///

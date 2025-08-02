@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use bytes::Bytes;
 
-use super::postcard_utils;
+use crate::postcard_utils;
 
 /// Deserializes `entity` from compressed index and generation.
 ///
