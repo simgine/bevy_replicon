@@ -73,18 +73,21 @@ pub struct RepliconSharedPlugin {
         protocol: Res<ProtocolHash>,
         squares: Query<(Entity, &Square)>,
     ) {
+        let client = trigger
+            .client_id
+            .entity()
+            .expect("protocol hash sent only from clients");
+
         // Since we using custom authorization,
         // we need to verify the protocol manually.
         if trigger.protocol != *protocol {
             // Notify client about the problem. No delivery
             // guarantee since we disconnect after sending.
             commands.server_trigger(ToClients {
-                mode: SendMode::Direct(trigger.client),
+                mode: SendMode::Direct(trigger.client_id),
                 event: ProtocolMismatch,
             });
-            events.write(DisconnectRequest {
-                client: trigger.client,
-            });
+            events.write(DisconnectRequest { client });
         }
 
         // Sort local square entities to match them with the received.
@@ -104,9 +107,7 @@ pub struct RepliconSharedPlugin {
         }
 
         // Manually mark client as authorized and insert mappings.
-        commands
-            .entity(trigger.client)
-            .insert((AuthorizedClient, entity_map));
+        commands.entity(client).insert((AuthorizedClient, entity_map));
 
         // Run other commands to start the game...
     }

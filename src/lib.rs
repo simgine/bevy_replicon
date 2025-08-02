@@ -266,8 +266,8 @@ fn send_events(mut events: EventWriter<ExampleEvent>) {
 }
 
 fn receive_events(mut events: EventReader<FromClient<ExampleEvent>>) {
-    for FromClient { client, event } in events.read() {
-        info!("received event `{event:?}` from client `{client}`");
+    for FromClient { client_id, event } in events.read() {
+        info!("received event `{event:?}` from client `{client_id}`");
     }
 }
 
@@ -302,7 +302,7 @@ fn send_events(mut commands: Commands) {
 }
 
 fn receive_events(trigger: Trigger<FromClient<ExampleEvent>>) {
-    info!("received event `{:?}` from client `{}`", **trigger, trigger.client);
+    info!("received event `{:?}` from client `{}`", **trigger, trigger.client_id);
 }
 # #[derive(Event, Debug, Deserialize, Serialize)]
 # struct ExampleEvent;
