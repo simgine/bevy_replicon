@@ -23,7 +23,7 @@ pub trait ServerTriggerAppExt {
     ///
     /// After triggering [`ToClients<E>`] event on the server, `E` event will be triggered on clients.
     ///
-    /// If [`ClientEventPlugin`] is enabled and [`SERVER`] is a recipient of the event
+    /// If [`ClientEventPlugin`] is enabled and [`ClientId::Server`] is a recipient of the event
     /// (not to be confused with trigger target), then `E` event will be emitted on the server as well.
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
@@ -215,7 +215,7 @@ fn trigger_deserialize<'a, E>(
 /// See also [`ServerTriggerAppExt`].
 pub trait ServerTriggerExt {
     /// Like [`Commands::trigger`], but triggers `E` on server and locally
-    /// if [`SERVER`] is a recipient of the event).
+    /// if [`ClientId::Server`] is a recipient of the event).
     fn server_trigger(&mut self, event: ToClients<impl Event>);
 
     /// Like [`Self::server_trigger`], but allows you to specify target entities, similar to

@@ -37,7 +37,7 @@ struct Bullet;
 /// System that shoots a bullet and spawns it on the client.
 fn shoot_bullet(mut commands: Commands, mut bullet_events: EventWriter<SpawnBullet>) {
     let entity = commands.spawn(Bullet).id();
-    bullet_events.send(SpawnBullet(entity));
+    bullet_events.write(SpawnBullet(entity));
 }
 
 /// Validation to check if client is not cheating or the simulation is correct.
@@ -50,9 +50,11 @@ fn confirm_bullet(
     mut clients: Query<&mut ClientEntityMap>,
 ) {
     for event in bullet_events.read() {
-        let mut entity_map = clients.get_mut(event.client).unwrap();
         let bullet = commands.spawn(Bullet).id(); // You can insert more components, they will be sent to the client's entity correctly.
-        entity_map.insert(bullet, event.0);
+        if let ClientId::Client(client) = event.client_id {
+            let mut entity_map = clients.get_mut(client).unwrap();
+            entity_map.insert(bullet, event.0);
+        }
     }
 }
 ```

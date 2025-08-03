@@ -211,21 +211,24 @@ fn check_protocol(
     mut events: EventWriter<DisconnectRequest>,
     protocol: Res<ProtocolHash>,
 ) {
+    let client = trigger
+        .client_id
+        .entity()
+        .expect("protocol hash sent only from clients");
+
     if **trigger == *protocol {
-        debug!("marking client `{}` as authorized", trigger.client);
-        commands.entity(trigger.client).insert(AuthorizedClient);
+        debug!("marking client `{client}` as authorized");
+        commands.entity(client).insert(AuthorizedClient);
     } else {
         debug!(
-            "disconnecting client `{}` due to protocol mismatch (client: `{:?}`, server: `{:?}`)",
-            trigger.client, **trigger, *protocol
+            "disconnecting client `{client}` due to protocol mismatch (client: `{:?}`, server: `{:?}`)",
+            **trigger, *protocol
         );
         commands.server_trigger(ToClients {
-            mode: SendMode::Direct(trigger.client),
+            mode: SendMode::Direct(trigger.client_id),
             event: ProtocolMismatch,
         });
-        events.write(DisconnectRequest {
-            client: trigger.client,
-        });
+        events.write(DisconnectRequest { client });
     }
 }
 

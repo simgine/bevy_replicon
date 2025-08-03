@@ -25,8 +25,8 @@ pub trait ClientEventAppExt {
     /// After emitting `E` event on the client, [`FromClient<E>`] event will be emitted on the server.
     ///
     /// If [`ServerEventPlugin`] is enabled and [`RepliconClient`] is inactive, the event will be drained
-    /// right after sending and re-emitted locally as [`FromClient<E>`] event with [`FromClient::client`]
-    /// equal to [`SERVER`].
+    /// right after sending and re-emitted locally as [`FromClient<E>`] event with [`FromClient::client_id`]
+    /// equal to [`ClientId::Server`].
     ///
     /// Calling [`App::add_event`] is not necessary. Can used for regular events that were
     /// previously registered. But be careful, since on listen servers all events `E` are drained,
@@ -298,7 +298,10 @@ impl ClientEvent {
                         "applying event `{}` from client `{client}`",
                         any::type_name::<E>()
                     );
-                    client_events.send(FromClient { client, event });
+                    client_events.send(FromClient {
+                        client_id: client.into(),
+                        event,
+                    });
                 }
                 Err(e) => debug!(
                     "ignoring event `{}` from client `{client}` that failed to deserialize: {e}",
@@ -333,7 +336,7 @@ impl ClientEvent {
                 any::type_name::<E>()
             );
             client_events.send_batch(events.drain().map(|event| FromClient {
-                client: SERVER,
+                client_id: ClientId::Server,
                 event,
             }));
         }
@@ -440,10 +443,10 @@ impl<E: Event> FromWorld for ClientEventReader<E> {
 /// Emitted only on server.
 #[derive(Clone, Copy, Event, Deref, DerefMut)]
 pub struct FromClient<T> {
-    /// Entity representing a connected client or [`SERVER`] that sent the event.
+    /// Sender of the event.
     ///
     /// See also [`ConnectedClient`].
-    pub client: Entity,
+    pub client_id: ClientId,
 
     /// Transmitted event.
     #[deref]

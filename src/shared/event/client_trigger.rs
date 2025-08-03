@@ -24,7 +24,7 @@ pub trait ClientTriggerAppExt {
     /// After triggering `E` event on the client, [`FromClient<E>`] event will be triggered on the server.
     ///
     /// If [`ServerEventPlugin`] is enabled and [`RepliconClient`] is inactive, the event will also be triggered
-    /// locally as [`FromClient<E>`] event with [`FromClient::client`] equal to [`SERVER`].
+    /// locally as [`FromClient<E>`] event with [`FromClient::client_id`] equal to [`ClientId::Server`].
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
     fn add_client_trigger<E: Event + Serialize + DeserializeOwned>(
@@ -119,14 +119,14 @@ impl ClientTrigger {
     unsafe fn trigger_typed<E: Event>(commands: &mut Commands, client_events: PtrMut) {
         let client_events: &mut Events<FromClient<ClientTriggerEvent<E>>> =
             unsafe { client_events.deref_mut() };
-        for FromClient { client, event } in client_events.drain() {
+        for FromClient { client_id, event } in client_events.drain() {
             debug!(
-                "triggering `{}` from `{client}`",
+                "triggering `{}` from `{client_id}`",
                 any::type_name::<FromClient<E>>()
             );
             commands.trigger_targets(
                 FromClient {
-                    client,
+                    client_id,
                     event: event.event,
                 },
                 event.targets,
