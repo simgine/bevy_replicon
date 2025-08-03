@@ -13,7 +13,7 @@ use bevy::{
 
 use crate::{
     prelude::*,
-    shared::replication::{replication_registry::FnsId, replication_rules::ReplicationRules},
+    shared::replication::{replication_registry::FnsId, rules::ReplicationRules},
 };
 
 /// Reader for removed components.

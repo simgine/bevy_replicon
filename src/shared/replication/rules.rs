@@ -62,7 +62,7 @@ pub trait AppRuleExt {
                 ctx::{SerializeCtx, WriteCtx},
                 ReplicationRegistry,
             },
-            replication_rules::{ReplicationBundle, ReplicationRule, ComponentRule},
+            rules::{ReplicationBundle, ReplicationRule, ComponentRule},
         },
         prelude::*,
     };

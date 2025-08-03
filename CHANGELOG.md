@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
 - Rename `replicon_channels` module into `channels`.
+- Rename `replication_rules` module into `rules`.
 
 ## Removed
 
