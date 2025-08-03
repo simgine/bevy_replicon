@@ -14,7 +14,7 @@ use log::{debug, trace};
 
 use crate::{
     prelude::*,
-    shared::replication::rules::{ComponentRule, ReplicationRules},
+    shared::replication::rules::{ReplicationRules, RuleComponent},
 };
 
 /// A [`SystemParam`] that wraps [`World`], but provides access only for replicated components.
@@ -209,7 +209,7 @@ pub(crate) struct ReplicatedArchetype {
     pub(super) id: ArchetypeId,
 
     /// Components marked as replicated.
-    pub(super) components: Vec<(ComponentRule, StorageType)>,
+    pub(super) components: Vec<(RuleComponent, StorageType)>,
 }
 
 impl ReplicatedArchetype {

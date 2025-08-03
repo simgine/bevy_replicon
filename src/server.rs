@@ -32,7 +32,7 @@ use crate::{
                 ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
                 rule_fns::UntypedRuleFns,
             },
-            rules::{ComponentRule, ReplicationRules},
+            rules::{ReplicationRules, RuleComponent},
             track_mutate_messages::TrackMutateMessages,
         },
     },
@@ -732,7 +732,7 @@ fn write_component_cached(
     rule_fns: &UntypedRuleFns,
     component_fns: &ComponentFns,
     ctx: &SerializeCtx,
-    component_rule: ComponentRule,
+    component_rule: RuleComponent,
     component: Ptr<'_>,
 ) -> Result<Range<usize>> {
     if let Some(component_range) = component_range.clone() {

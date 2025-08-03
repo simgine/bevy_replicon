@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make `postcard_utils` a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
 - Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
+- Rename `ComponentRule` into `RuleComponent` and `IntoComponentRule` into `IntoRuleComponent`.
 - Rename `replicon_channels` module into `channels`.
 - Rename `replication_rules` module into `rules`.
 - Rename `replication_registry` module into `registry`.
