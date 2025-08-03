@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All contexts now store `AppTypeRegistry` instead of `TypeRegistry`. To get `TypeRegistry`, call `AppTypeRegistry::read`.
 - All events now use `ClientId` wrapper instead of `Entity`.
 - `AppTypeRegistry` now available on replication for observers.
-- Made `postcard_utils` a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
+- Make `postcard_utils` a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
 - Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
 - Rename `replicon_channels` module into `channels`.
