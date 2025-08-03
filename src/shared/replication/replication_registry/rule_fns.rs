@@ -8,7 +8,7 @@ use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::ctx::{SerializeCtx, WriteCtx};
-use crate::shared::postcard_utils;
+use crate::postcard_utils;
 
 /// Type-erased version of [`RuleFns`].
 ///

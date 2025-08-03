@@ -5,11 +5,11 @@ use postcard::experimental::serialized_size;
 
 use super::{change_ranges::ChangeRanges, mutations::Mutations, serialized_data::SerializedData};
 use crate::{
+    postcard_utils,
     prelude::*,
     server::client_visibility::Visibility,
     shared::{
-        backend::channels::ServerChannel, postcard_utils,
-        replication::update_message_flags::UpdateMessageFlags,
+        backend::channels::ServerChannel, replication::update_message_flags::UpdateMessageFlags,
     },
 };
 

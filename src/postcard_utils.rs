@@ -2,9 +2,14 @@
 
 use alloc::slice;
 
+use bevy::prelude::*;
 use bytes::Buf;
-use postcard::{Deserializer, de_flavors::Flavor as DeFlavor, ser_flavors::Flavor as SerFlavor};
+use postcard::{
+    Deserializer, Serializer, de_flavors::Flavor as DeFlavor, ser_flavors::Flavor as SerFlavor,
+};
 use serde::{Deserialize, Serialize};
+
+use crate::compact_entity;
 
 // TODO: replace with https://github.com/jamesmunns/postcard/pull/210 after release.
 /// Serializes a value to an [`Extend`] writer.
@@ -12,13 +17,13 @@ use serde::{Deserialize, Serialize};
 /// Similar to [`postcard::to_extend`], but it takes the writer by reference instead of by value
 /// to remain in control of the writer.
 ///
-/// See also [`from_buf`].
+/// See also [`from_buf`] and [`entity_to_extend_mut`].
 ///
 /// # Examples
 ///
 /// ```
 /// use bevy::prelude::*;
-/// use bevy_replicon::shared::postcard_utils;
+/// use bevy_replicon::postcard_utils;
 ///
 /// let transform = Transform::default();
 /// let mut message = Vec::new();
@@ -30,6 +35,17 @@ pub fn to_extend_mut<T: Serialize + ?Sized, W: Extend<u8>>(
     writer: &mut W,
 ) -> postcard::Result<()> {
     postcard::serialize_with_flavor(value, ExtendMutFlavor::new(writer))
+}
+
+/// Like [`to_extend_mut`], but uses [`compact_entity`] instead of the default serde implementation for an entity.
+pub fn entity_to_extend_mut<W: Extend<u8>>(
+    entity: &Entity,
+    writer: &mut W,
+) -> postcard::Result<()> {
+    let mut serializer = Serializer {
+        output: ExtendMutFlavor::new(writer),
+    };
+    compact_entity::serialize(entity, &mut serializer)
 }
 
 /// A serialization flavor for an [`Extend<u8>`].
@@ -47,7 +63,7 @@ pub fn to_extend_mut<T: Serialize + ?Sized, W: Extend<u8>>(
 ///     prelude::*,
 ///     reflect::{serde::ReflectSerializer, TypeRegistry},
 /// };
-/// use bevy_replicon::shared::postcard_utils::ExtendMutFlavor;
+/// use bevy_replicon::postcard_utils::ExtendMutFlavor;
 /// use postcard::Serializer;
 /// use serde::Serialize;
 ///
@@ -93,13 +109,13 @@ impl<T: Extend<u8>> SerFlavor for ExtendMutFlavor<'_, T> {
 /// Similar to [`postcard::take_from_bytes`], but accepts a sliding buffer
 /// avoiding the need for the caller to reassign the original slice with the returned unused portion.
 ///
-/// See also [`to_extend_mut`].
+/// See also [`to_extend_mut`] and [`entity_from_buf`].
 ///
 /// # Examples
 ///
 /// ```
 /// use bevy::prelude::*;
-/// use bevy_replicon::{bytes::Bytes, shared::postcard_utils};
+/// use bevy_replicon::{bytes::Bytes, postcard_utils};
 ///
 /// # let transform = Transform::default();
 /// # let mut message = Vec::new();
@@ -114,6 +130,12 @@ pub fn from_buf<'de, T: Deserialize<'de>, B: Buf>(buf: &'de mut B) -> postcard::
     T::deserialize(&mut deserializer)
 }
 
+/// Like [`from_buf`], but uses [`compact_entity`] instead of the default serde implementation for an entity.
+pub fn entity_from_buf<B: Buf>(buf: &mut B) -> postcard::Result<Entity> {
+    let mut deserializer = Deserializer::from_flavor(BufFlavor::new(buf));
+    compact_entity::deserialize(&mut deserializer)
+}
+
 /// A deserialization flavor for a borrowed buffer.
 ///
 /// Unlike [`Slice`](postcard::de_flavors::Slice), deserialization advances buffer's cursor.
@@ -126,11 +148,11 @@ pub fn from_buf<'de, T: Deserialize<'de>, B: Buf>(buf: &'de mut B) -> postcard::
 ///
 /// ```
 /// # use bevy::{prelude::*, reflect::{serde::ReflectSerializer, TypeRegistry}};
-/// # use bevy_replicon::{shared::postcard_utils::ExtendMutFlavor};
+/// # use bevy_replicon::postcard_utils::ExtendMutFlavor;
 /// # use postcard::Serializer;
 /// # use serde::Serialize;
 /// use bevy::reflect::serde::ReflectDeserializer;
-/// use bevy_replicon::{bytes::Bytes, shared::postcard_utils::BufFlavor};
+/// use bevy_replicon::{bytes::Bytes, postcard_utils::BufFlavor};
 /// use postcard::Deserializer;
 /// use serde::de::DeserializeSeed;
 ///
@@ -185,5 +207,32 @@ impl<'a, T: Buf> DeFlavor<'a> for BufFlavor<'a, T> {
 
     fn finalize(self) -> postcard::Result<Self::Remainder> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entity_without_generation() {
+        let expected_entity = Entity::from_raw(1);
+        let mut buffer = Vec::new();
+        entity_to_extend_mut(&expected_entity, &mut buffer).unwrap();
+        assert_eq!(buffer.len(), 1);
+
+        let entity = entity_from_buf(&mut &*buffer).unwrap();
+        assert_eq!(entity, expected_entity);
+    }
+
+    #[test]
+    fn entity_with_generation() {
+        let expected_entity = Entity::from_bits(1 | (2 << 32));
+        let mut buffer = Vec::new();
+        entity_to_extend_mut(&expected_entity, &mut buffer).unwrap();
+        assert_eq!(buffer.len(), 2);
+
+        let entity = entity_from_buf(&mut &*buffer).unwrap();
+        assert_eq!(entity, expected_entity);
     }
 }

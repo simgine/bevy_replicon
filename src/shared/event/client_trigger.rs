@@ -12,10 +12,7 @@ use super::{
     remote_event_registry::RemoteEventRegistry,
     remote_targets::RemoteTargets,
 };
-use crate::{
-    prelude::*,
-    shared::{entity_serde, postcard_utils},
-};
+use crate::{postcard_utils, prelude::*};
 
 /// An extension trait for [`App`] for creating client triggers.
 ///
@@ -158,7 +155,7 @@ fn trigger_serialize<'a, E>(
     postcard_utils::to_extend_mut(&trigger.targets.len(), message)?;
     for &entity in &trigger.targets {
         let entity = ctx.get_mapped(entity);
-        entity_serde::serialize_entity(message, entity)?;
+        postcard_utils::entity_to_extend_mut(&entity, message)?;
     }
 
     (serialize)(ctx, &trigger.event, message)
@@ -176,7 +173,7 @@ fn trigger_deserialize<'a, E>(
     let len = postcard_utils::from_buf(message)?;
     let mut targets = Vec::with_capacity(len);
     for _ in 0..len {
-        let entity = entity_serde::deserialize_entity(message)?;
+        let entity = postcard_utils::entity_from_buf(message)?;
         targets.push(entity);
     }
 

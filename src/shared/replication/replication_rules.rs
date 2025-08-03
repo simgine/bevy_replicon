@@ -142,7 +142,7 @@ pub trait AppRuleExt {
 
     You can also override how the component will be written, see [`AppMarkerExt`].
 
-    See also [`postcard_utils`](crate::shared::postcard_utils) for serialization helpers.
+    See also [`postcard_utils`](crate::postcard_utils) for serialization helpers.
 
     # Examples
 
@@ -152,12 +152,10 @@ pub trait AppRuleExt {
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
-        shared::{
-            postcard_utils,
-            replication::replication_registry::{
-                ctx::{SerializeCtx, WriteCtx},
-                rule_fns::DeserializeFn,
-            },
+        postcard_utils,
+        shared::replication::replication_registry::{
+            ctx::{SerializeCtx, WriteCtx},
+            rule_fns::DeserializeFn,
         },
         prelude::*,
     };
@@ -243,12 +241,10 @@ pub trait AppRuleExt {
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
-        shared::{
-            postcard_utils,
-            replication::replication_registry::{
-                ctx::{SerializeCtx, WriteCtx},
-                rule_fns::RuleFns,
-            },
+        postcard_utils,
+        shared::replication::replication_registry::{
+            ctx::{SerializeCtx, WriteCtx},
+            rule_fns::RuleFns,
         },
         postcard,
         prelude::*,
@@ -312,12 +308,10 @@ pub trait AppRuleExt {
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
-        shared::{
-            postcard_utils,
-            replication::replication_registry::{
-                ctx::{SerializeCtx, WriteCtx},
-                rule_fns::RuleFns,
-            },
+        postcard_utils,
+        shared::replication::replication_registry::{
+            ctx::{SerializeCtx, WriteCtx},
+            rule_fns::RuleFns,
         },
         postcard,
         prelude::*,
@@ -372,12 +366,10 @@ pub trait AppRuleExt {
     };
     use bevy_replicon::{
         bytes::Bytes,
-        shared::{
-            postcard_utils::{BufFlavor, ExtendMutFlavor},
-            replication::replication_registry::{
-                ctx::{SerializeCtx, WriteCtx},
-                rule_fns::RuleFns,
-            },
+        postcard_utils::{BufFlavor, ExtendMutFlavor},
+        shared::replication::replication_registry::{
+            ctx::{SerializeCtx, WriteCtx},
+            rule_fns::RuleFns,
         },
         postcard::{self, Deserializer, Serializer},
         prelude::*,

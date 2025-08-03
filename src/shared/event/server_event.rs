@@ -24,10 +24,7 @@ use super::{
     event_fns::{EventDeserializeFn, EventFns, EventSerializeFn, UntypedEventFns},
     remote_event_registry::RemoteEventRegistry,
 };
-use crate::{
-    prelude::*,
-    shared::{postcard_utils, replication::client_ticks::ClientTicks},
-};
+use crate::{postcard_utils, prelude::*, shared::replication::client_ticks::ClientTicks};
 
 /// An extension trait for [`App`] for creating server events.
 ///
@@ -86,10 +83,8 @@ pub trait ServerEventAppExt {
     };
     use bevy_replicon::{
         bytes::Bytes,
-        shared::{
-            event::ctx::{ClientReceiveCtx, ServerSendCtx},
-            postcard_utils::{BufFlavor, ExtendMutFlavor},
-        },
+        postcard_utils::{BufFlavor, ExtendMutFlavor},
+        shared::event::ctx::{ClientReceiveCtx, ServerSendCtx},
         prelude::*,
     };
     use postcard::{Deserializer, Serializer};
