@@ -71,8 +71,8 @@ impl<C: Component> From<RuleFns<C>> for UntypedRuleFns {
 
 /// Serialization and deserialization functions for a component.
 ///
-/// See also [`AppRuleExt`](crate::shared::replication::replication_rules::AppRuleExt)
-/// and [`ReplicationRule`](crate::shared::replication::replication_rules::ReplicationRule).
+/// See also [`AppRuleExt`](crate::shared::replication::rules::AppRuleExt)
+/// and [`ReplicationRule`](crate::shared::replication::rules::ReplicationRule).
 pub struct RuleFns<C> {
     serialize: SerializeFn<C>,
     deserialize: DeserializeFn<C>,

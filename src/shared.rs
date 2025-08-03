@@ -14,7 +14,7 @@ use backend::connected_client::NetworkIdMap;
 use event::remote_event_registry::RemoteEventRegistry;
 use replication::{
     command_markers::CommandMarkers, replication_registry::ReplicationRegistry,
-    replication_rules::ReplicationRules, track_mutate_messages::TrackMutateMessages,
+    rules::ReplicationRules, track_mutate_messages::TrackMutateMessages,
 };
 
 /// Initializes types, resources and events needed for both client and server.

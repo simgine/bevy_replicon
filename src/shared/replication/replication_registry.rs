@@ -35,7 +35,7 @@ pub struct ReplicationRegistry {
     /// the component's index in [`Self::components`].
     ///
     /// Can be registered multiple times for the same component for a different
-    /// [`ReplicationRule`](super::replication_rules::ReplicationRule)
+    /// [`ReplicationRule`](super::rules::ReplicationRule)
     rules: Vec<(UntypedRuleFns, usize)>,
 
     /// Number of registered markers.
@@ -104,7 +104,7 @@ impl ReplicationRegistry {
     /// Registers serialization/deserialization functions for a component.
     ///
     /// Returned data can be assigned to a
-    /// [`ReplicationRule`](super::replication_rules::ReplicationRule)
+    /// [`ReplicationRule`](super::rules::ReplicationRule)
     pub fn register_rule_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         world: &mut World,

@@ -14,7 +14,7 @@ use log::{debug, trace};
 
 use crate::{
     prelude::*,
-    shared::replication::replication_rules::{ComponentRule, ReplicationRules},
+    shared::replication::rules::{ComponentRule, ReplicationRules},
 };
 
 /// A [`SystemParam`] that wraps [`World`], but provides access only for replicated components.
