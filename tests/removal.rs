@@ -5,7 +5,7 @@ use bevy_replicon::{
     server::server_tick::ServerTick,
     shared::replication::{
         deferred_entity::DeferredEntity,
-        replication_registry::{command_fns, ctx::WriteCtx},
+        registry::{command_fns, ctx::WriteCtx},
     },
     test_app::{ServerTestAppExt, TestClientEntity},
 };

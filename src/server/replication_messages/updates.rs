@@ -47,7 +47,7 @@ pub(crate) struct Updates {
     /// Component removals that happened in this tick.
     ///
     /// Serialized as a list of pairs of entity chunk and a list of
-    /// [`FnsId`](crate::shared::replication::replication_registry::FnsId)
+    /// [`FnsId`](crate::shared::replication::registry::FnsId)
     /// serialized as a single chunk.
     removals: Vec<RemovalRanges>,
 

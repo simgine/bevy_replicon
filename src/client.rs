@@ -18,7 +18,7 @@ use crate::{
             command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},
             mutate_index::MutateIndex,
-            replication_registry::{
+            registry::{
                 ReplicationRegistry,
                 ctx::{DespawnCtx, RemoveCtx, WriteCtx},
             },

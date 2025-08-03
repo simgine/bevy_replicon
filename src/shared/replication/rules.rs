@@ -7,7 +7,7 @@ use bevy::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 
-use super::replication_registry::{FnsId, ReplicationRegistry, command_fns::MutWrite};
+use super::registry::{FnsId, ReplicationRegistry, command_fns::MutWrite};
 use crate::prelude::*;
 
 /// Replication functions for [`App`].
@@ -58,7 +58,7 @@ pub trait AppRuleExt {
     use bevy_replicon::{
         bytes::Bytes,
         shared::replication::{
-            replication_registry::{
+            registry::{
                 ctx::{SerializeCtx, WriteCtx},
                 ReplicationRegistry,
             },
@@ -153,7 +153,7 @@ pub trait AppRuleExt {
     use bevy_replicon::{
         bytes::Bytes,
         postcard_utils,
-        shared::replication::replication_registry::{
+        shared::replication::registry::{
             ctx::{SerializeCtx, WriteCtx},
             rule_fns::DeserializeFn,
         },
@@ -242,7 +242,7 @@ pub trait AppRuleExt {
     use bevy_replicon::{
         bytes::Bytes,
         postcard_utils,
-        shared::replication::replication_registry::{
+        shared::replication::registry::{
             ctx::{SerializeCtx, WriteCtx},
             rule_fns::RuleFns,
         },
@@ -309,7 +309,7 @@ pub trait AppRuleExt {
     use bevy_replicon::{
         bytes::Bytes,
         postcard_utils,
-        shared::replication::replication_registry::{
+        shared::replication::registry::{
             ctx::{SerializeCtx, WriteCtx},
             rule_fns::RuleFns,
         },
@@ -367,7 +367,7 @@ pub trait AppRuleExt {
     use bevy_replicon::{
         bytes::Bytes,
         postcard_utils::{BufFlavor, ExtendMutFlavor},
-        shared::replication::replication_registry::{
+        shared::replication::registry::{
             ctx::{SerializeCtx, WriteCtx},
             rule_fns::RuleFns,
         },

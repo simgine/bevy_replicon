@@ -29,7 +29,7 @@ This example shows how to call registered functions on an entity:
 use bevy::prelude::*;
 use bevy_replicon::{
     shared::{
-        replication::replication_registry::{
+        replication::registry::{
             test_fns::TestFnsEntityExt, ReplicationRegistry,
         },
         replicon_tick::RepliconTick,

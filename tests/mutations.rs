@@ -13,7 +13,7 @@ use bevy_replicon::{
         replication::{
             command_markers::MarkerConfig,
             deferred_entity::DeferredEntity,
-            replication_registry::{command_fns, ctx::WriteCtx},
+            registry::{command_fns, ctx::WriteCtx},
         },
         server_entity_map::ServerEntityMap,
     },
