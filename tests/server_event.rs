@@ -55,10 +55,10 @@ fn regular() {
     let test_client_entity = **client_app.world().resource::<TestClientEntity>();
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
-        (SendMode::Direct(SERVER), 0),
-        (SendMode::Direct(test_client_entity), 1),
-        (SendMode::BroadcastExcept(SERVER), 1),
-        (SendMode::BroadcastExcept(test_client_entity), 0),
+        (SendMode::Direct(ClientId::Server), 0),
+        (SendMode::Direct(test_client_entity.into()), 1),
+        (SendMode::BroadcastExcept(ClientId::Server), 1),
+        (SendMode::BroadcastExcept(test_client_entity.into()), 0),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
@@ -156,10 +156,10 @@ fn without_plugins() {
     let test_client_entity = **client_app.world().resource::<TestClientEntity>();
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
-        (SendMode::Direct(SERVER), 0),
-        (SendMode::Direct(test_client_entity), 1),
-        (SendMode::BroadcastExcept(SERVER), 1),
-        (SendMode::BroadcastExcept(test_client_entity), 0),
+        (SendMode::Direct(ClientId::Server), 0),
+        (SendMode::Direct(test_client_entity.into()), 1),
+        (SendMode::BroadcastExcept(ClientId::Server), 1),
+        (SendMode::BroadcastExcept(test_client_entity.into()), 0),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
@@ -193,12 +193,12 @@ fn local_resending() {
     .add_server_event::<TestEvent>(Channel::Ordered)
     .finish();
 
-    const PLACEHOLDER_CLIENT_ID: Entity = Entity::from_raw(1);
+    const PLACEHOLDER_CLIENT_ID: ClientId = ClientId::Client(Entity::from_raw(1));
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
-        (SendMode::Direct(SERVER), 1),
+        (SendMode::Direct(ClientId::Server), 1),
         (SendMode::Direct(PLACEHOLDER_CLIENT_ID), 0),
-        (SendMode::BroadcastExcept(SERVER), 0),
+        (SendMode::BroadcastExcept(ClientId::Server), 0),
         (SendMode::BroadcastExcept(PLACEHOLDER_CLIENT_ID), 1),
     ] {
         app.world_mut().send_event(ToClients {
@@ -477,10 +477,10 @@ fn independent() {
     let test_client_entity = **client_app.world().resource::<TestClientEntity>();
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
-        (SendMode::Direct(SERVER), 0),
-        (SendMode::Direct(test_client_entity), 1),
-        (SendMode::BroadcastExcept(SERVER), 1),
-        (SendMode::BroadcastExcept(test_client_entity), 0),
+        (SendMode::Direct(ClientId::Server), 0),
+        (SendMode::Direct(test_client_entity.into()), 1),
+        (SendMode::BroadcastExcept(ClientId::Server), 1),
+        (SendMode::BroadcastExcept(test_client_entity.into()), 0),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
@@ -537,8 +537,8 @@ fn before_started_replication() {
     let test_client_entity = **client_app.world().resource::<TestClientEntity>();
     for mode in [
         SendMode::Broadcast,
-        SendMode::BroadcastExcept(SERVER),
-        SendMode::Direct(test_client_entity),
+        SendMode::BroadcastExcept(ClientId::Server),
+        SendMode::Direct(test_client_entity.into()),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
