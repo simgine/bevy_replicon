@@ -659,7 +659,7 @@ pub mod prelude {
             replication::{
                 Replicated,
                 command_markers::AppMarkerExt,
-                replication_registry::rule_fns::RuleFns,
+                registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, SendRate},
             },
             replicon_tick::RepliconTick,

@@ -5,7 +5,7 @@ use bevy::{prelude::*, ptr::Ptr};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::replication_registry::{
+    shared::replication::registry::{
         FnsId, component_fns::ComponentFns, ctx::SerializeCtx, rule_fns::UntypedRuleFns,
     },
 };

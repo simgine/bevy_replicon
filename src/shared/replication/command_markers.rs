@@ -3,7 +3,7 @@ use core::{any, cmp::Reverse};
 use bevy::{ecs::component::ComponentId, prelude::*};
 use log::debug;
 
-use super::replication_registry::{
+use super::registry::{
     ReplicationRegistry,
     command_fns::{MutWrite, RemoveFn, WriteFn},
 };
@@ -35,9 +35,9 @@ pub trait AppMarkerExt {
 
     If this marker is present on an entity and its priority is the highest,
     then these functions will be called for this component during replication
-    instead of [`default_write`](super::replication_registry::command_fns::default_write) /
-    [`default_insert_write`](super::replication_registry::command_fns::default_insert_write) and
-    [`default_remove`](super::replication_registry::command_fns::default_remove).
+    instead of [`default_write`](super::registry::command_fns::default_write) /
+    [`default_insert_write`](super::registry::command_fns::default_insert_write) and
+    [`default_remove`](super::registry::command_fns::default_remove).
     See also [`Self::set_command_fns`].
 
     # Examples
@@ -55,7 +55,7 @@ pub trait AppMarkerExt {
             replication::{
                 command_markers::MarkerConfig,
                 deferred_entity::DeferredEntity,
-                replication_registry::{
+                registry::{
                     ctx::{RemoveCtx, WriteCtx},
                     rule_fns::RuleFns,
                 },
@@ -122,9 +122,9 @@ pub trait AppMarkerExt {
     ///
     /// If there are no markers present on an entity, then these functions will
     /// be called for this component during replication instead of
-    /// [`default_write`](super::replication_registry::command_fns::default_write) /
-    /// [`default_insert_write`](super::replication_registry::command_fns::default_insert_write) and
-    /// [`default_remove`](super::replication_registry::command_fns::default_remove).
+    /// [`default_write`](super::registry::command_fns::default_write) /
+    /// [`default_insert_write`](super::registry::command_fns::default_insert_write) and
+    /// [`default_remove`](super::registry::command_fns::default_remove).
     /// See also [`Self::set_marker_fns`].
     fn set_command_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
@@ -322,7 +322,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::shared::replication::replication_registry::command_fns;
+    use crate::shared::replication::registry::command_fns;
 
     #[test]
     #[should_panic]

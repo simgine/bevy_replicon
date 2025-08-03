@@ -5,7 +5,7 @@ use bevy_replicon::{
         replication::{
             command_markers::MarkerConfig,
             deferred_entity::DeferredEntity,
-            replication_registry::{
+            registry::{
                 ReplicationRegistry, command_fns,
                 ctx::{DespawnCtx, WriteCtx},
                 test_fns::TestFnsEntityExt,

@@ -28,7 +28,7 @@ use crate::{
         event::server_event::BufferedServerEvents,
         replication::{
             client_ticks::{ClientTicks, EntityBuffer},
-            replication_registry::{
+            registry::{
                 ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
                 rule_fns::UntypedRuleFns,
             },

@@ -13,7 +13,7 @@ use bevy::{
 
 use crate::{
     prelude::*,
-    shared::replication::{replication_registry::FnsId, rules::ReplicationRules},
+    shared::replication::{registry::FnsId, rules::ReplicationRules},
 };
 
 /// Reader for removed components.
@@ -166,7 +166,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{server, shared::replication::replication_registry::ReplicationRegistry};
+    use crate::{server, shared::replication::registry::ReplicationRegistry};
 
     #[test]
     fn not_replicated() {

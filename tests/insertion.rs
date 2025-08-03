@@ -6,7 +6,7 @@ use bevy_replicon::{
     shared::{
         replication::{
             deferred_entity::DeferredEntity,
-            replication_registry::{command_fns, ctx::WriteCtx},
+            registry::{command_fns, ctx::WriteCtx},
         },
         server_entity_map::ServerEntityMap,
     },

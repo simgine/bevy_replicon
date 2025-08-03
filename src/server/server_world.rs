@@ -228,7 +228,7 @@ mod tests {
     use test_log::test;
 
     use super::*;
-    use crate::shared::replication::replication_registry::ReplicationRegistry;
+    use crate::shared::replication::registry::ReplicationRegistry;
 
     #[test]
     #[should_panic]
