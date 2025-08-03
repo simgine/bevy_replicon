@@ -37,7 +37,7 @@ struct Bullet;
 /// System that shoots a bullet and spawns it on the client.
 fn shoot_bullet(mut commands: Commands, mut bullet_events: EventWriter<SpawnBullet>) {
     let entity = commands.spawn(Bullet).id();
-    bullet_events.send(SpawnBullet(entity));
+    bullet_events.write(SpawnBullet(entity));
 }
 
 /// Validation to check if client is not cheating or the simulation is correct.
