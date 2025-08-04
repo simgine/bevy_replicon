@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename `replicon_channels` module into `channels`.
 - Rename `replication_rules` module into `rules`.
 - Rename `replication_registry` module into `registry`.
+- Rename `IntoComponentRule::register_component` to `IntoComponentRule::into_rule` and move it to the `shared::replication::rules::component` module.
+- Replace `IntoReplicationRule` with `IntoComponentRules`, which returns only `Vec<ComponentRule>`.
+- Replace `ReplicationBundle` with `BundleRules`, which returns only `Vec<ComponentRule>` and uses an associated constant to customzie the priority.
 
 ## Removed
 
