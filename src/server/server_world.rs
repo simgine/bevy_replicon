@@ -316,14 +316,14 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate::<ComponentA>()
+            .replicate::<A>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert!(archetype.components.is_empty());
             });
 
-        app.world_mut().spawn((Replicated, ComponentB));
+        app.world_mut().spawn((Replicated, B));
         app.update();
     }
 
@@ -333,14 +333,14 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate::<ComponentA>()
+            .replicate::<A>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert_eq!(archetype.components.len(), 1);
             });
 
-        app.world_mut().spawn((Replicated, ComponentA));
+        app.world_mut().spawn((Replicated, A));
         app.update();
     }
 
@@ -350,14 +350,14 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate_bundle::<(ComponentA, ComponentB)>()
+            .replicate_bundle::<(A, B)>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert_eq!(archetype.components.len(), 2);
             });
 
-        app.world_mut().spawn((Replicated, ComponentA, ComponentB));
+        app.world_mut().spawn((Replicated, A, B));
         app.update();
     }
 
@@ -367,14 +367,14 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate_bundle::<(ComponentA, ComponentB)>()
+            .replicate_bundle::<(A, B)>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert!(archetype.components.is_empty());
             });
 
-        app.world_mut().spawn((Replicated, ComponentA));
+        app.world_mut().spawn((Replicated, A));
         app.update();
     }
 
@@ -384,15 +384,15 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate::<ComponentA>()
-            .replicate_bundle::<(ComponentA, ComponentB)>()
+            .replicate::<A>()
+            .replicate_bundle::<(A, B)>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert_eq!(archetype.components.len(), 2);
             });
 
-        app.world_mut().spawn((Replicated, ComponentA, ComponentB));
+        app.world_mut().spawn((Replicated, A, B));
         app.update();
     }
 
@@ -402,16 +402,16 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate::<ComponentA>()
-            .replicate::<ComponentB>()
-            .replicate_bundle::<(ComponentA, ComponentB)>()
+            .replicate::<A>()
+            .replicate::<B>()
+            .replicate_bundle::<(A, B)>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert_eq!(archetype.components.len(), 2);
             });
 
-        app.world_mut().spawn((Replicated, ComponentA, ComponentB));
+        app.world_mut().spawn((Replicated, A, B));
         app.update();
     }
 
@@ -421,25 +421,24 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate_bundle::<(ComponentA, ComponentC)>()
-            .replicate_bundle::<(ComponentA, ComponentB)>()
+            .replicate_bundle::<(A, C)>()
+            .replicate_bundle::<(A, B)>()
             .add_systems(Update, |world: ServerWorld| {
                 assert_eq!(world.state.archetypes.len(), 1);
                 let archetype = world.state.archetypes.first().unwrap();
                 assert_eq!(archetype.components.len(), 3);
             });
 
-        app.world_mut()
-            .spawn((Replicated, ComponentA, ComponentB, ComponentC));
+        app.world_mut().spawn((Replicated, A, B, C));
         app.update();
     }
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentA;
+    struct A;
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentB;
+    struct B;
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentC;
+    struct C;
 }
