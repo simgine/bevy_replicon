@@ -46,76 +46,6 @@ pub trait AppRuleExt {
     }
 
     /**
-    Defines a [`ReplicationRule`] for a bundle.
-
-    Implemented for tuples of components. Use it to conveniently create a rule with
-    default ser/de functions and [`SendRate::EveryTick`] for all components.
-    To customize this, use [`Self::replicate_with`].
-
-    Can also be implemented manually for user-defined bundles.
-
-    # Examples
-
-    ```
-    use bevy::prelude::*;
-    use bevy_replicon::{
-        bytes::Bytes,
-        shared::replication::{
-            registry::{
-                ctx::{SerializeCtx, WriteCtx},
-                ReplicationRegistry,
-            },
-            rules::component::{BundleRules, ComponentRule},
-        },
-        prelude::*,
-    };
-    use serde::{Deserialize, Serialize};
-
-    # let mut app = App::new();
-    # app.add_plugins(RepliconPlugins);
-    app.replicate_bundle::<(Name, City)>() // Tuple of components is also a bundle!
-        .replicate_bundle::<PlayerBundle>();
-
-    #[derive(Component, Deserialize, Serialize)]
-    struct City;
-
-    #[derive(Bundle)]
-    struct PlayerBundle {
-        transform: Transform,
-        player: Player,
-    }
-
-    #[derive(Component, Deserialize, Serialize)]
-    struct Player;
-
-    impl BundleRules for PlayerBundle {
-        fn component_rules(world: &mut World, registry: &mut ReplicationRegistry) -> Vec<ComponentRule> {
-            // Customize serlialization to serialize only `translation`.
-            let (transform_id, transform_fns_id) = registry.register_rule_fns(
-                world,
-                RuleFns::new(serialize_translation, deserialize_translation),
-            );
-            let transform = ComponentRule::new(transform_id, transform_fns_id);
-
-            // Serialize `player` as usual.
-            let (player_id, player_fns_id) = registry.register_rule_fns(world, RuleFns::<Player>::default());
-            let player = ComponentRule::new(player_id, player_fns_id);
-
-            // We skip `replication` registration since it's a special component.
-            // It's automatically inserted on clients after replication and
-            // deserialization from scenes.
-
-            vec![transform, player]
-        }
-    }
-
-    # fn serialize_translation(_: &SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
-    # fn deserialize_translation(_: &mut WriteCtx, _: &mut Bytes) -> Result<Transform> { unimplemented!() }
-    ```
-    **/
-    fn replicate_bundle<B: BundleRules>(&mut self) -> &mut Self;
-
-    /**
     Defines a customizable [`ReplicationRule`].
 
     Can be used to customize how a component is passed over the network, or
@@ -420,6 +350,76 @@ pub trait AppRuleExt {
         priority: usize,
         component_rules: R,
     ) -> &mut Self;
+
+    /**
+    Defines a [`ReplicationRule`] for a bundle.
+
+    Implemented for tuples of components. Use it to conveniently create a rule with
+    default ser/de functions and [`SendRate::EveryTick`] for all components.
+    To customize this, use [`Self::replicate_with`].
+
+    Can also be implemented manually for user-defined bundles.
+
+    # Examples
+
+    ```
+    use bevy::prelude::*;
+    use bevy_replicon::{
+        bytes::Bytes,
+        shared::replication::{
+            registry::{
+                ctx::{SerializeCtx, WriteCtx},
+                ReplicationRegistry,
+            },
+            rules::component::{BundleRules, ComponentRule},
+        },
+        prelude::*,
+    };
+    use serde::{Deserialize, Serialize};
+
+    # let mut app = App::new();
+    # app.add_plugins(RepliconPlugins);
+    app.replicate_bundle::<(Name, City)>() // Tuple of components is also a bundle!
+        .replicate_bundle::<PlayerBundle>();
+
+    #[derive(Component, Deserialize, Serialize)]
+    struct City;
+
+    #[derive(Bundle)]
+    struct PlayerBundle {
+        transform: Transform,
+        player: Player,
+    }
+
+    #[derive(Component, Deserialize, Serialize)]
+    struct Player;
+
+    impl BundleRules for PlayerBundle {
+        fn component_rules(world: &mut World, registry: &mut ReplicationRegistry) -> Vec<ComponentRule> {
+            // Customize serlialization to serialize only `translation`.
+            let (transform_id, transform_fns_id) = registry.register_rule_fns(
+                world,
+                RuleFns::new(serialize_translation, deserialize_translation),
+            );
+            let transform = ComponentRule::new(transform_id, transform_fns_id);
+
+            // Serialize `player` as usual.
+            let (player_id, player_fns_id) = registry.register_rule_fns(world, RuleFns::<Player>::default());
+            let player = ComponentRule::new(player_id, player_fns_id);
+
+            // We skip `replication` registration since it's a special component.
+            // It's automatically inserted on clients after replication and
+            // deserialization from scenes.
+
+            vec![transform, player]
+        }
+    }
+
+    # fn serialize_translation(_: &SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
+    # fn deserialize_translation(_: &mut WriteCtx, _: &mut Bytes) -> Result<Transform> { unimplemented!() }
+    ```
+    **/
+    fn replicate_bundle<B: BundleRules>(&mut self) -> &mut Self;
 }
 
 impl AppRuleExt for App {
