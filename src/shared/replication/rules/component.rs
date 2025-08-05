@@ -59,7 +59,7 @@ pub enum SendRate {
 }
 
 impl SendRate {
-    /// Returns `true` if a mutation for should be replicated on this tick.
+    /// Returns `true` if a mutation for a component in a replication rule should be replicated on this tick.
     pub fn send_mutations(self, tick: RepliconTick) -> bool {
         match self {
             SendRate::EveryTick => true,
