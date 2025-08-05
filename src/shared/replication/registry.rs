@@ -189,7 +189,7 @@ mod tests {
     fn rule_fns() {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
-        registry.register_rule_fns(&mut world, RuleFns::<ComponentA>::default());
+        registry.register_rule_fns(&mut world, RuleFns::<A>::default());
         assert_eq!(registry.rules.len(), 1);
         assert_eq!(registry.components.len(), 1);
     }
@@ -198,8 +198,8 @@ mod tests {
     fn duplicate_rule_fns() {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
-        registry.register_rule_fns(&mut world, RuleFns::<ComponentA>::default());
-        registry.register_rule_fns(&mut world, RuleFns::<ComponentA>::default());
+        registry.register_rule_fns(&mut world, RuleFns::<A>::default());
+        registry.register_rule_fns(&mut world, RuleFns::<A>::default());
 
         assert_eq!(registry.rules.len(), 2);
         assert_eq!(
@@ -213,16 +213,16 @@ mod tests {
     fn different_rule_fns() {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
-        registry.register_rule_fns(&mut world, RuleFns::<ComponentA>::default());
-        registry.register_rule_fns(&mut world, RuleFns::<ComponentB>::default());
+        registry.register_rule_fns(&mut world, RuleFns::<A>::default());
+        registry.register_rule_fns(&mut world, RuleFns::<B>::default());
 
         assert_eq!(registry.rules.len(), 2);
         assert_eq!(registry.components.len(), 2);
     }
 
     #[derive(Component, Serialize, Deserialize)]
-    struct ComponentA;
+    struct A;
 
     #[derive(Component, Deserialize, Serialize)]
-    struct ComponentB;
+    struct B;
 }

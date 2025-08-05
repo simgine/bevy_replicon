@@ -28,7 +28,7 @@ fn table_storage() {
                 ..Default::default()
             }),
         ))
-        .replicate::<TableComponent>()
+        .replicate::<Table>()
         .finish();
     }
 
@@ -44,13 +44,13 @@ fn table_storage() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert(TableComponent);
+        .insert(Table);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&TableComponent>();
+    let mut components = client_app.world_mut().query::<&Table>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -66,7 +66,7 @@ fn sparse_set_storage() {
                 ..Default::default()
             }),
         ))
-        .replicate::<SparseSetComponent>()
+        .replicate::<SparseSet>()
         .finish();
     }
 
@@ -82,13 +82,13 @@ fn sparse_set_storage() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert(SparseSetComponent);
+        .insert(SparseSet);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&SparseSetComponent>();
+    let mut components = client_app.world_mut().query::<&SparseSet>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -104,7 +104,7 @@ fn immutable() {
                 ..Default::default()
             }),
         ))
-        .replicate::<ImmutableComponent>()
+        .replicate::<Immutable>()
         .finish();
     }
 
@@ -120,20 +120,20 @@ fn immutable() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert(ImmutableComponent(false));
+        .insert(Immutable(false));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&ImmutableComponent>();
+    let mut components = client_app.world_mut().query::<&Immutable>();
     let component = components.single(client_app.world()).unwrap();
     assert!(!component.0);
 
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert(ImmutableComponent(true));
+        .insert(Immutable(true));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -251,8 +251,8 @@ fn multiple_components() {
                 ..Default::default()
             }),
         ))
-        .replicate::<ComponentA>()
-        .replicate::<ComponentB>()
+        .replicate::<A>()
+        .replicate::<B>()
         .finish();
     }
 
@@ -270,13 +270,13 @@ fn multiple_components() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert((ComponentA, ComponentB));
+        .insert((A, B));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&ComponentA, &ComponentB)>();
+    let mut components = client_app.world_mut().query::<(&A, &B)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
     assert_eq!(
         client_app.world().archetypes().len() - before_archetypes,
@@ -297,8 +297,8 @@ fn command_fns() {
                 ..Default::default()
             }),
         ))
-        .replicate::<OriginalComponent>()
-        .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>)
+        .replicate::<Original>()
+        .set_command_fns(replace, command_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -314,7 +314,7 @@ fn command_fns() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert(OriginalComponent);
+        .insert(Original);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -322,7 +322,7 @@ fn command_fns() {
 
     let mut components = client_app
         .world_mut()
-        .query_filtered::<&ReplacedComponent, Without<OriginalComponent>>();
+        .query_filtered::<&Replaced, Without<Original>>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -339,11 +339,8 @@ fn marker() {
             }),
         ))
         .register_marker::<ReplaceMarker>()
-        .replicate::<OriginalComponent>()
-        .set_marker_fns::<ReplaceMarker, _>(
-            replace,
-            command_fns::default_remove::<ReplacedComponent>,
-        )
+        .replicate::<Original>()
+        .set_marker_fns::<ReplaceMarker, _>(replace, command_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -368,15 +365,15 @@ fn marker() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert(OriginalComponent);
+        .insert(Original);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
     let client_entity = client_app.world().entity(client_entity);
-    assert!(!client_entity.contains::<OriginalComponent>());
-    assert!(client_entity.contains::<ReplacedComponent>());
+    assert!(!client_entity.contains::<Original>());
+    assert!(client_entity.contains::<Replaced>());
 }
 
 #[test]
@@ -391,7 +388,7 @@ fn group() {
                 ..Default::default()
             }),
         ))
-        .replicate_bundle::<(ComponentA, ComponentB)>()
+        .replicate_bundle::<(A, B)>()
         .finish();
     }
 
@@ -407,13 +404,13 @@ fn group() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .insert((ComponentA, ComponentB));
+        .insert((A, B));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut groups = client_app.world_mut().query::<(&ComponentA, &ComponentB)>();
+    let mut groups = client_app.world_mut().query::<(&A, &B)>();
     assert_eq!(groups.iter(client_app.world()).count(), 1);
 }
 
@@ -441,16 +438,13 @@ fn not_replicated() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app
-        .world_mut()
-        .entity_mut(server_entity)
-        .insert(TestComponent);
+    server_app.world_mut().entity_mut(server_entity).insert(A);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&TestComponent>();
+    let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(components.iter(client_app.world()).count(), 0);
 }
 
@@ -466,16 +460,13 @@ fn after_removal() {
                 ..Default::default()
             }),
         ))
-        .replicate::<TestComponent>()
+        .replicate::<A>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, TestComponent))
-        .id();
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -486,17 +477,17 @@ fn after_removal() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .remove::<TestComponent>()
-        .insert(TestComponent);
+        .remove::<A>()
+        .insert(A);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&TestComponent>();
+    let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 
-    let mut system_state: SystemState<RemovedComponents<TestComponent>> =
+    let mut system_state: SystemState<RemovedComponents<A>> =
         SystemState::new(client_app.world_mut());
     let removals = system_state.get(client_app.world());
     assert_eq!(
@@ -522,20 +513,20 @@ fn before_started_replication() {
                     ..Default::default()
                 }),
         ))
-        .replicate::<TestComponent>()
+        .replicate::<A>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    server_app.world_mut().spawn((Replicated, TestComponent));
+    server_app.world_mut().spawn((Replicated, A));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query::<&TestComponent>();
+    let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(
         components.iter(client_app.world()).count(),
         0,
@@ -572,7 +563,7 @@ fn after_started_replication() {
                     ..Default::default()
                 }),
         ))
-        .replicate::<TestComponent>()
+        .replicate::<A>()
         .finish();
     }
 
@@ -589,14 +580,14 @@ fn after_started_replication() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().spawn((Replicated, TestComponent));
+    server_app.world_mut().spawn((Replicated, A));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query::<&TestComponent>();
+    let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -612,7 +603,7 @@ fn confirm_history() {
                 ..Default::default()
             }),
         ))
-        .replicate::<TestComponent>()
+        .replicate::<A>()
         .finish();
     }
 
@@ -625,10 +616,7 @@ fn confirm_history() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app
-        .world_mut()
-        .entity_mut(server_entity)
-        .insert(TestComponent);
+    server_app.world_mut().entity_mut(server_entity).insert(A);
 
     // Clear previous events.
     client_app
@@ -663,46 +651,43 @@ fn confirm_history() {
 
 #[derive(Component, Deserialize, Serialize)]
 #[component(storage = "Table")]
-struct TableComponent;
+struct Table;
 
 #[derive(Component, Deserialize, Serialize)]
 #[component(storage = "SparseSet")]
-struct SparseSetComponent;
-
-#[derive(Component, Deserialize, Serialize)]
-struct TestComponent;
+struct SparseSet;
 
 #[derive(Component, Deserialize, Serialize)]
 struct MappedComponent(#[entities] Entity);
 
 #[derive(Component, Deserialize, Serialize)]
 #[component(immutable)]
-struct ImmutableComponent(bool);
+struct Immutable(bool);
 
 #[derive(Component, Deserialize, Serialize)]
-struct ComponentA;
+struct A;
 
 #[derive(Component, Deserialize, Serialize)]
-struct ComponentB;
+struct B;
 
 #[derive(Component)]
 struct ReplaceMarker;
 
 #[derive(Component, Deserialize, Serialize)]
-struct OriginalComponent;
+struct Original;
 
 #[derive(Component, Deserialize, Serialize)]
-struct ReplacedComponent;
+struct Replaced;
 
 /// Deserializes [`OriginalComponent`], but ignores it and inserts [`ReplacedComponent`].
 fn replace(
     ctx: &mut WriteCtx,
-    rule_fns: &RuleFns<OriginalComponent>,
+    rule_fns: &RuleFns<Original>,
     entity: &mut DeferredEntity,
     message: &mut Bytes,
 ) -> Result<()> {
     rule_fns.deserialize(ctx, message)?;
-    entity.insert(ReplacedComponent);
+    entity.insert(Replaced);
 
     Ok(())
 }

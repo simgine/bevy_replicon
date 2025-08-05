@@ -749,31 +749,22 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate::<ComponentA>()
+            .replicate::<A>()
+            .replicate_with((RuleFns::<A>::default(), RuleFns::<B>::default()))
+            .replicate_once::<B>()
             .replicate_with((
-                RuleFns::<ComponentA>::default(),
-                RuleFns::<ComponentB>::default(),
+                (RuleFns::<B>::default(), SendRate::Once),
+                (RuleFns::<C>::default(), SendRate::Periodic(2)),
             ))
-            .replicate_once::<ComponentB>()
-            .replicate_with((
-                (RuleFns::<ComponentB>::default(), SendRate::Once),
-                (RuleFns::<ComponentC>::default(), SendRate::Periodic(2)),
-            ))
-            .replicate_periodic::<ComponentC>(1)
-            .replicate_with_priority(
-                4,
-                (
-                    RuleFns::<ComponentC>::default(),
-                    RuleFns::<ComponentD>::default(),
-                ),
-            )
-            .replicate_with((RuleFns::<ComponentD>::default(), SendRate::Once))
-            .replicate_bundle::<(ComponentA, ComponentB)>();
+            .replicate_periodic::<C>(1)
+            .replicate_with_priority(4, (RuleFns::<C>::default(), RuleFns::<D>::default()))
+            .replicate_with((RuleFns::<D>::default(), SendRate::Once))
+            .replicate_bundle::<(A, B)>();
 
-        let a = app.world().component_id::<ComponentA>().unwrap();
-        let b = app.world().component_id::<ComponentB>().unwrap();
-        let c = app.world().component_id::<ComponentC>().unwrap();
-        let d = app.world().component_id::<ComponentD>().unwrap();
+        let a = app.world().component_id::<A>().unwrap();
+        let b = app.world().component_id::<B>().unwrap();
+        let c = app.world().component_id::<C>().unwrap();
+        let d = app.world().component_id::<D>().unwrap();
 
         let rules = &**app.world().resource::<ReplicationRules>();
 
@@ -819,14 +810,14 @@ mod tests {
     }
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentA;
+    struct A;
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentB;
+    struct B;
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentC;
+    struct C;
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentD;
+    struct D;
 }

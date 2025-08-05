@@ -178,9 +178,7 @@ mod tests {
 
         app.update();
 
-        app.world_mut()
-            .spawn((Replicated, ComponentA))
-            .remove::<ComponentA>();
+        app.world_mut().spawn((Replicated, A)).remove::<A>();
 
         app.update();
 
@@ -196,15 +194,11 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<RemovalBuffer>()
             .add_systems(PostUpdate, server::buffer_removals)
-            .replicate::<ComponentA>();
+            .replicate::<A>();
 
         app.update();
 
-        let entity = app
-            .world_mut()
-            .spawn((Replicated, ComponentA))
-            .remove::<ComponentA>()
-            .id();
+        let entity = app.world_mut().spawn((Replicated, A)).remove::<A>().id();
 
         app.update();
 
@@ -223,14 +217,14 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<RemovalBuffer>()
             .add_systems(PostUpdate, server::buffer_removals)
-            .replicate_bundle::<(ComponentA, ComponentB)>();
+            .replicate_bundle::<(A, B)>();
 
         app.update();
 
         let entity = app
             .world_mut()
-            .spawn((Replicated, ComponentA, ComponentB))
-            .remove::<(ComponentA, ComponentB)>()
+            .spawn((Replicated, A, B))
+            .remove::<(A, B)>()
             .id();
 
         app.update();
@@ -250,15 +244,11 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<RemovalBuffer>()
             .add_systems(PostUpdate, server::buffer_removals)
-            .replicate_bundle::<(ComponentA, ComponentB)>();
+            .replicate_bundle::<(A, B)>();
 
         app.update();
 
-        let entity = app
-            .world_mut()
-            .spawn((Replicated, ComponentA, ComponentB))
-            .remove::<ComponentA>()
-            .id();
+        let entity = app.world_mut().spawn((Replicated, A, B)).remove::<A>().id();
 
         app.update();
 
@@ -277,15 +267,15 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<RemovalBuffer>()
             .add_systems(PostUpdate, server::buffer_removals)
-            .replicate::<ComponentA>()
-            .replicate_bundle::<(ComponentA, ComponentB)>();
+            .replicate::<A>()
+            .replicate_bundle::<(A, B)>();
 
         app.update();
 
         let entity = app
             .world_mut()
-            .spawn((Replicated, ComponentA, ComponentB))
-            .remove::<(ComponentA, ComponentB)>()
+            .spawn((Replicated, A, B))
+            .remove::<(A, B)>()
             .id();
 
         app.update();
@@ -305,16 +295,12 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<RemovalBuffer>()
             .add_systems(PostUpdate, server::buffer_removals)
-            .replicate::<ComponentA>()
-            .replicate_bundle::<(ComponentA, ComponentB)>();
+            .replicate::<A>()
+            .replicate_bundle::<(A, B)>();
 
         app.update();
 
-        let entity = app
-            .world_mut()
-            .spawn((Replicated, ComponentA, ComponentB))
-            .remove::<ComponentA>()
-            .id();
+        let entity = app.world_mut().spawn((Replicated, A, B)).remove::<A>().id();
 
         app.update();
 
@@ -333,11 +319,11 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<RemovalBuffer>()
             .add_systems(PostUpdate, server::buffer_removals)
-            .replicate::<ComponentA>();
+            .replicate::<A>();
 
         app.update();
 
-        app.world_mut().spawn((ComponentA, Replicated)).despawn();
+        app.world_mut().spawn((Replicated, A)).despawn();
 
         app.update();
 
@@ -349,8 +335,8 @@ mod tests {
     }
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentA;
+    struct A;
 
     #[derive(Serialize, Deserialize, Component)]
-    struct ComponentB;
+    struct B;
 }
