@@ -32,7 +32,7 @@ use crate::{
                 ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
                 rule_fns::UntypedRuleFns,
             },
-            rules::{ComponentRule, ReplicationRules},
+            rules::{ReplicationRules, component::ComponentRule},
             track_mutate_messages::TrackMutateMessages,
         },
     },
