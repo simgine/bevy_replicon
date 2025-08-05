@@ -133,6 +133,7 @@ impl<C: IntoComponentRule> IntoComponentRules for C {
 macro_rules! impl_into_component_rules {
     ($(($n:tt, $R:ident)),*) => {
         impl<$($R: IntoComponentRule),*> IntoComponentRules for ($($R,)*) {
+            // A dummy variable to add 1 for each tuple element.
             const DEFAULT_PRIORITY: usize = 0 $(+ { let _ = $n; 1 })*;
 
             fn into_rules(
