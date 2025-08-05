@@ -157,10 +157,10 @@ variadics_please::all_tuples_enumerated!(impl_into_component_rules, 1, 15, R);
 ///
 /// See [`AppRuleExt::replicate_bundle`] for more details.
 pub trait BundleRules {
-    /// By default the priority equals the number of components.
+    /// Priority when registered with [`AppRuleExt::replicate_bundle`].
     ///
-    /// If this constant is set, its value will be used instead.
-    const CUSTOM_PRIORITY: Option<usize> = None;
+    /// Equals the number of components in a bundle.
+    const DEFAULT_PRIORITY: usize;
 
     /// Creates the associated component replication rules and registers their functions in [`ReplicationRegistry`].
     fn component_rules(world: &mut World, registry: &mut ReplicationRegistry)
@@ -168,8 +168,10 @@ pub trait BundleRules {
 }
 
 macro_rules! impl_into_bundle_rules {
-    ($($C:ident),*) => {
+    ($N:expr, $($C:ident),*) => {
         impl<$($C: Component<Mutability: MutWrite<$C>> + Serialize + DeserializeOwned),*> BundleRules for ($($C,)*) {
+            const DEFAULT_PRIORITY: usize = $N;
+
             fn component_rules(world: &mut World, registry: &mut ReplicationRegistry) -> Vec<ComponentRule> {
                 vec![
                     $(
@@ -188,4 +190,4 @@ macro_rules! impl_into_bundle_rules {
     }
 }
 
-variadics_please::all_tuples!(impl_into_bundle_rules, 1, 15, C);
+variadics_please::all_tuples_with_size!(impl_into_bundle_rules, 1, 15, C);

@@ -395,6 +395,8 @@ pub trait AppRuleExt {
     struct Player;
 
     impl BundleRules for PlayerBundle {
+        const DEFAULT_PRIORITY: usize = 2; // Usually equals to the number of components, but can be customized.
+
         fn component_rules(world: &mut World, registry: &mut ReplicationRegistry) -> Vec<ComponentRule> {
             // Customize serlialization to serialize only `translation`.
             let (transform_id, transform_fns_id) = registry.register_rule_fns(
@@ -419,7 +421,11 @@ pub trait AppRuleExt {
     # fn deserialize_translation(_: &mut WriteCtx, _: &mut Bytes) -> Result<Transform> { unimplemented!() }
     ```
     **/
-    fn replicate_bundle<B: BundleRules>(&mut self) -> &mut Self;
+    fn replicate_bundle<B: BundleRules>(&mut self) -> &mut Self {
+        self.replicate_bundle_with::<B>(B::DEFAULT_PRIORITY)
+    }
+
+    fn replicate_bundle_with<B: BundleRules>(&mut self, priority: usize) -> &mut Self;
 }
 
 impl AppRuleExt for App {
@@ -448,7 +454,7 @@ impl AppRuleExt for App {
         self
     }
 
-    fn replicate_bundle<B: BundleRules>(&mut self) -> &mut Self {
+    fn replicate_bundle_with<B: BundleRules>(&mut self, priority: usize) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
             .replicate_bundle::<B>();
@@ -462,7 +468,7 @@ impl AppRuleExt for App {
         self.world_mut()
             .resource_mut::<ReplicationRules>()
             .insert(ReplicationRule {
-                priority: B::CUSTOM_PRIORITY.unwrap_or(components.len()),
+                priority,
                 components,
             });
 
