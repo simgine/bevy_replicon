@@ -69,7 +69,7 @@ impl SendRate {
     }
 }
 
-/// Parameters for that can be turned into a component replication rule.
+/// Parameters that can be turned into a component replication rule.
 ///
 /// Used for [`IntoComponentRules`] to accept either [`RuleFns`] or a tuple combining
 /// [`RuleFns`] with an associated [`SendRate`].
