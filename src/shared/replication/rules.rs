@@ -513,6 +513,7 @@ pub struct ReplicationRule {
 
 impl ReplicationRule {
     /// Determines whether an archetype contains all components required by the rule.
+    #[must_use]
     pub(crate) fn matches(&self, archetype: &Archetype) -> bool {
         self.components
             .iter()
@@ -550,69 +551,129 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registration() {
+    fn single() {
         let mut app = App::new();
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
             .replicate::<A>()
-            .replicate_with((RuleFns::<A>::default(), RuleFns::<B>::default()))
             .replicate_once::<B>()
-            .replicate_with((
-                (RuleFns::<B>::default(), SendRate::Once),
-                (RuleFns::<C>::default(), SendRate::Periodic(2)),
-            ))
-            .replicate_periodic::<C>(1)
-            .replicate_with_priority(4, (RuleFns::<C>::default(), RuleFns::<D>::default()))
-            .replicate_with((RuleFns::<D>::default(), SendRate::Once))
-            .replicate_bundle::<(A, B)>();
+            .replicate_periodic::<C>(1);
 
-        let a = app.world().component_id::<A>().unwrap();
-        let b = app.world().component_id::<B>().unwrap();
-        let c = app.world().component_id::<C>().unwrap();
-        let d = app.world().component_id::<D>().unwrap();
+        let rules = app
+            .world_mut()
+            .remove_resource::<ReplicationRules>()
+            .unwrap();
+        let [rule_a, rule_b, rule_c] = rules.0.try_into().unwrap();
+        assert_eq!(rule_a.priority, 1);
+        assert_eq!(rule_b.priority, 1);
+        assert_eq!(rule_c.priority, 1);
 
-        let rules = &**app.world().resource::<ReplicationRules>();
+        let a = app.world_mut().spawn(A).archetype().id();
+        let b = app.world_mut().spawn(B).archetype().id();
+        let c = app.world_mut().spawn(C).archetype().id();
 
-        assert_eq!(rules[0].priority, 4);
-        assert_eq!(rules[0].components[0].id, c);
-        assert_eq!(rules[0].components[0].send_rate, SendRate::EveryTick);
-        assert_eq!(rules[0].components[1].id, d);
-        assert_eq!(rules[0].components[1].send_rate, SendRate::EveryTick);
+        let a = app.world().archetypes().get(a).unwrap();
+        let b = app.world().archetypes().get(b).unwrap();
+        let c = app.world().archetypes().get(c).unwrap();
 
-        assert_eq!(rules[1].priority, 2);
-        assert_eq!(rules[1].components[0].id, a);
-        assert_eq!(rules[1].components[0].send_rate, SendRate::EveryTick);
-        assert_eq!(rules[1].components[1].id, b);
-        assert_eq!(rules[1].components[1].send_rate, SendRate::EveryTick);
+        assert!(rule_a.matches(a));
+        assert!(!rule_a.matches(b));
+        assert!(!rule_a.matches(c));
 
-        assert_eq!(rules[2].priority, 2);
-        assert_eq!(rules[2].components[0].id, b);
-        assert_eq!(rules[2].components[0].send_rate, SendRate::Once);
-        assert_eq!(rules[2].components[1].id, c);
-        assert_eq!(rules[2].components[1].send_rate, SendRate::Periodic(2));
+        assert!(!rule_b.matches(a));
+        assert!(rule_b.matches(b));
+        assert!(!rule_b.matches(c));
 
-        assert_eq!(rules[3].priority, 2);
-        assert_eq!(rules[3].components[0].id, a);
-        assert_eq!(rules[3].components[0].send_rate, SendRate::EveryTick);
-        assert_eq!(rules[3].components[1].id, b);
-        assert_eq!(rules[3].components[1].send_rate, SendRate::EveryTick);
+        assert!(!rule_c.matches(a));
+        assert!(!rule_c.matches(b));
+        assert!(rule_c.matches(c));
+    }
 
-        assert_eq!(rules[4].priority, 1);
-        assert_eq!(rules[4].components[0].id, a);
-        assert_eq!(rules[4].components[0].send_rate, SendRate::EveryTick);
+    #[test]
+    fn with() {
+        let mut app = App::new();
+        app.init_resource::<ProtocolHasher>()
+            .init_resource::<ReplicationRules>()
+            .init_resource::<ReplicationRegistry>()
+            .replicate_with((RuleFns::<A>::default(), SendRate::Once))
+            .replicate_with((RuleFns::<B>::default(), RuleFns::<C>::default()))
+            .replicate_with_priority(
+                4,
+                (
+                    RuleFns::<C>::default(),
+                    (RuleFns::<D>::default(), SendRate::Periodic(1)),
+                ),
+            );
 
-        assert_eq!(rules[5].priority, 1);
-        assert_eq!(rules[5].components[0].id, b);
-        assert_eq!(rules[5].components[0].send_rate, SendRate::Once);
+        let rules = app
+            .world_mut()
+            .remove_resource::<ReplicationRules>()
+            .unwrap();
+        let [rule_cd, rule_bc, rule_a] = rules.0.try_into().unwrap();
+        assert_eq!(rule_cd.priority, 4);
+        assert_eq!(rule_bc.priority, 2);
+        assert_eq!(rule_a.priority, 1);
 
-        assert_eq!(rules[6].priority, 1);
-        assert_eq!(rules[6].components[0].id, c);
-        assert_eq!(rules[6].components[0].send_rate, SendRate::Periodic(1));
+        let abc = app.world_mut().spawn((A, B, C)).archetype().id();
+        let bcd = app.world_mut().spawn((B, C, D)).archetype().id();
+        let cda = app.world_mut().spawn((C, D, A)).archetype().id();
 
-        assert_eq!(rules[7].priority, 1);
-        assert_eq!(rules[7].components[0].id, d);
-        assert_eq!(rules[7].components[0].send_rate, SendRate::Once);
+        let abc = app.world().archetypes().get(abc).unwrap();
+        let bcd = app.world().archetypes().get(bcd).unwrap();
+        let cda = app.world().archetypes().get(cda).unwrap();
+
+        assert!(!rule_cd.matches(abc));
+        assert!(rule_cd.matches(bcd));
+        assert!(rule_cd.matches(cda));
+
+        assert!(rule_bc.matches(abc));
+        assert!(rule_bc.matches(bcd));
+        assert!(!rule_bc.matches(cda));
+
+        assert!(rule_a.matches(abc));
+        assert!(!rule_a.matches(bcd));
+        assert!(rule_a.matches(cda));
+    }
+
+    #[test]
+    fn bundle() {
+        let mut app = App::new();
+        app.init_resource::<ProtocolHasher>()
+            .init_resource::<ReplicationRules>()
+            .init_resource::<ReplicationRegistry>()
+            .replicate_bundle::<(A, B)>()
+            .replicate_bundle::<(B, C)>()
+            .replicate_bundle_with::<(C, D)>(4);
+
+        let rules = app
+            .world_mut()
+            .remove_resource::<ReplicationRules>()
+            .unwrap();
+        let [rule_cd, rule_ab, rule_bc] = rules.0.try_into().unwrap();
+        assert_eq!(rule_cd.priority, 4);
+        assert_eq!(rule_ab.priority, 2);
+        assert_eq!(rule_bc.priority, 2);
+
+        let abc = app.world_mut().spawn((A, B, C)).archetype().id();
+        let bcd = app.world_mut().spawn((B, C, D)).archetype().id();
+        let cda = app.world_mut().spawn((C, D, A)).archetype().id();
+
+        let abc = app.world().archetypes().get(abc).unwrap();
+        let bcd = app.world().archetypes().get(bcd).unwrap();
+        let cda = app.world().archetypes().get(cda).unwrap();
+
+        assert!(!rule_cd.matches(abc));
+        assert!(rule_cd.matches(bcd));
+        assert!(rule_cd.matches(cda));
+
+        assert!(rule_ab.matches(abc));
+        assert!(!rule_ab.matches(bcd));
+        assert!(!rule_ab.matches(cda));
+
+        assert!(rule_bc.matches(abc));
+        assert!(rule_bc.matches(bcd));
+        assert!(!rule_bc.matches(cda));
     }
 
     #[derive(Serialize, Deserialize, Component)]
