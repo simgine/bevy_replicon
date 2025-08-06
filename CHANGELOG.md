@@ -352,7 +352,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Update to Bevy `0.14.0`.
-- Move `bevy_replicon_renet` to a [dedicated repository](https://github.com/projectharmonia/bevy_replicon_renet).
+- Move `bevy_replicon_renet` to a [dedicated repository](https://github.com/simgine/bevy_replicon_renet).
 - `ServerEventsPlugin` and `ClientEventsPlugin` can be disabled on client-only and server-only apps respectively.
 - Put `ClientDiagnosticsPlugin` under `client_diagnostics` feature (disabled by default) and make it part of the `RepliconPlugins` group.
 - Put `scene` module under `scene` feature (enabled by default).
@@ -882,71 +882,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2023-03-28
 
-Initial release after separation from [Project Harmonia](https://github.com/projectharmonia/project_harmonia).
+Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/projectharmonia/bevy_replicon/compare/v0.34.4...HEAD
-[0.34.4]: https://github.com/projectharmonia/bevy_replicon/compare/v0.34.3...v0.34.4
-[0.34.3]: https://github.com/projectharmonia/bevy_replicon/compare/v0.34.1...v0.34.3
-[0.34.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.34.0...v0.34.1
-[0.34.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.33.0...v0.34.0
-[0.33.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.32.2...v0.33.0
-[0.32.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.32.1...v0.32.2
-[0.32.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.32.0...v0.32.1
-[0.32.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.31.1...v0.32.0
-[0.31.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.31.0...v0.31.1
-[0.31.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.30.1...v0.31.0
-[0.30.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.30.0...v0.30.1
-[0.30.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.29.2...v0.30.0
-[0.29.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.29.1...v0.29.2
-[0.29.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.29.0...v0.29.1
-[0.29.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.28.4...v0.29.0
-[0.28.4]: https://github.com/projectharmonia/bevy_replicon/compare/v0.28.3...v0.28.4
-[0.28.3]: https://github.com/projectharmonia/bevy_replicon/compare/v0.28.2...v0.28.3
-[0.28.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.28.1...v0.28.2
-[0.28.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.28.0...v0.28.1
-[0.28.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.27.0...v0.28.0
-[0.27.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.26.3...v0.27.0
-[0.26.3]: https://github.com/projectharmonia/bevy_replicon/compare/v0.26.2...v0.26.3
-[0.26.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.26.1...v0.26.2
-[0.26.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.26.0...v0.26.1
-[0.26.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.25.3...v0.26.0
-[0.25.3]: https://github.com/projectharmonia/bevy_replicon/compare/v0.25.2...v0.25.3
-[0.25.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.25.1...v0.25.2
-[0.25.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.25.0...v0.25.1
-[0.25.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.24.1...v0.25.0
-[0.24.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.24.0...v0.24.1
-[0.24.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.23.0...v0.24.0
-[0.23.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.22.0...v0.23.0
-[0.22.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.21.2...v0.22.0
-[0.21.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.21.1...v0.21.2
-[0.21.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.21.0...v0.21.1
-[0.21.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.20.0...v0.21.0
-[0.20.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.19.0...v0.20.0
-[0.19.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.18.2...v0.19.0
-[0.18.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.18.1...v0.18.2
-[0.18.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.18.0...v0.18.1
-[0.18.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.17.0...v0.18.0
-[0.17.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.16.0...v0.17.0
-[0.16.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.15.1...v0.16.0
-[0.15.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.15.0...v0.15.1
-[0.15.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.14.0...v0.15.0
-[0.14.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.13.0...v0.14.0
-[0.13.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.12.0...v0.13.0
-[0.12.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.11.0...v0.12.0
-[0.11.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.9.1...v0.10.0
-[0.9.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.7.1...v0.8.0
-[0.7.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.6.1...v0.7.0
-[0.6.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.6.0...v0.6.1
-[0.6.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.2.3...v0.3.0
-[0.2.3]: https://github.com/projectharmonia/bevy_replicon/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/projectharmonia/bevy_replicon/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/projectharmonia/bevy_replicon/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/projectharmonia/bevy_replicon/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/projectharmonia/bevy_replicon/releases/tag/v0.1.0
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.34.4...HEAD
+[0.34.4]: https://github.com/simgine/bevy_replicon/compare/v0.34.3...v0.34.4
+[0.34.3]: https://github.com/simgine/bevy_replicon/compare/v0.34.1...v0.34.3
+[0.34.1]: https://github.com/simgine/bevy_replicon/compare/v0.34.0...v0.34.1
+[0.34.0]: https://github.com/simgine/bevy_replicon/compare/v0.33.0...v0.34.0
+[0.33.0]: https://github.com/simgine/bevy_replicon/compare/v0.32.2...v0.33.0
+[0.32.2]: https://github.com/simgine/bevy_replicon/compare/v0.32.1...v0.32.2
+[0.32.1]: https://github.com/simgine/bevy_replicon/compare/v0.32.0...v0.32.1
+[0.32.0]: https://github.com/simgine/bevy_replicon/compare/v0.31.1...v0.32.0
+[0.31.1]: https://github.com/simgine/bevy_replicon/compare/v0.31.0...v0.31.1
+[0.31.0]: https://github.com/simgine/bevy_replicon/compare/v0.30.1...v0.31.0
+[0.30.1]: https://github.com/simgine/bevy_replicon/compare/v0.30.0...v0.30.1
+[0.30.0]: https://github.com/simgine/bevy_replicon/compare/v0.29.2...v0.30.0
+[0.29.2]: https://github.com/simgine/bevy_replicon/compare/v0.29.1...v0.29.2
+[0.29.1]: https://github.com/simgine/bevy_replicon/compare/v0.29.0...v0.29.1
+[0.29.0]: https://github.com/simgine/bevy_replicon/compare/v0.28.4...v0.29.0
+[0.28.4]: https://github.com/simgine/bevy_replicon/compare/v0.28.3...v0.28.4
+[0.28.3]: https://github.com/simgine/bevy_replicon/compare/v0.28.2...v0.28.3
+[0.28.2]: https://github.com/simgine/bevy_replicon/compare/v0.28.1...v0.28.2
+[0.28.1]: https://github.com/simgine/bevy_replicon/compare/v0.28.0...v0.28.1
+[0.28.0]: https://github.com/simgine/bevy_replicon/compare/v0.27.0...v0.28.0
+[0.27.0]: https://github.com/simgine/bevy_replicon/compare/v0.26.3...v0.27.0
+[0.26.3]: https://github.com/simgine/bevy_replicon/compare/v0.26.2...v0.26.3
+[0.26.2]: https://github.com/simgine/bevy_replicon/compare/v0.26.1...v0.26.2
+[0.26.1]: https://github.com/simgine/bevy_replicon/compare/v0.26.0...v0.26.1
+[0.26.0]: https://github.com/simgine/bevy_replicon/compare/v0.25.3...v0.26.0
+[0.25.3]: https://github.com/simgine/bevy_replicon/compare/v0.25.2...v0.25.3
+[0.25.2]: https://github.com/simgine/bevy_replicon/compare/v0.25.1...v0.25.2
+[0.25.1]: https://github.com/simgine/bevy_replicon/compare/v0.25.0...v0.25.1
+[0.25.0]: https://github.com/simgine/bevy_replicon/compare/v0.24.1...v0.25.0
+[0.24.1]: https://github.com/simgine/bevy_replicon/compare/v0.24.0...v0.24.1
+[0.24.0]: https://github.com/simgine/bevy_replicon/compare/v0.23.0...v0.24.0
+[0.23.0]: https://github.com/simgine/bevy_replicon/compare/v0.22.0...v0.23.0
+[0.22.0]: https://github.com/simgine/bevy_replicon/compare/v0.21.2...v0.22.0
+[0.21.2]: https://github.com/simgine/bevy_replicon/compare/v0.21.1...v0.21.2
+[0.21.1]: https://github.com/simgine/bevy_replicon/compare/v0.21.0...v0.21.1
+[0.21.0]: https://github.com/simgine/bevy_replicon/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/simgine/bevy_replicon/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/simgine/bevy_replicon/compare/v0.18.2...v0.19.0
+[0.18.2]: https://github.com/simgine/bevy_replicon/compare/v0.18.1...v0.18.2
+[0.18.1]: https://github.com/simgine/bevy_replicon/compare/v0.18.0...v0.18.1
+[0.18.0]: https://github.com/simgine/bevy_replicon/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/simgine/bevy_replicon/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/simgine/bevy_replicon/compare/v0.15.1...v0.16.0
+[0.15.1]: https://github.com/simgine/bevy_replicon/compare/v0.15.0...v0.15.1
+[0.15.0]: https://github.com/simgine/bevy_replicon/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/simgine/bevy_replicon/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/simgine/bevy_replicon/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/simgine/bevy_replicon/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/simgine/bevy_replicon/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/simgine/bevy_replicon/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/simgine/bevy_replicon/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/simgine/bevy_replicon/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/simgine/bevy_replicon/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/simgine/bevy_replicon/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/simgine/bevy_replicon/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/simgine/bevy_replicon/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/simgine/bevy_replicon/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/simgine/bevy_replicon/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/simgine/bevy_replicon/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/simgine/bevy_replicon/compare/v0.2.3...v0.3.0
+[0.2.3]: https://github.com/simgine/bevy_replicon/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/simgine/bevy_replicon/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/simgine/bevy_replicon/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/simgine/bevy_replicon/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/simgine/bevy_replicon/releases/tag/v0.1.0

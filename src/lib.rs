@@ -4,7 +4,7 @@ A server-authoritative replication crate for [Bevy](https://bevyengine.org).
 # Quick start
 
 The library doesn't provide any I/O, so you need to add a
-[messaging backend](https://github.com/projectharmonia/bevy_replicon#messaging-backends).
+[messaging backend](https://github.com/simgine/bevy_replicon#messaging-backends).
 If you want to write an integration yourself, see [`shared::backend`] module.
 
 ## Prelude
@@ -442,7 +442,7 @@ We also provide [`ClientSet`] and [`ServerSet`] to schedule your system at speci
 For example, you can run your systems right after receive using [`ClientSet::Receive`] or [`ServerSet::Receive`].
 
 Everything else is done automatically by the crate. All provided
-[examples](https://github.com/projectharmonia/bevy_replicon/tree/master/bevy_replicon_example_backend/examples)
+[examples](https://github.com/simgine/bevy_replicon/tree/master/bevy_replicon_example_backend/examples)
 use this approach.
 
 Internally we run replication sending system only if [`server_running`] and replication receiving
@@ -495,7 +495,7 @@ in [`ServerPlugin`] to [`VisibilityPolicy::Whitelist`] or [`VisibilityPolicy::Bl
 To set which entity is visible, you need to use the [`ClientVisibility`] component
 on replicated clients (not to be confused with replicated entities).
 
-Check also the [corresponding section](https://github.com/projectharmonia/bevy_replicon#visibility)
+Check also the [corresponding section](https://github.com/simgine/bevy_replicon#visibility)
 in our README for more high-level abstractions.
 
 ### Spawning the client on an entity first
@@ -533,7 +533,7 @@ How much to predict also depends on the game. Common approaches are:
   that at least one will trigger a world rollback. So with this approach client usually just always rollbacks.
 
 We don't have these features built-in, but we provide a low-level API to implement these abstractions on top.
-Check the [corresponding section](https://github.com/projectharmonia/bevy_replicon#interpolation-andor-rollback)
+Check the [corresponding section](https://github.com/simgine/bevy_replicon#interpolation-andor-rollback)
 in our README for existing implementations.
 
 #### Client markers

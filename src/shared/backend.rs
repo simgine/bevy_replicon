@@ -16,8 +16,8 @@
 //! configurations.
 //!
 //! You can also use
-//! [bevy_replicon_example_backend](https://github.com/projectharmonia/bevy_replicon/tree/master/bevy_replicon_example_backend)
-//! as a reference. For a real backend integration, see [bevy_replicon_renet](https://github.com/projectharmonia/bevy_replicon_renet),
+//! [bevy_replicon_example_backend](https://github.com/simgine/bevy_replicon/tree/master/bevy_replicon_example_backend)
+//! as a reference. For a real backend integration, see [bevy_replicon_renet](https://github.com/simgine/bevy_replicon_renet),
 //! which we maintain.
 
 pub mod channels;

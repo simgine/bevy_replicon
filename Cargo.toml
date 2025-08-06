@@ -8,7 +8,7 @@ authors = [
 edition = "2024"
 description = "A server-authoritative replication crate for Bevy"
 readme = "README.md"
-repository = "https://github.com/projectharmonia/bevy_replicon"
+repository = "https://github.com/simgine/bevy_replicon"
 keywords = [
   "bevy",
   "multiplayer",
