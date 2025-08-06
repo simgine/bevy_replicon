@@ -135,6 +135,10 @@ or pass a tuple of [`RuleFns`] to [`AppRuleExt::replicate_with`]. The components
 be replicated if all of them are present on the entity. This also allows you to specialize
 serialization and deserialization based on specific entity components.
 
+All functions also have `_filtered` variants that additionally accept archetypal filters,
+similar to [`Query`]. They are separate functions because Rust doesn't allow default generics
+for functions. For more details, see [`AppRuleExt::replicate_filtered`].
+
 #### Required components
 
 You don't want to replicate all components because not all of them are

@@ -348,6 +348,65 @@ fn periodic_with_miss() {
 }
 
 #[test]
+fn filtered() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            RepliconPlugins.set(ServerPlugin {
+                tick_policy: TickPolicy::EveryFrame,
+                ..Default::default()
+            }),
+        ))
+        .replicate_filtered::<BoolComponent, Without<TestComponent>>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let with_match = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+    let without_match = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), TestComponent))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Change values.
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(with_match)
+        .unwrap();
+    component.0 = true;
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(without_match)
+        .unwrap();
+    component.0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = client_app
+        .world_mut()
+        .query::<&BoolComponent>()
+        .single(client_app.world())
+        .unwrap();
+    assert!(
+        component.0,
+        "only entity that matches the filter should be replicated"
+    );
+}
+
+#[test]
 fn related() {
     let mut server_app = App::new();
     let mut client_app = App::new();
