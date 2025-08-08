@@ -254,10 +254,10 @@ fn add_relation<C: Relationship>(
     mut related_entities: ResMut<RelatedEntities>,
     components: Query<&C, With<Replicated>>,
 ) {
-    if server.is_running() {
-        if let Ok(relationship) = components.get(trigger.target()) {
-            related_entities.add_relation::<C>(trigger.target(), relationship.get());
-        }
+    if server.is_running()
+        && let Ok(relationship) = components.get(trigger.target())
+    {
+        related_entities.add_relation::<C>(trigger.target(), relationship.get());
     }
 }
 
@@ -267,10 +267,10 @@ fn remove_relation<C: Relationship>(
     mut related_entities: ResMut<RelatedEntities>,
     relationships: Query<&C, With<Replicated>>,
 ) {
-    if server.is_running() {
-        if let Ok(relationship) = relationships.get(trigger.target()) {
-            related_entities.remove_relation::<C>(trigger.target(), relationship.get());
-        }
+    if server.is_running()
+        && let Ok(relationship) = relationships.get(trigger.target())
+    {
+        related_entities.remove_relation::<C>(trigger.target(), relationship.get());
     }
 }
 
@@ -280,10 +280,10 @@ fn start_replication<C: Relationship>(
     mut related_entities: ResMut<RelatedEntities>,
     components: Query<&C, With<Replicated>>,
 ) {
-    if server.is_running() {
-        if let Ok(relationship) = components.get(trigger.target()) {
-            related_entities.add_relation::<C>(trigger.target(), relationship.get());
-        }
+    if server.is_running()
+        && let Ok(relationship) = components.get(trigger.target())
+    {
+        related_entities.add_relation::<C>(trigger.target(), relationship.get());
     }
 }
 
@@ -293,10 +293,10 @@ fn stop_replication<C: Relationship>(
     mut related_entities: ResMut<RelatedEntities>,
     relationships: Query<&C, With<Replicated>>,
 ) {
-    if server.is_running() {
-        if let Ok(relationship) = relationships.get(trigger.target()) {
-            related_entities.remove_relation::<C>(trigger.target(), relationship.get());
-        }
+    if server.is_running()
+        && let Ok(relationship) = relationships.get(trigger.target())
+    {
+        related_entities.remove_relation::<C>(trigger.target(), relationship.get());
     }
 }
 
