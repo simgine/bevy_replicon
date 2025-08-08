@@ -371,12 +371,12 @@ fn apply_mutate_messages(
             ),
         }
 
-        if let Some(mutate_ticks) = &mut params.mutate_ticks {
-            if mutate_ticks.confirm(mutate.message_tick, mutate.messages_count) {
-                world.send_event(MutateTickReceived {
-                    tick: mutate.message_tick,
-                });
-            }
+        if let Some(mutate_ticks) = &mut params.mutate_ticks
+            && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
+        {
+            world.send_event(MutateTickReceived {
+                tick: mutate.message_tick,
+            });
         }
 
         false

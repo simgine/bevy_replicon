@@ -834,16 +834,15 @@ impl BufferedServerEvents {
                     SendMode::Direct(client_id) => {
                         if let ClientId::Client(client) = client_id
                             && !set.excluded.contains(&client)
+                            && let Ok((_, ticks)) = clients.get(client)
                         {
-                            if let Ok((_, ticks)) = clients.get(client) {
-                                if let Some(ticks) = ticks {
-                                    event.send(server, client, ticks)?;
-                                } else {
-                                    error!(
-                                        "ignoring direct event for non-authorized client `{client}`, \
+                            if let Some(ticks) = ticks {
+                                event.send(server, client, ticks)?;
+                            } else {
+                                error!(
+                                    "ignoring direct event for non-authorized client `{client}`, \
                                          mark it as independent to allow this"
-                                    );
-                                }
+                                );
                             }
                         }
                     }

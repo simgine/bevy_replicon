@@ -48,7 +48,7 @@ impl ServerEntityMap {
     }
 
     /// Gets a client entry using the server entity.
-    pub fn client_entry(&mut self, client_entity: Entity) -> EntityEntry {
+    pub fn client_entry(&mut self, client_entity: Entity) -> EntityEntry<'_> {
         EntityEntry::new(
             self.client_to_server.entry(client_entity),
             &mut self.server_to_client,
@@ -56,7 +56,7 @@ impl ServerEntityMap {
     }
 
     /// Gets a server entry using the client entity.
-    pub fn server_entry(&mut self, server_entity: Entity) -> EntityEntry {
+    pub fn server_entry(&mut self, server_entity: Entity) -> EntityEntry<'_> {
         EntityEntry::new(
             self.server_to_client.entry(server_entity),
             &mut self.client_to_server,
