@@ -833,8 +833,8 @@ impl BufferedServerEvents {
                     }
                     SendMode::Direct(client_id) => {
                         if let ClientId::Client(client) = client_id
-                            && !set.excluded.contains(&client)
                             && let Ok((_, ticks)) = clients.get(client)
+                            && !set.excluded.contains(&client)
                         {
                             if let Some(ticks) = ticks {
                                 event.send(server, client, ticks)?;
