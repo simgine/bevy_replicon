@@ -31,7 +31,7 @@ pub trait FilterRules {
     /// Used for preallocation.
     const ARITY: usize;
 
-    /// Priority that is added the default components priority.
+    /// Priority that is added to the default components priority.
     ///
     /// Equal to the number of all rules, including nested.
     const DEFAULT_PRIORITY: usize;
