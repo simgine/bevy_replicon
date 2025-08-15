@@ -21,7 +21,7 @@ pub trait AppRuleExt {
     ///
     /// If present on an entity with [`Replicated`] component,
     /// it will be serialized and deserialized as-is using [`postcard`]
-    /// and sent at [`SendRate::EveryTick`]. To customize this, use [`Self::replicate_with`].
+    /// and sent at [`ReplicationMode::OnChange`]. To customize this, use [`Self::replicate_with`].
     ///
     /// See also the section on [`components`](../../index.html#components) from the quick start guide.
     fn replicate<C>(&mut self) -> &mut Self
@@ -31,20 +31,12 @@ pub trait AppRuleExt {
         self.replicate_filtered::<C, ()>()
     }
 
-    /// Like [`Self::replicate`], but uses [`SendRate::Once`].
+    /// Like [`Self::replicate`], but uses [`ReplicationMode::Once`].
     fn replicate_once<C>(&mut self) -> &mut Self
     where
         C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
     {
         self.replicate_once_filtered::<C, ()>()
-    }
-
-    /// Like [`Self::replicate`], but uses [`SendRate::Periodic`] with the given tick period.
-    fn replicate_periodic<C>(&mut self, period: u32) -> &mut Self
-    where
-        C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
-    {
-        self.replicate_periodic_filtered::<C, ()>(period)
     }
 
     /// Like [`Self::replicate`], but lets you specify archetype filters an entity must match to replicate.
@@ -87,15 +79,7 @@ pub trait AppRuleExt {
     where
         C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
     {
-        self.replicate_with_filtered::<_, F>((RuleFns::<C>::default(), SendRate::Once))
-    }
-
-    /// Like [`Self::replicate_filtered`], but for [`Self::replicate_periodic`].
-    fn replicate_periodic_filtered<C, F: FilterRules>(&mut self, period: u32) -> &mut Self
-    where
-        C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
-    {
-        self.replicate_with_filtered::<_, F>((RuleFns::<C>::default(), SendRate::Periodic(period)))
+        self.replicate_with_filtered::<_, F>((RuleFns::<C>::default(), ReplicationMode::Once))
     }
 
     /**
@@ -106,7 +90,7 @@ pub trait AppRuleExt {
 
     You can also pass a tuple of [`RuleFns`] to define a rule for multiple components.
     These components will only be replicated if all of them are present on the entity.
-    To assign a [`SendRate`] to a component, wrap its [`RuleFns`] in a tuple with the
+    To assign a [`ReplicationMode`] to a component, wrap its [`RuleFns`] in a tuple with the
     desired rate.
 
     If an entity matches multiple rules, the functions from the rule with higher priority
@@ -208,7 +192,7 @@ pub trait AppRuleExt {
     .replicate_with((
         RuleFns::<MovingPlatform>::default(),
         // Send position only once.
-        (RuleFns::<Position>::default(), SendRate::Once),
+        (RuleFns::<Position>::default(), ReplicationMode::Once),
     ));
 
     #[derive(Component, Deserialize, Serialize)]
@@ -411,7 +395,7 @@ pub trait AppRuleExt {
     /// # app.add_plugins(RepliconPlugins);
     /// app.replicate_with_filtered::<_, With<StaticBox>>((
     ///     RuleFns::<Health>::default(),
-    ///     (RuleFns::<Transform>::default(), SendRate::Once),
+    ///     (RuleFns::<Transform>::default(), ReplicationMode::Once),
     /// ));
     /// # #[derive(Component)]
     /// # struct StaticBox;
@@ -452,7 +436,7 @@ pub trait AppRuleExt {
     Defines a [`ReplicationRule`] for a bundle.
 
     Implemented for tuples of components. Use it to conveniently create a rule with
-    default ser/de functions and [`SendRate::EveryTick`] for all components.
+    default ser/de functions and [`ReplicationMode::OnChange`] for all components.
     To customize this, use [`Self::replicate_with`].
 
     Can also be implemented manually for user-defined bundles.
@@ -683,37 +667,27 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
             .replicate::<A>()
-            .replicate_once::<B>()
-            .replicate_periodic::<C>(1);
+            .replicate_once::<B>();
 
         let rules = app
             .world_mut()
             .remove_resource::<ReplicationRules>()
             .unwrap();
-        let [rule_a, rule_b, rule_c] = rules.0.try_into().unwrap();
+        let [rule_a, rule_b] = rules.0.try_into().unwrap();
         assert_eq!(rule_a.priority, 1);
         assert_eq!(rule_b.priority, 1);
-        assert_eq!(rule_c.priority, 1);
 
         let a = app.world_mut().spawn(A).archetype().id();
         let b = app.world_mut().spawn(B).archetype().id();
-        let c = app.world_mut().spawn(C).archetype().id();
 
         let a = app.world().archetypes().get(a).unwrap();
         let b = app.world().archetypes().get(b).unwrap();
-        let c = app.world().archetypes().get(c).unwrap();
 
         assert!(rule_a.matches(a));
         assert!(!rule_a.matches(b));
-        assert!(!rule_a.matches(c));
 
         assert!(!rule_b.matches(a));
         assert!(rule_b.matches(b));
-        assert!(!rule_b.matches(c));
-
-        assert!(!rule_c.matches(a));
-        assert!(!rule_c.matches(b));
-        assert!(rule_c.matches(c));
     }
 
     #[test]
@@ -723,8 +697,8 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
             .replicate_filtered::<A, With<B>>()
-            .replicate_once_filtered::<B, Or<(With<A>, With<C>)>>()
-            .replicate_periodic_filtered::<C, (Without<A>, With<B>)>(1);
+            .replicate_filtered::<B, Or<(With<A>, With<C>)>>()
+            .replicate_once_filtered::<C, (Without<A>, With<B>)>();
 
         let rules = app
             .world_mut()
@@ -762,13 +736,13 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate_with((RuleFns::<A>::default(), SendRate::Once))
+            .replicate_with((RuleFns::<A>::default(), ReplicationMode::Once))
             .replicate_with((RuleFns::<B>::default(), RuleFns::<C>::default()))
             .replicate_with_priority(
                 4,
                 (
                     RuleFns::<C>::default(),
-                    (RuleFns::<D>::default(), SendRate::Periodic(1)),
+                    (RuleFns::<D>::default(), ReplicationMode::Once),
                 ),
             );
 
@@ -808,7 +782,7 @@ mod tests {
         app.init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
-            .replicate_with_filtered::<_, With<B>>((RuleFns::<A>::default(), SendRate::Once))
+            .replicate_with_filtered::<_, With<B>>((RuleFns::<A>::default(), ReplicationMode::Once))
             .replicate_with_filtered::<_, Or<(With<A>, With<D>)>>((
                 RuleFns::<B>::default(),
                 RuleFns::<C>::default(),
@@ -817,7 +791,7 @@ mod tests {
                 5,
                 (
                     RuleFns::<C>::default(),
-                    (RuleFns::<D>::default(), SendRate::Periodic(1)),
+                    (RuleFns::<D>::default(), ReplicationMode::Once),
                 ),
             );
 

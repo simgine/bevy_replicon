@@ -13,8 +13,8 @@ pub struct ComponentRule {
     pub id: ComponentId,
     /// Associated serialization and deserialization functions.
     pub fns_id: FnsId,
-    /// Send rate configuration.
-    pub send_rate: SendRate,
+    /// Replication configuration.
+    pub mode: ReplicationMode,
 }
 
 impl ComponentRule {
@@ -23,56 +23,33 @@ impl ComponentRule {
         Self {
             id,
             fns_id,
-            send_rate: Default::default(),
+            mode: Default::default(),
         }
     }
 }
 
-/// Describes how often component changes should be replicated.
+/// Describes how component changes should be replicated.
 ///
 /// Used inside [`ComponentRule`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SendRate {
-    /// Replicate any change every tick.
+pub enum ReplicationMode {
+    /// Replicate any all changes.
     ///
     /// If multiple changes occur in the same tick,
     /// only the latest value will be replicated.
     #[default]
-    EveryTick,
+    OnChange,
 
     /// Replicates only the initial value and removal.
     ///
-    /// Component mutations won't be sent.
+    /// Component mutations and re-insertions won't be sent.
     Once,
-
-    /// Replicate mutations at a specified interval.
-    ///
-    /// If multiple mutations occur within the interval,
-    /// only the latest value at the time of sending will
-    /// be replicated.
-    ///
-    /// Does not affect initial values or removals.
-    ///
-    /// For example, with a period of 2, any mutation
-    /// will be replicated every second tick.
-    Periodic(u32),
-}
-
-impl SendRate {
-    /// Returns `true` if a mutation for a component in a replication rule should be replicated on this tick.
-    pub fn send_mutations(self, tick: RepliconTick) -> bool {
-        match self {
-            SendRate::EveryTick => true,
-            SendRate::Once => false,
-            SendRate::Periodic(period) => tick.get() % period == 0,
-        }
-    }
 }
 
 /// Parameters that can be turned into a component replication rule.
 ///
 /// Used for [`IntoComponentRules`] to accept either [`RuleFns`] or a tuple combining
-/// [`RuleFns`] with an associated [`SendRate`].
+/// [`RuleFns`] with an associated [`ReplicationMode`].
 ///
 /// See [`AppRuleExt::replicate_with`] for more details.
 pub trait IntoComponentRule {
@@ -87,15 +64,11 @@ impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for RuleFns<C> {
     }
 }
 
-impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for (RuleFns<C>, SendRate) {
+impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for (RuleFns<C>, ReplicationMode) {
     fn into_rule(self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
-        let (rule_fns, send_rate) = self;
+        let (rule_fns, mode) = self;
         let (id, fns_id) = registry.register_rule_fns(world, rule_fns);
-        ComponentRule {
-            id,
-            fns_id,
-            send_rate,
-        }
+        ComponentRule { id, fns_id, mode }
     }
 }
 
@@ -180,7 +153,7 @@ macro_rules! impl_into_bundle_rules {
                             ComponentRule {
                                 id,
                                 fns_id,
-                                send_rate: Default::default(),
+                                mode: Default::default(),
                             }
                         },
                     )*
