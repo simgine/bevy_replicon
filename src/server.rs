@@ -614,7 +614,7 @@ fn collect_changes(
                         .filter(|_| updates.entity_visibility() != Visibility::Gained)
                         .filter(|_| !ticks.is_added(change_tick.last_run(), change_tick.this_run()))
                     {
-                        if component_rule.send_rate != SendRate::Once
+                        if component_rule.mode != ReplicationMode::Once
                             && ticks.is_changed(tick, change_tick.this_run())
                         {
                             if !mutations.entity_added() {

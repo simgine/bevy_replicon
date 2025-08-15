@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make `postcard_utils` a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
 - Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
+- Rename `SendRate` into `ReplicationMode`. The `EveryTick` variant was also renated into `OnChange`.
+- Rename `ComponentRule::send_rate` into `ComponentRule::mode`.
 - Rename `replicon_channels` module into `channels`.
 - Rename `replication_rules` module into `rules`.
 - Rename `replication_registry` module into `registry`.
@@ -35,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `entity_serde::serialize_entity` and `entity_serde::deserialize_entity`. Use `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` respectively; just swap the argument order.
 - `SERVER`. Use `ClientId::Server` instead.
-- `SendRate::Periodic`.
+- `ReplicationMode::Periodic`.
 
 ## [0.34.4] - 2025-07-29
 
