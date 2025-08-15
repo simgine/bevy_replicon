@@ -189,7 +189,8 @@ fn create_app<C: BenchmarkComponent>() -> App {
             ..Default::default()
         }),
     ))
-    .replicate::<C>();
+    .replicate::<C>()
+    .finish();
 
     app
 }
