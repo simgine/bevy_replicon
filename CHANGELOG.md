@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `entity_serde::serialize_entity` and `entity_serde::deserialize_entity`. Use `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` respectively; just swap the argument order.
 - `SERVER`. Use `ClientId::Server` instead.
+- `SendRate::Periodic`.
 
 ## [0.34.4] - 2025-07-29
 

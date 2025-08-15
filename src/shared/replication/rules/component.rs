@@ -44,29 +44,6 @@ pub enum SendRate {
     ///
     /// Component mutations won't be sent.
     Once,
-
-    /// Replicate mutations at a specified interval.
-    ///
-    /// If multiple mutations occur within the interval,
-    /// only the latest value at the time of sending will
-    /// be replicated.
-    ///
-    /// Does not affect initial values or removals.
-    ///
-    /// For example, with a period of 2, any mutation
-    /// will be replicated every second tick.
-    Periodic(u32),
-}
-
-impl SendRate {
-    /// Returns `true` if a mutation for a component in a replication rule should be replicated on this tick.
-    pub fn send_mutations(self, tick: RepliconTick) -> bool {
-        match self {
-            SendRate::EveryTick => true,
-            SendRate::Once => false,
-            SendRate::Periodic(period) => tick.get() % period == 0,
-        }
-    }
 }
 
 /// Parameters that can be turned into a component replication rule.
