@@ -584,7 +584,6 @@ fn collect_changes(
 
             for &(component_rule, storage) in &replicated_archetype.components {
                 let (component_id, component_fns, rule_fns) = registry.get(component_rule.fns_id);
-                let send_mutations = component_rule.send_rate.send_mutations(server_tick);
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (component, ticks) = unsafe {
@@ -615,7 +614,9 @@ fn collect_changes(
                         .filter(|_| entity_cache.visibility != Visibility::Gained)
                         .filter(|_| !ticks.is_added(change_tick.last_run(), change_tick.this_run()))
                     {
-                        if ticks.is_changed(tick, change_tick.this_run()) && send_mutations {
+                        if component_rule.send_rate != SendRate::Once
+                            && ticks.is_changed(tick, change_tick.this_run())
+                        {
                             if !mutations.entity_added() {
                                 let graph_index = related_entities.graph_index(entity.id());
                                 let entity_range = write_entity_cached(

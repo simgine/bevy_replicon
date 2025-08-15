@@ -224,8 +224,7 @@ relying on determinism. This approach is called deterministic replication (DR).
 For example, you might use AR for things like player health, and DR for moving platform positions to reduce
 network traffic.
 
-Use [`AppRuleExt::replicate_once`] to replicate only the initial value of a component. If you want a mix of
-both - relying on determinism but periodically syncing with a defined interval - use [`AppRuleExt::replicate_periodic`].
+Use [`AppRuleExt::replicate_once`] to replicate only the initial value of a component.
 You can configure this per-component within a replication rule using [`AppRuleExt::replicate_with`].
 
 See also [server events](#from-server-to-client), which are also useful for DR.
@@ -572,7 +571,6 @@ A tick for an entity is confirmed if one of the following is true:
 - [`ConfirmHistory`](client::confirm_history::ConfirmHistory) is greater than the tick.
 - [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) reports that for at least one of the next ticks, all update
   messages have been received.
-- [`SendRate::send_mutations`] returns `false` for all replicated components on the entity for every tick prior to the current one.
 
 ### Optimizing entity serialization
 

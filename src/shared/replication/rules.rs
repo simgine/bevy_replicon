@@ -39,14 +39,6 @@ pub trait AppRuleExt {
         self.replicate_once_filtered::<C, ()>()
     }
 
-    /// Like [`Self::replicate`], but uses [`SendRate::Periodic`] with the given tick period.
-    fn replicate_periodic<C>(&mut self, period: u32) -> &mut Self
-    where
-        C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
-    {
-        self.replicate_periodic_filtered::<C, ()>(period)
-    }
-
     /// Like [`Self::replicate`], but lets you specify archetype filters an entity must match to replicate.
     ///
     /// Supports [`With`], [`Without`], [`Or`], and tuples of them, similar to the second generic parameter of [`Query`].
@@ -88,14 +80,6 @@ pub trait AppRuleExt {
         C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
     {
         self.replicate_with_filtered::<_, F>((RuleFns::<C>::default(), SendRate::Once))
-    }
-
-    /// Like [`Self::replicate_filtered`], but for [`Self::replicate_periodic`].
-    fn replicate_periodic_filtered<C, F: FilterRules>(&mut self, period: u32) -> &mut Self
-    where
-        C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
-    {
-        self.replicate_with_filtered::<_, F>((RuleFns::<C>::default(), SendRate::Periodic(period)))
     }
 
     /**
@@ -683,37 +667,27 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
             .replicate::<A>()
-            .replicate_once::<B>()
-            .replicate_periodic::<C>(1);
+            .replicate_once::<B>();
 
         let rules = app
             .world_mut()
             .remove_resource::<ReplicationRules>()
             .unwrap();
-        let [rule_a, rule_b, rule_c] = rules.0.try_into().unwrap();
+        let [rule_a, rule_b] = rules.0.try_into().unwrap();
         assert_eq!(rule_a.priority, 1);
         assert_eq!(rule_b.priority, 1);
-        assert_eq!(rule_c.priority, 1);
 
         let a = app.world_mut().spawn(A).archetype().id();
         let b = app.world_mut().spawn(B).archetype().id();
-        let c = app.world_mut().spawn(C).archetype().id();
 
         let a = app.world().archetypes().get(a).unwrap();
         let b = app.world().archetypes().get(b).unwrap();
-        let c = app.world().archetypes().get(c).unwrap();
 
         assert!(rule_a.matches(a));
         assert!(!rule_a.matches(b));
-        assert!(!rule_a.matches(c));
 
         assert!(!rule_b.matches(a));
         assert!(rule_b.matches(b));
-        assert!(!rule_b.matches(c));
-
-        assert!(!rule_c.matches(a));
-        assert!(!rule_c.matches(b));
-        assert!(rule_c.matches(c));
     }
 
     #[test]
@@ -723,8 +697,8 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
             .replicate_filtered::<A, With<B>>()
-            .replicate_once_filtered::<B, Or<(With<A>, With<C>)>>()
-            .replicate_periodic_filtered::<C, (Without<A>, With<B>)>(1);
+            .replicate_filtered::<B, Or<(With<A>, With<C>)>>()
+            .replicate_once_filtered::<C, (Without<A>, With<B>)>();
 
         let rules = app
             .world_mut()
@@ -768,7 +742,7 @@ mod tests {
                 4,
                 (
                     RuleFns::<C>::default(),
-                    (RuleFns::<D>::default(), SendRate::Periodic(1)),
+                    (RuleFns::<D>::default(), SendRate::Once),
                 ),
             );
 
@@ -817,7 +791,7 @@ mod tests {
                 5,
                 (
                     RuleFns::<C>::default(),
-                    (RuleFns::<D>::default(), SendRate::Periodic(1)),
+                    (RuleFns::<D>::default(), SendRate::Once),
                 ),
             );
 
