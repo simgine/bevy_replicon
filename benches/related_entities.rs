@@ -11,21 +11,23 @@ fn hierarchy_spawning(c: &mut Criterion) {
 
     group.bench_function("regular", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins));
+        app.add_plugins((MinimalPlugins, RepliconPlugins)).finish();
 
         b.iter(|| spawn_then_despawn(&mut app));
     });
     group.bench_function("related_without_server", |b| {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, RepliconPlugins))
-            .sync_related_entities::<ChildOf>();
+            .sync_related_entities::<ChildOf>()
+            .finish();
 
         b.iter(|| spawn_then_despawn(&mut app));
     });
     group.bench_function("related", |b| {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, RepliconPlugins))
-            .sync_related_entities::<ChildOf>();
+            .sync_related_entities::<ChildOf>()
+            .finish();
 
         let mut server = app.world_mut().resource_mut::<RepliconServer>();
         server.set_running(true);
@@ -45,7 +47,7 @@ fn hierarchy_changes(c: &mut Criterion) {
 
     group.bench_function("regular", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins));
+        app.add_plugins((MinimalPlugins, RepliconPlugins)).finish();
 
         spawn_hierarchy(app.world_mut());
 
@@ -54,7 +56,8 @@ fn hierarchy_changes(c: &mut Criterion) {
     group.bench_function("related_without_server", |b| {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, RepliconPlugins))
-            .sync_related_entities::<ChildOf>();
+            .sync_related_entities::<ChildOf>()
+            .finish();
 
         spawn_hierarchy(app.world_mut());
 
@@ -63,7 +66,8 @@ fn hierarchy_changes(c: &mut Criterion) {
     group.bench_function("related", |b| {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, RepliconPlugins))
-            .sync_related_entities::<ChildOf>();
+            .sync_related_entities::<ChildOf>()
+            .finish();
 
         spawn_hierarchy(app.world_mut());
 

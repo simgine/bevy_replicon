@@ -163,7 +163,7 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Test
-        run: cargo tarpaulin --all-features --engine llvm --out lcov --exclude-files benches/*
+        run: cargo tarpaulin --benches --all-features --engine llvm --out lcov --exclude-files benches/*
 
         # Can't collect coverage from the example backend,
         # it crashes tarpaulin due to TCP usage.
