@@ -148,7 +148,6 @@ impl Plugin for ServerPlugin {
 
         debug!("using visibility policy `{:?}`", self.visibility_policy);
         match self.visibility_policy {
-            VisibilityPolicy::All => {}
             VisibilityPolicy::Blacklist => {
                 app.register_required_components_with::<AuthorizedClient, _>(
                     ClientVisibility::blacklist,
@@ -314,7 +313,7 @@ fn send_replication(
         &ConnectedClient,
         &mut ClientEntityMap,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     mut related_entities: ResMut<RelatedEntities>,
     mut removal_buffer: ResMut<RemovalBuffer>,
@@ -389,7 +388,7 @@ fn send_messages(
         &ConnectedClient,
         &mut ClientEntityMap,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     server: &mut RepliconServer,
     server_tick: RepliconTick,
@@ -400,7 +399,7 @@ fn send_messages(
     time: &Time,
 ) -> Result<()> {
     let mut server_tick_range = None;
-    for (client_entity, updates, mut mutations, client, .., mut ticks, visibility) in clients {
+    for (client_entity, updates, mut mutations, client, .., mut ticks, mut visibility) in clients {
         if !updates.is_empty() {
             ticks.set_update_tick(server_tick);
             let server_tick = write_tick_cached(&mut server_tick_range, serialized, server_tick)?;
@@ -425,9 +424,7 @@ fn send_messages(
             )?;
         }
 
-        if let Some(mut visibility) = visibility {
-            visibility.update();
-        }
+        visibility.update();
     }
 
     Ok(())
@@ -443,7 +440,7 @@ fn collect_mappings(
         &ConnectedClient,
         &mut ClientEntityMap,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
 ) -> Result<()> {
     for (client_entity, mut message, _, _, mut entity_map, ..) in clients {
@@ -470,35 +467,28 @@ fn collect_despawns(
         &ConnectedClient,
         &mut ClientEntityMap,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     despawn_buffer: &mut DespawnBuffer,
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
-        for (client_entity, mut message, .., mut ticks, visibility) in &mut *clients {
-            if let Some(mut visibility) = visibility {
-                if visibility.is_visible(entity) {
-                    trace!("writing despawn for `{entity}` for client `{client_entity}`");
-                    message.add_despawn(entity_range.clone());
-                }
-                visibility.remove_despawned(entity);
-            } else {
+        for (client_entity, mut message, .., mut ticks, mut visibility) in &mut *clients {
+            if visibility.is_visible(entity) {
                 trace!("writing despawn for `{entity}` for client `{client_entity}`");
                 message.add_despawn(entity_range.clone());
             }
+            visibility.remove_despawned(entity);
             ticks.remove_entity(entity);
         }
     }
 
-    for (client_entity, mut message, .., mut ticks, visibility) in clients {
-        if let Some(mut visibility) = visibility {
-            for entity in visibility.drain_lost() {
-                trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
-                let entity_range = serialized.write_entity(entity)?;
-                message.add_despawn(entity_range);
-                ticks.remove_entity(entity);
-            }
+    for (client_entity, mut message, .., mut ticks, mut visibility) in clients {
+        for entity in visibility.drain_lost() {
+            trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
+            let entity_range = serialized.write_entity(entity)?;
+            message.add_despawn(entity_range);
+            ticks.remove_entity(entity);
         }
     }
 
@@ -515,7 +505,7 @@ fn collect_removals(
         &ConnectedClient,
         &mut ClientEntityMap,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     removal_buffer: &RemovalBuffer,
 ) -> Result<()> {
@@ -524,7 +514,7 @@ fn collect_removals(
         let ids_len = remove_ids.len();
         let fn_ids = serialized.write_fn_ids(remove_ids.iter().map(|&(_, fns_id)| fns_id))?;
         for (client_entity, mut message, .., visibility) in &mut *clients {
-            if visibility.is_none_or(|v| v.is_visible(entity)) {
+            if visibility.is_visible(entity) {
                 trace!(
                     "writing removals for `{entity}` with `{remove_ids:?}` for client `{client_entity}`"
                 );
@@ -546,7 +536,7 @@ fn collect_changes(
         &ConnectedClient,
         &mut ClientEntityMap,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     registry: &ReplicationRegistry,
     type_registry: &AppTypeRegistry,
@@ -560,9 +550,7 @@ fn collect_changes(
         for entity in archetype.entities() {
             let mut entity_range = None;
             for (_, mut updates, mut mutations, .., visibility) in &mut *clients {
-                let visibility = visibility
-                    .map(|v| v.state(entity.id()))
-                    .unwrap_or(Visibility::Visible);
+                let visibility = visibility.state(entity.id());
                 updates.start_entity_changes(visibility);
                 mutations.start_entity();
             }
@@ -832,10 +820,8 @@ pub struct AuthorizedClient;
 /// Controls how visibility will be managed via [`ClientVisibility`].
 #[derive(Default, Debug, Clone, Copy)]
 pub enum VisibilityPolicy {
-    /// All entities are visible by default and visibility can't be changed.
-    #[default]
-    All,
     /// All entities are visible by default and should be explicitly registered to be hidden.
+    #[default]
     Blacklist,
     /// All entities are hidden by default and should be explicitly registered to be visible.
     Whitelist,
