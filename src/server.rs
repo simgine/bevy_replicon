@@ -806,17 +806,6 @@ pub enum TickPolicy {
     Manual,
 }
 
-/// Marker that enables replication and all events for a client.
-///
-/// Until authorization happened, the client and server can still exchange network events that are marked as
-/// independent via [`ServerEventAppExt::make_event_independent`] or [`ServerTriggerAppExt::make_trigger_independent`].
-/// **All other events will be ignored**.
-///
-/// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
-#[derive(Component, Default)]
-#[require(ClientTicks, ClientEntityMap, Updates, Mutations)]
-pub struct AuthorizedClient;
-
 /// Controls how visibility will be managed via [`ClientVisibility`].
 #[derive(Default, Debug, Clone, Copy)]
 pub enum VisibilityPolicy {
@@ -834,3 +823,14 @@ pub enum VisibilityPolicy {
 /// not [`TickPolicy::EveryFrame`].
 #[derive(Default, Resource, Deref, DerefMut)]
 struct DespawnBuffer(Vec<Entity>);
+
+/// Marker that enables replication and all events for a client.
+///
+/// Until authorization happened, the client and server can still exchange network events that are marked as
+/// independent via [`ServerEventAppExt::make_event_independent`] or [`ServerTriggerAppExt::make_trigger_independent`].
+/// **All other events will be ignored**.
+///
+/// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
+#[derive(Component, Default)]
+#[require(ClientTicks, ClientEntityMap, Updates, Mutations)]
+pub struct AuthorizedClient;
