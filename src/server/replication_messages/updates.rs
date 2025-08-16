@@ -7,7 +7,6 @@ use super::{change_ranges::ChangeRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
-    server::client_visibility::Visibility,
     shared::{
         backend::channels::ServerChannel, replication::update_message_flags::UpdateMessageFlags,
     },
@@ -61,11 +60,6 @@ pub(crate) struct Updates {
     /// or the entity just became visible for a client, we serialize it as part of the update message to keep entity updates atomic.
     changes: Vec<ChangeRanges>,
 
-    /// Visibility of the entity for which component changes are being written.
-    ///
-    /// Updated after [`Self::start_entity_changes`].
-    entity_visibility: Visibility,
-
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_changes`].
     changed_entity_added: bool,
@@ -109,14 +103,8 @@ impl Updates {
     ///
     /// Entities and their data are written lazily during the iteration.
     /// See [`Self::add_changed_entity`] and [`Self::add_changed_component`].
-    pub(crate) fn start_entity_changes(&mut self, visibility: Visibility) {
-        self.entity_visibility = visibility;
+    pub(crate) fn start_entity_changes(&mut self) {
         self.changed_entity_added = false;
-    }
-
-    /// Visibility from the last call of [`Self::start_entity_changes`].
-    pub(crate) fn entity_visibility(&self) -> Visibility {
-        self.entity_visibility
     }
 
     /// Returns `true` if [`Self::add_changed_entity`] were called since the last
