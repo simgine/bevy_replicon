@@ -33,7 +33,7 @@ impl ComponentRule {
 /// Used inside [`ComponentRule`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ReplicationMode {
-    /// Replicate any all changes.
+    /// Replicate all changes.
     ///
     /// If multiple changes occur in the same tick,
     /// only the latest value will be replicated.
