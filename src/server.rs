@@ -11,7 +11,10 @@ use core::{ops::Range, time::Duration};
 
 use bevy::{
     ecs::{
-        archetype::Archetypes, component::StorageType, entity::Entities, system::SystemChangeTick,
+        archetype::Archetypes,
+        component::{StorageType, Tick},
+        entity::Entities,
+        system::SystemChangeTick,
     },
     prelude::*,
     ptr::Ptr,
@@ -148,7 +151,6 @@ impl Plugin for ServerPlugin {
 
         debug!("using visibility policy `{:?}`", self.visibility_policy);
         match self.visibility_policy {
-            VisibilityPolicy::All => {}
             VisibilityPolicy::Blacklist => {
                 app.register_required_components_with::<AuthorizedClient, _>(
                     ClientVisibility::blacklist,
@@ -313,8 +315,9 @@ fn send_replication(
         &mut Mutations,
         &ConnectedClient,
         &mut ClientEntityMap,
+        &mut EntityCache,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     mut related_entities: ResMut<RelatedEntities>,
     mut removal_buffer: ResMut<RemovalBuffer>,
@@ -388,8 +391,9 @@ fn send_messages(
         &mut Mutations,
         &ConnectedClient,
         &mut ClientEntityMap,
+        &mut EntityCache,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     server: &mut RepliconServer,
     server_tick: RepliconTick,
@@ -400,7 +404,7 @@ fn send_messages(
     time: &Time,
 ) -> Result<()> {
     let mut server_tick_range = None;
-    for (client_entity, updates, mut mutations, client, .., mut ticks, visibility) in clients {
+    for (client_entity, updates, mut mutations, client, .., mut ticks, mut visibility) in clients {
         if !updates.is_empty() {
             ticks.set_update_tick(server_tick);
             let server_tick = write_tick_cached(&mut server_tick_range, serialized, server_tick)?;
@@ -425,9 +429,7 @@ fn send_messages(
             )?;
         }
 
-        if let Some(mut visibility) = visibility {
-            visibility.update();
-        }
+        visibility.update();
     }
 
     Ok(())
@@ -442,8 +444,9 @@ fn collect_mappings(
         &mut Mutations,
         &ConnectedClient,
         &mut ClientEntityMap,
+        &mut EntityCache,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
 ) -> Result<()> {
     for (client_entity, mut message, _, _, mut entity_map, ..) in clients {
@@ -469,36 +472,30 @@ fn collect_despawns(
         &mut Mutations,
         &ConnectedClient,
         &mut ClientEntityMap,
+        &mut EntityCache,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     despawn_buffer: &mut DespawnBuffer,
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
-        for (client_entity, mut message, .., mut ticks, visibility) in &mut *clients {
-            if let Some(mut visibility) = visibility {
-                if visibility.is_visible(entity) {
-                    trace!("writing despawn for `{entity}` for client `{client_entity}`");
-                    message.add_despawn(entity_range.clone());
-                }
-                visibility.remove_despawned(entity);
-            } else {
+        for (client_entity, mut message, .., mut ticks, mut visibility) in &mut *clients {
+            if visibility.is_visible(entity) {
                 trace!("writing despawn for `{entity}` for client `{client_entity}`");
                 message.add_despawn(entity_range.clone());
             }
+            visibility.remove_despawned(entity);
             ticks.remove_entity(entity);
         }
     }
 
-    for (client_entity, mut message, .., mut ticks, visibility) in clients {
-        if let Some(mut visibility) = visibility {
-            for entity in visibility.drain_lost() {
-                trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
-                let entity_range = serialized.write_entity(entity)?;
-                message.add_despawn(entity_range);
-                ticks.remove_entity(entity);
-            }
+    for (client_entity, mut message, .., mut ticks, mut visibility) in clients {
+        for entity in visibility.drain_lost() {
+            trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
+            let entity_range = serialized.write_entity(entity)?;
+            message.add_despawn(entity_range);
+            ticks.remove_entity(entity);
         }
     }
 
@@ -514,8 +511,9 @@ fn collect_removals(
         &mut Mutations,
         &ConnectedClient,
         &mut ClientEntityMap,
+        &mut EntityCache,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     removal_buffer: &RemovalBuffer,
 ) -> Result<()> {
@@ -524,7 +522,7 @@ fn collect_removals(
         let ids_len = remove_ids.len();
         let fn_ids = serialized.write_fn_ids(remove_ids.iter().map(|&(_, fns_id)| fns_id))?;
         for (client_entity, mut message, .., visibility) in &mut *clients {
-            if visibility.is_none_or(|v| v.is_visible(entity)) {
+            if visibility.is_visible(entity) {
                 trace!(
                     "writing removals for `{entity}` with `{remove_ids:?}` for client `{client_entity}`"
                 );
@@ -545,8 +543,9 @@ fn collect_changes(
         &mut Mutations,
         &ConnectedClient,
         &mut ClientEntityMap,
+        &mut EntityCache,
         &mut ClientTicks,
-        Option<&mut ClientVisibility>,
+        &mut ClientVisibility,
     )>,
     registry: &ReplicationRegistry,
     type_registry: &AppTypeRegistry,
@@ -559,11 +558,12 @@ fn collect_changes(
     for (archetype, replicated_archetype) in world.iter_archetypes() {
         for entity in archetype.entities() {
             let mut entity_range = None;
-            for (_, mut updates, mut mutations, .., visibility) in &mut *clients {
-                let visibility = visibility
-                    .map(|v| v.state(entity.id()))
-                    .unwrap_or(Visibility::Visible);
-                updates.start_entity_changes(visibility);
+            for (_, mut updates, mut mutations, .., mut entity_cache, ticks, visibility) in
+                &mut *clients
+            {
+                entity_cache.visibility = visibility.state(entity.id());
+                entity_cache.mutation_tick = ticks.mutation_tick(entity.id());
+                updates.start_entity_changes();
                 mutations.start_entity();
             }
 
@@ -601,17 +601,17 @@ fn collect_changes(
                     type_registry,
                 };
                 let mut component_range = None;
-                for (client_entity, mut updates, mut mutations, .., client_ticks, _) in
+                for (client_entity, mut updates, mut mutations, .., entity_cache, _, _) in
                     &mut *clients
                 {
-                    if updates.entity_visibility() == Visibility::Hidden {
+                    if entity_cache.visibility == Visibility::Hidden {
                         continue;
                     }
 
-                    if let Some(tick) = client_ticks
-                        .mutation_tick(entity.id())
+                    if let Some(tick) = entity_cache
+                        .mutation_tick
                         .filter(|_| !marker_added)
-                        .filter(|_| updates.entity_visibility() != Visibility::Gained)
+                        .filter(|_| entity_cache.visibility != Visibility::Gained)
                         .filter(|_| !ticks.is_added(change_tick.last_run(), change_tick.this_run()))
                     {
                         if component_rule.mode != ReplicationMode::Once
@@ -669,13 +669,14 @@ fn collect_changes(
                 }
             }
 
-            for (client_entity, mut updates, mut mutations, .., mut ticks, _) in &mut *clients {
-                let visibility = updates.entity_visibility();
-                if visibility == Visibility::Hidden {
+            for (client_entity, mut updates, mut mutations, .., entity_cache, mut ticks, _) in
+                &mut *clients
+            {
+                if entity_cache.visibility == Visibility::Hidden {
                     continue;
                 }
 
-                let new_entity = marker_added || visibility == Visibility::Gained;
+                let new_entity = marker_added || entity_cache.visibility == Visibility::Gained;
                 if new_entity
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
@@ -819,24 +820,11 @@ pub enum TickPolicy {
     Manual,
 }
 
-/// Marker that enables replication and all events for a client.
-///
-/// Until authorization happened, the client and server can still exchange network events that are marked as
-/// independent via [`ServerEventAppExt::make_event_independent`] or [`ServerTriggerAppExt::make_trigger_independent`].
-/// **All other events will be ignored**.
-///
-/// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
-#[derive(Component, Default)]
-#[require(ClientTicks, ClientEntityMap, Updates, Mutations)]
-pub struct AuthorizedClient;
-
 /// Controls how visibility will be managed via [`ClientVisibility`].
 #[derive(Default, Debug, Clone, Copy)]
 pub enum VisibilityPolicy {
-    /// All entities are visible by default and visibility can't be changed.
-    #[default]
-    All,
     /// All entities are visible by default and should be explicitly registered to be hidden.
+    #[default]
     Blacklist,
     /// All entities are hidden by default and should be explicitly registered to be visible.
     Whitelist,
@@ -849,3 +837,25 @@ pub enum VisibilityPolicy {
 /// not [`TickPolicy::EveryFrame`].
 #[derive(Default, Resource, Deref, DerefMut)]
 struct DespawnBuffer(Vec<Entity>);
+
+/// Marker that enables replication and all events for a client.
+///
+/// Until authorization happened, the client and server can still exchange network events that are marked as
+/// independent via [`ServerEventAppExt::make_event_independent`] or [`ServerTriggerAppExt::make_trigger_independent`].
+/// **All other events will be ignored**.
+///
+/// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
+#[derive(Component, Default)]
+#[require(ClientTicks, EntityCache, ClientEntityMap, Updates, Mutations)]
+pub struct AuthorizedClient;
+
+/// Cached data from [`ClientTicks`] and [`ClientVisibility`] about the entity
+/// currently being processed during [`collect_changes`].
+///
+/// Because we iterate over clients for each component, this information is
+/// cached to avoid redundant lookups.
+#[derive(Component, Default, Clone, Copy)]
+struct EntityCache {
+    visibility: Visibility,
+    mutation_tick: Option<Tick>,
+}
