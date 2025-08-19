@@ -7,9 +7,6 @@ use log::{error, warn};
 
 /// Maps server entities to client entities and vice versa.
 ///
-/// If [`ClientSet::Reset`](crate::client::ClientSet) is disabled, then this needs to be cleaned up manually
-/// by removing entries via [`EntityEntry::remove`] or [`Self::clear`].
-///
 /// Inserted as resource by [`ClientPlugin`](crate::client::ClientPlugin).
 #[derive(Default, Resource)]
 pub struct ServerEntityMap {
@@ -19,8 +16,7 @@ pub struct ServerEntityMap {
 
 impl ServerEntityMap {
     /// Inserts a server-client pair into the map.
-    #[inline]
-    pub fn insert(&mut self, server_entity: Entity, client_entity: Entity) {
+    pub(crate) fn insert(&mut self, server_entity: Entity, client_entity: Entity) {
         if let Some(existing_entity) = self.server_to_client.insert(server_entity, client_entity) {
             if client_entity != existing_entity {
                 error!(
@@ -47,16 +43,8 @@ impl ServerEntityMap {
         &self.client_to_server
     }
 
-    /// Gets a client entry using the server entity.
-    pub fn client_entry(&mut self, client_entity: Entity) -> EntityEntry<'_> {
-        EntityEntry::new(
-            self.client_to_server.entry(client_entity),
-            &mut self.server_to_client,
-        )
-    }
-
     /// Gets a server entry using the client entity.
-    pub fn server_entry(&mut self, server_entity: Entity) -> EntityEntry<'_> {
+    pub(crate) fn server_entry(&mut self, server_entity: Entity) -> EntityEntry<'_> {
         EntityEntry::new(
             self.server_to_client.entry(server_entity),
             &mut self.client_to_server,
@@ -64,7 +52,7 @@ impl ServerEntityMap {
     }
 
     /// Clears the map.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.client_to_server.clear();
         self.server_to_client.clear();
     }
@@ -172,30 +160,21 @@ mod tests {
 
         let mut map = ServerEntityMap::default();
         assert_eq!(map.server_entry(SERVER_ENTITY).get(), None);
-        assert_eq!(map.client_entry(CLIENT_ENTITY).get(), None);
-
-        map.insert(SERVER_ENTITY, CLIENT_ENTITY);
-        assert_eq!(map.server_entry(SERVER_ENTITY).get(), Some(CLIENT_ENTITY));
-        assert_eq!(map.client_entry(CLIENT_ENTITY).get(), Some(SERVER_ENTITY));
 
         map.insert(SERVER_ENTITY, Entity::PLACEHOLDER);
         assert_eq!(
             map.server_entry(SERVER_ENTITY).get(),
             Some(Entity::PLACEHOLDER)
         );
-        assert_eq!(
-            map.client_entry(Entity::PLACEHOLDER).get(),
-            Some(SERVER_ENTITY)
-        );
-        assert_eq!(map.client_entry(CLIENT_ENTITY).get(), None);
 
         map.insert(SERVER_ENTITY, CLIENT_ENTITY);
+        assert_eq!(map.server_entry(SERVER_ENTITY).get(), Some(CLIENT_ENTITY));
+
         assert_eq!(
             map.server_entry(SERVER_ENTITY).remove(),
             Some(CLIENT_ENTITY)
         );
         assert_eq!(map.server_entry(SERVER_ENTITY).get(), None);
-        assert_eq!(map.client_entry(CLIENT_ENTITY).get(), None);
 
         assert_eq!(
             map.server_entry(SERVER_ENTITY)
@@ -203,7 +182,6 @@ mod tests {
             CLIENT_ENTITY
         );
         assert_eq!(map.server_entry(SERVER_ENTITY).get(), Some(CLIENT_ENTITY));
-        assert_eq!(map.client_entry(CLIENT_ENTITY).get(), Some(SERVER_ENTITY));
 
         assert_eq!(
             map.server_entry(SERVER_ENTITY)
@@ -211,6 +189,5 @@ mod tests {
             CLIENT_ENTITY
         );
         assert_eq!(map.server_entry(SERVER_ENTITY).get(), Some(CLIENT_ENTITY));
-        assert_eq!(map.client_entry(CLIENT_ENTITY).get(), Some(SERVER_ENTITY));
     }
 }

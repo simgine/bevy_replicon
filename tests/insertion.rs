@@ -162,14 +162,7 @@ fn mapped_existing_entity() {
     server_app.connect_client(&mut client_app);
 
     let server_entity = server_app.world_mut().spawn(Replicated).id();
-    let server_map_entity = server_app.world_mut().spawn_empty().id();
-    let client_map_entity = client_app.world_mut().spawn_empty().id();
-    assert_ne!(server_map_entity, client_map_entity);
-
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_map_entity, client_map_entity);
+    let server_map_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -184,6 +177,13 @@ fn mapped_existing_entity() {
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
+
+    let client_map_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_map_entity)
+        .unwrap();
 
     let mapped_component = client_app
         .world_mut()
