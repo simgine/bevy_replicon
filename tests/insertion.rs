@@ -350,10 +350,10 @@ fn marker() {
     let client_entity = client_app.world_mut().spawn(ReplaceMarker).id();
     assert_ne!(server_entity, client_entity);
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     let mut entity_map = server_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(test_client_entity)
+        .get_mut::<ClientEntityMap>(client)
         .unwrap();
     entity_map.insert(server_entity, client_entity);
 
@@ -533,10 +533,10 @@ fn before_started_replication() {
         "no entities should have been sent to the client"
     );
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     server_app
         .world_mut()
-        .entity_mut(test_client_entity)
+        .entity_mut(client)
         .insert(AuthorizedClient);
 
     server_app.update();
@@ -569,10 +569,10 @@ fn after_started_replication() {
 
     server_app.connect_client(&mut client_app);
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     server_app
         .world_mut()
-        .entity_mut(test_client_entity)
+        .entity_mut(client)
         .insert(AuthorizedClient);
 
     server_app.update();

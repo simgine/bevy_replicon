@@ -61,10 +61,10 @@ fn blacklist() {
         .spawn((Replicated, TestComponent))
         .id();
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     let mut visibility = server_app
         .world_mut()
-        .get_mut::<ClientVisibility>(test_client_entity)
+        .get_mut::<ClientVisibility>(client)
         .unwrap();
     visibility.set_visibility(server_entity, false);
 
@@ -79,7 +79,7 @@ fn blacklist() {
     // Reverse visibility back.
     let mut visibility = server_app
         .world_mut()
-        .get_mut::<ClientVisibility>(test_client_entity)
+        .get_mut::<ClientVisibility>(client)
         .unwrap();
     visibility.set_visibility(server_entity, true);
 
@@ -114,10 +114,10 @@ fn blacklist_with_despawn() {
 
     let server_entity = server_app.world_mut().spawn(Replicated).id();
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     let mut visibility = server_app
         .world_mut()
-        .get_mut::<ClientVisibility>(test_client_entity)
+        .get_mut::<ClientVisibility>(client)
         .unwrap();
     visibility.set_visibility(server_entity, false);
     server_app.world_mut().despawn(server_entity);
@@ -129,10 +129,7 @@ fn blacklist_with_despawn() {
     let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(replicated.iter(client_app.world()).len(), 0);
 
-    let visibility = server_app
-        .world()
-        .get::<ClientVisibility>(test_client_entity)
-        .unwrap();
+    let visibility = server_app.world().get::<ClientVisibility>(client).unwrap();
     assert!(visibility.is_visible(server_entity)); // The missing entity must be removed from the list, so this should return `true`.
 }
 
@@ -193,10 +190,10 @@ fn whitelist() {
         .spawn((Replicated, TestComponent))
         .id();
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     let mut visibility = server_app
         .world_mut()
-        .get_mut::<ClientVisibility>(test_client_entity)
+        .get_mut::<ClientVisibility>(client)
         .unwrap();
     visibility.set_visibility(server_entity, true);
 
@@ -213,7 +210,7 @@ fn whitelist() {
     // Reverse visibility.
     let mut visibility = server_app
         .world_mut()
-        .get_mut::<ClientVisibility>(test_client_entity)
+        .get_mut::<ClientVisibility>(client)
         .unwrap();
     visibility.set_visibility(server_entity, false);
 
@@ -249,10 +246,10 @@ fn whitelist_with_despawn() {
 
     let server_entity = server_app.world_mut().spawn(Replicated).id();
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     let mut visibility = server_app
         .world_mut()
-        .get_mut::<ClientVisibility>(test_client_entity)
+        .get_mut::<ClientVisibility>(client)
         .unwrap();
     visibility.set_visibility(server_entity, true);
     server_app.world_mut().despawn(server_entity);
@@ -264,10 +261,7 @@ fn whitelist_with_despawn() {
     let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(replicated.iter(client_app.world()).len(), 0);
 
-    let visibility = server_app
-        .world()
-        .get::<ClientVisibility>(test_client_entity)
-        .unwrap();
+    let visibility = server_app.world().get::<ClientVisibility>(client).unwrap();
     assert!(!visibility.is_visible(server_entity));
 }
 

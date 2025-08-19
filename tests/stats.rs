@@ -30,10 +30,10 @@ fn client_stats() {
         .spawn((Replicated, TestComponent))
         .id();
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     let mut entity_map = server_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(test_client_entity)
+        .get_mut::<ClientEntityMap>(client)
         .unwrap();
     entity_map.insert(server_entity, client_entity);
 
