@@ -810,13 +810,11 @@ pub enum ClientSet {
 pub struct ServerUpdateTick(RepliconTick);
 
 /// Cached buffered mutate messages, used to synchronize mutations with update messages.
-///
-/// If [`ClientSet::Reset`] is disabled, then this needs to be cleaned up manually with [`Self::clear`].
 #[derive(Default, Resource)]
-pub struct BufferedMutations(Vec<BufferedMutate>);
+pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
 
 impl BufferedMutations {
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.0.clear();
     }
 
