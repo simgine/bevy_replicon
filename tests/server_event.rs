@@ -52,13 +52,13 @@ fn regular() {
 
     server_app.connect_client(&mut client_app);
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
         (SendMode::Direct(ClientId::Server), 0),
-        (SendMode::Direct(test_client_entity.into()), 1),
+        (SendMode::Direct(client.into()), 1),
         (SendMode::BroadcastExcept(ClientId::Server), 1),
-        (SendMode::BroadcastExcept(test_client_entity.into()), 0),
+        (SendMode::BroadcastExcept(client.into()), 0),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
@@ -155,13 +155,13 @@ fn without_plugins() {
 
     server_app.connect_client(&mut client_app);
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
         (SendMode::Direct(ClientId::Server), 0),
-        (SendMode::Direct(test_client_entity.into()), 1),
+        (SendMode::Direct(client.into()), 1),
         (SendMode::BroadcastExcept(ClientId::Server), 1),
-        (SendMode::BroadcastExcept(test_client_entity.into()), 0),
+        (SendMode::BroadcastExcept(client.into()), 0),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
@@ -476,13 +476,13 @@ fn independent() {
     // but our independent event should be triggered immediately.
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = Default::default();
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
         (SendMode::Direct(ClientId::Server), 0),
-        (SendMode::Direct(test_client_entity.into()), 1),
+        (SendMode::Direct(client.into()), 1),
         (SendMode::BroadcastExcept(ClientId::Server), 1),
-        (SendMode::BroadcastExcept(test_client_entity.into()), 0),
+        (SendMode::BroadcastExcept(client.into()), 0),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,
@@ -536,11 +536,11 @@ fn before_started_replication() {
 
     server_app.connect_client(&mut client_app);
 
-    let test_client_entity = **client_app.world().resource::<TestClientEntity>();
+    let client = **client_app.world().resource::<TestClientEntity>();
     for mode in [
         SendMode::Broadcast,
         SendMode::BroadcastExcept(ClientId::Server),
-        SendMode::Direct(test_client_entity.into()),
+        SendMode::Direct(client.into()),
     ] {
         server_app.world_mut().send_event(ToClients {
             mode,

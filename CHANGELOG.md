@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `IntoReplicationRule` with `IntoComponentRules`, which returns only `Vec<ComponentRule>`.
 - Replace `ReplicationBundle` with `BundleRules`, which returns only `Vec<ComponentRule>` and uses an associated constant to customize the priority.
 - Hide `ServerEntityMap` mutation methods from public API.
+- Hide `BufferedMutations` from public API.
 
 ## Removed
 
