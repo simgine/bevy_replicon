@@ -57,12 +57,7 @@ fn with_target() {
 
     server_app.connect_client(&mut client_app);
 
-    let client_entity = Entity::from_raw(0);
-    let server_entity = Entity::from_raw(client_entity.index() + 1);
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_entity, client_entity);
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.world_mut().server_trigger_targets(
         ToClients {
@@ -75,6 +70,13 @@ fn with_target() {
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
 
     let reader = client_app.world().resource::<TriggerReader<TestEvent>>();
     assert_eq!(reader.entities, [client_entity]);
@@ -99,12 +101,7 @@ fn mapped() {
 
     server_app.connect_client(&mut client_app);
 
-    let client_entity = Entity::from_raw(0);
-    let server_entity = Entity::from_raw(client_entity.index() + 1);
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_entity, client_entity);
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
@@ -114,6 +111,13 @@ fn mapped() {
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
 
     let reader = client_app.world().resource::<TriggerReader<EntityEvent>>();
     let mapped_entities: Vec<_> = reader.events.iter().map(|event| event.0).collect();

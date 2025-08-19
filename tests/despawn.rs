@@ -23,12 +23,18 @@ fn single() {
     server_app.connect_client(&mut client_app);
 
     let server_entity = server_app.world_mut().spawn(Replicated).id();
-    let client_entity = client_app.world_mut().spawn(Replicated).id();
 
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_entity, client_entity);
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
 
     server_app.world_mut().despawn(server_entity);
 
@@ -44,7 +50,7 @@ fn single() {
 }
 
 #[test]
-fn with_hierarchy() {
+fn with_relations() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -60,32 +66,25 @@ fn with_hierarchy() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_child_entity = server_app.world_mut().spawn(Replicated).id();
     let server_entity = server_app
         .world_mut()
-        .spawn(Replicated)
-        .add_children(&[server_child_entity])
+        .spawn((Replicated, children![Replicated]))
         .id();
 
-    let client_child_entity = client_app.world_mut().spawn(Replicated).id();
-    let client_entity = client_app
-        .world_mut()
-        .spawn(Replicated)
-        .add_children(&[client_child_entity])
-        .id();
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
 
-    let mut entity_map = client_app.world_mut().resource_mut::<ServerEntityMap>();
-    entity_map.insert(server_entity, client_entity);
-    entity_map.insert(server_child_entity, client_child_entity);
+    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    assert_eq!(replicated.iter(client_app.world()).len(), 2);
 
     server_app.world_mut().despawn(server_entity);
-    server_app.world_mut().despawn(server_child_entity);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(replicated.iter(client_app.world()).len(), 0);
 }
 

@@ -97,12 +97,7 @@ fn mapped() {
 
     server_app.connect_client(&mut client_app);
 
-    let client_entity = Entity::from_raw(0);
-    let server_entity = Entity::from_raw(client_entity.index() + 1);
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_entity, client_entity);
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.world_mut().send_event(ToClients {
         mode: SendMode::Broadcast,
@@ -112,6 +107,13 @@ fn mapped() {
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
 
     let mapped_entities: Vec<_> = client_app
         .world_mut()
@@ -336,13 +338,6 @@ fn client_queue_and_mapping() {
 
     // Spawn an entity to trigger world change.
     let server_entity = server_app.world_mut().spawn(Replicated).id();
-    let client_entity = client_app.world_mut().spawn_empty().id();
-    assert_ne!(server_entity, client_entity);
-
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_entity, client_entity);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -369,6 +364,13 @@ fn client_queue_and_mapping() {
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = previous_tick;
 
     client_app.update();
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
 
     let mapped_entities: Vec<_> = client_app
         .world_mut()

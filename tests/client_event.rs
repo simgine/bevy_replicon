@@ -61,19 +61,31 @@ fn mapped() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
-            .add_mapped_client_event::<EntityEvent>(Channel::Ordered)
-            .finish();
+        app.add_plugins((
+            MinimalPlugins,
+            RepliconPlugins.set(ServerPlugin {
+                tick_policy: TickPolicy::EveryFrame,
+                ..Default::default()
+            }),
+        ))
+        .add_mapped_client_event::<EntityEvent>(Channel::Ordered)
+        .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let client_entity = Entity::from_raw(0);
-    let server_entity = Entity::from_raw(client_entity.index() + 1);
-    client_app
-        .world_mut()
-        .resource_mut::<ServerEntityMap>()
-        .insert(server_entity, client_entity);
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
 
     client_app
         .world_mut()
