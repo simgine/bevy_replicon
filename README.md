@@ -63,11 +63,11 @@ Depending on your game, you may need additional features. We provide an API that
 
 #### Miscellaneous
 
-- [`bevy_replicon_repair`](https://github.com/UkoeHB/bevy_replicon_repair) - preserves replicated client state across reconnects.
 - [`bevy_bundlication`](https://github.com/NiseVoid/bevy_bundlication) - automates the creation of replication rules for bundles.
 
 #### Unmaintained
 
+- [`bevy_replicon_repair`](https://github.com/UkoeHB/bevy_replicon_repair) - preserves replicated client state across reconnects.
 - [`bevy_replicon_snap`](https://github.com/Bendzae/bevy_replicon_snap) - snapshot interpolation and client-side prediction.
 - [`bevy_timewarp`](https://github.com/RJ/bevy_timewarp) - a rollback library that buffers component state. See [this instruction](https://github.com/RJ/bevy_timewarp/blob/main/REPLICON_INTEGRATION.md) about how to integrate.
 
