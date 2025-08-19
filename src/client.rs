@@ -790,13 +790,6 @@ pub enum ClientSet {
     /// Systems that reset the client.
     ///
     /// Runs in [`PreUpdate`] when the client just disconnected.
-    ///
-    /// You may want to disable this set if you want to preserve client replication state across reconnects.
-    /// In that case, you need to manually repair the client state (or use something like
-    /// [`bevy_replicon_repair`](https://docs.rs/bevy_replicon_repair)).
-    ///
-    /// If this set is disabled and you don't want to repair client state, then you need to manually clean up
-    /// the client after a disconnect or when reconnecting.
     Reset,
 }
 
