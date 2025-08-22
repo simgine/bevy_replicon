@@ -93,13 +93,12 @@ impl ClientTicks {
     pub(crate) fn ack_mutate_message(
         &mut self,
         client: Entity,
-        entity_buffer: &mut EntityBuffer,
         tick: Tick,
         mutate_index: MutateIndex,
-    ) {
+    ) -> Option<Vec<Entity>> {
         let Some(mutate_info) = self.mutations.remove(&mutate_index) else {
             debug!("received unknown `{mutate_index:?}` from client `{client}`");
-            return;
+            return None;
         };
 
         for entity in &mutate_info.entities {
@@ -114,12 +113,12 @@ impl ClientTicks {
                 *last_tick = mutate_info.tick;
             }
         }
-        entity_buffer.push(mutate_info.entities);
-
         trace!(
             "acknowledged mutate message with `{:?}` from client `{client}`",
             mutate_info.tick,
         );
+
+        Some(mutate_info.entities)
     }
 
     /// Removes a despawned or hidden entity from tracking by this client.

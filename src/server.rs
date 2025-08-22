@@ -262,12 +262,11 @@ fn receive_acks(
                             "messages from client `{client}` should have been removed on disconnect"
                         )
                     });
-                    ticks.ack_mutate_message(
-                        client,
-                        &mut entity_buffer,
-                        change_tick.this_run(),
-                        mutate_index,
-                    );
+                    if let Some(entities) =
+                        ticks.ack_mutate_message(client, change_tick.this_run(), mutate_index)
+                    {
+                        entity_buffer.push(entities);
+                    }
                 }
                 Err(e) => {
                     debug!("unable to deserialize mutate index from client `{client}`: {e}")
