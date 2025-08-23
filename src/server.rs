@@ -607,11 +607,10 @@ fn collect_changes(
                         continue;
                     }
 
-                    if let Some(tick) = entity_cache
-                        .mutation_tick
-                        .filter(|_| !marker_added)
-                        .filter(|_| entity_cache.visibility != Visibility::Gained)
-                        .filter(|_| !ticks.is_added(change_tick.last_run(), change_tick.this_run()))
+                    if let Some(tick) = entity_cache.mutation_tick
+                        && !marker_added
+                        && entity_cache.visibility != Visibility::Gained
+                        && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
                     {
                         if component_rule.mode != ReplicationMode::Once
                             && ticks.is_changed(tick, change_tick.this_run())
