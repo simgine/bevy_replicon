@@ -899,7 +899,8 @@ pub struct AuthorizedClient;
 /// all unacknowledged mutations will be sent every tick.
 ///
 /// All of this only affects mutations. For any component insertion or removal, the changes
-/// will be sent using [`ServerChannel::Update`]. See its documentation for more details.
+/// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
+/// See its documentation for more details.
 #[derive(Component, Deref, DerefMut, Debug, Default, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);
 
