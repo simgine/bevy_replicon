@@ -1,5 +1,4 @@
-//! A game to showcase single-player and multiplier game.
-//! Run it with `cargo run --example tic_tac_toe -- hotseat` to play locally or with `-- client` / `-- server`
+//! Tic-tac-toe game with optional multiplayer.
 
 use std::fmt::{self, Formatter};
 
@@ -44,7 +43,7 @@ fn main() {
         .add_observer(apply_pick)
         .add_observer(init_symbols)
         .add_observer(advance_turn)
-        .add_systems(Startup, (setup_ui, read_cli))
+        .add_systems(Startup, (read_cli, setup_ui))
         .add_systems(
             OnEnter(GameState::InGame),
             (show_turn_text, show_turn_symbol),
@@ -95,12 +94,17 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
         }
         Cli::Server { port, symbol } => {
             info!("starting server as {symbol} at port {port}");
+
+            // Backend initialization
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
+
             commands.spawn((LocalPlayer, symbol));
         }
         Cli::Client { port } => {
             info!("connecting to port {port}");
+
+            // Backend initialization
             let client = ExampleClient::new(port)?;
             commands.insert_resource(client);
         }
@@ -504,9 +508,12 @@ fn local_player_turn(
 
 const PORT: u16 = 5000;
 
+/// A Tic-tac-toe game.
 #[derive(Parser, PartialEq, Resource)]
 enum Cli {
+    /// Play locally.
     Hotseat,
+    /// Create a server that acts as both player and host.
     Server {
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
@@ -514,6 +521,7 @@ enum Cli {
         #[arg(short, long, default_value_t = Symbol::Cross)]
         symbol: Symbol,
     },
+    /// Connect to a host.
     Client {
         #[arg(short, long, default_value_t = PORT)]
         port: u16,

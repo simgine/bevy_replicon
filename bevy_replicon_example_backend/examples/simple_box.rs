@@ -1,5 +1,4 @@
-//! A simple demo to showcase how player could send inputs to move a box and server replicates position back.
-//! Also demonstrates the single-player and how sever also could be a player.
+//! A player sends inputs to move a box, and the server replicates the position back.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -32,12 +31,14 @@ fn main() {
         .add_observer(spawn_clients)
         .add_observer(despawn_clients)
         .add_observer(apply_movement)
-        .add_systems(Startup, (read_cli, spawn_camera))
+        .add_systems(Startup, setup)
         .add_systems(Update, (read_input, draw_boxes))
         .run();
 }
 
-fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
+fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
+    commands.spawn(Camera2d);
+
     match *cli {
         Cli::SinglePlayer => {
             info!("starting single-player game");
@@ -50,8 +51,11 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
         }
         Cli::Server { port } => {
             info!("starting server at port {port}");
+
+            // Backend initialization
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
+
             commands.spawn((
                 Text::new("Server"),
                 TextFont {
@@ -69,9 +73,12 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
         }
         Cli::Client { port } => {
             info!("connecting to port {port}");
+
+            // Backend initialization
             let client = ExampleClient::new(port)?;
             let addr = client.local_addr()?;
             commands.insert_resource(client);
+
             commands.spawn((
                 Text(format!("Client: {addr}")),
                 TextFont {
@@ -84,10 +91,6 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera2d);
 }
 
 /// Spawns a new box whenever a client connects.
@@ -182,17 +185,17 @@ fn draw_boxes(mut gizmos: Gizmos, boxes: Query<(&BoxPosition, &PlayerBox)>) {
 
 const PORT: u16 = 5000;
 
-/// A simple game with moving boxes.
+/// A simple demo with moving boxes.
 #[derive(Parser, PartialEq, Resource)]
 enum Cli {
-    /// No networking will be used, the player will control its box locally.
+    /// Play locally.
     SinglePlayer,
-    /// Run game instance will act as both a player and a host.
+    /// Create a server that acts as both player and host.
     Server {
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
     },
-    /// The game instance will connect to a host in order to start the game.
+    /// Connect to a host.
     Client {
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
