@@ -1,11 +1,8 @@
-//! Showcases boids with deterministic replication: on connection, the server sends its state
+//! Boids with deterministic replication: on connection, the server sends its state
 //! to clients, which then continue simulating independently while achieving identical results
 //! through determinism.
 //! See https://vanhunteradams.com/Pico/Animal_Movement/Boids-algorithm.html for details on the
 //! used algorithm.
-//!
-//! Run with `cargo run --example deterministic_boids -- single-player` to play locally,
-//! or use `client` / `server` for multiplayer.
 
 use std::f32::consts::TAU;
 
@@ -54,14 +51,17 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     commands.spawn(Camera2d);
 
     match *cli {
-        Cli::SinglePlayer => {
-            info!("starting single-player game");
+        Cli::Local => {
+            info!("starting local");
             spawn_boids(&mut commands);
         }
         Cli::Server { port } => {
             info!("starting server at port {port}");
+
+            // Backend initialization
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
+
             commands.spawn((
                 Text::new("Server"),
                 TextFont {
@@ -74,9 +74,12 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
         }
         Cli::Client { port } => {
             info!("connecting to port {port}");
+
+            // Backend initialization
             let client = ExampleClient::new(port)?;
             let addr = client.local_addr()?;
             commands.insert_resource(client);
+
             commands.spawn((
                 Text(format!("Client: {addr}")),
                 TextFont {
@@ -249,13 +252,17 @@ fn update(
 
 const PORT: u16 = 5000;
 
+/// Deterministic Boids demo.
 #[derive(Parser, PartialEq, Resource)]
 enum Cli {
-    SinglePlayer,
+    /// Run locally without any networking.
+    Local,
+    /// Create a server.
     Server {
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
     },
+    /// Connect to a host.
     Client {
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
