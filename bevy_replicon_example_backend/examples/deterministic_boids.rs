@@ -147,7 +147,9 @@ fn init_boid(
 
 /// Simulates boid flocking behavior.
 ///
-/// The simulation is fully deterministic.
+/// The simulation is deterministic: the algorithm relies only on +, -, *, and /,
+/// which are defined by IEEE-754. For more details, see
+/// https://github.com/bevyengine/bevy/discussions/8675 (scroll to "Math").
 fn update(
     mut cached_boids: Local<Vec<(Vec2, Velocity)>>,
     mut boids: Query<(&Boid, &mut Bias, &mut Transform, &mut Velocity)>,
