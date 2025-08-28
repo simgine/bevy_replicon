@@ -182,7 +182,10 @@ fn update(
         let mut neighbors = 0;
 
         // Collect information about other birds.
-        for &(other_position, other_velocity) in &cached_boids[index + 1..] {
+        for (other_index, &(other_position, other_velocity)) in cached_boids.iter().enumerate() {
+            if index == other_index {
+                continue;
+            }
             let diff = position - other_position;
 
             if diff.x.abs() < VISUAL_RANGE && diff.y.abs() < VISUAL_RANGE {
