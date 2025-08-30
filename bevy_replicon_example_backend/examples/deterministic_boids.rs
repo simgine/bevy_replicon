@@ -238,9 +238,9 @@ fn update(
         // Limit speed.
         let speed = velocity.length();
         if speed < MIN_SPEED {
-            **velocity = velocity.normalize() * MIN_SPEED;
+            **velocity = **velocity / speed * MIN_SPEED;
         } else if speed > MAX_SPEED {
-            **velocity = velocity.normalize() * MAX_SPEED;
+            **velocity = **velocity / speed * MAX_SPEED;
         }
 
         // Apply computation results to the sprite.
