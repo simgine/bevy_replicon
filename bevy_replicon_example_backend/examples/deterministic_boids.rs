@@ -181,7 +181,7 @@ fn update(
         let mut velocity_avg = Vec2::ZERO;
         let mut neighbors = 0;
 
-        // Collect information about other birds.
+        // Collect information about other boids.
         for (other_index, &(other_position, other_velocity)) in cached_boids.iter().enumerate() {
             if index == other_index {
                 continue;
