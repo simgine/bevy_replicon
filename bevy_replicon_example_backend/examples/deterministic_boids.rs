@@ -3,6 +3,11 @@
 //! through determinism.
 //! See https://vanhunteradams.com/Pico/Animal_Movement/Boids-algorithm.html for details on the
 //! used algorithm.
+//!
+//! Determinism helps save traffic, but determinism is not easy to guarantee, and clients need to
+//! know the full state, which may not be acceptable due to cheating. Luckily, you can combine it
+//! with authoritative replication for things that can't be simulated deterministically or need
+//! to be hidden from clients.
 
 use std::f32::consts::TAU;
 
