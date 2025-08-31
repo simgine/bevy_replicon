@@ -1,5 +1,6 @@
 use bevy::{
     color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500},
+    platform::collections::HashMap,
     prelude::*,
     render::primitives::Aabb,
 };
@@ -56,11 +57,11 @@ fn spawn_units(mut commands: Commands) {
         let blue_position = BLUE_ORIGIN + grid_position;
 
         commands.spawn((
-            Unit::Red,
+            Unit { team: Team::Red },
             Transform::from_translation(red_position.extend(0.0)),
         ));
         commands.spawn((
-            Unit::Blue,
+            Unit { team: Team::Blue },
             Transform::from_translation(blue_position.extend(0.0)),
         ));
     }
@@ -73,14 +74,8 @@ fn init_unit(
     mut units: Query<(&Unit, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,
 ) {
     let (unit, mut mesh, mut material) = units.get_mut(trigger.target()).unwrap();
-
-    let unit_material = match unit {
-        Unit::Blue => &unit_materials.blue,
-        Unit::Red => &unit_materials.red,
-    };
-
     **mesh = unit_mesh.0.clone();
-    **material = unit_material.clone();
+    **material = unit_materials.get(&unit.team).unwrap().clone();
 }
 
 fn select_units(
@@ -329,21 +324,27 @@ fn move_units(
     cached_units.clear();
 }
 
+const SELECTION_COLOR: Srgba = GREEN_500;
+
 fn draw_selection(mut gizmos: Gizmos, selection: Res<Selection>) {
-    gizmos.rect_2d(selection.rect.center(), selection.rect.size(), GREEN_500);
+    gizmos.rect_2d(
+        selection.rect.center(),
+        selection.rect.size(),
+        SELECTION_COLOR,
+    );
 }
 
 fn draw_selected(mut gizmos: Gizmos, units: Query<(&GlobalTransform, &Command), With<Selected>>) {
     for (transform, &command) in &units {
         let position = transform.translation().truncate();
-        gizmos.circle_2d(position, 15.0, GREEN_500);
+        gizmos.circle_2d(position, 15.0, SELECTION_COLOR);
 
         if let Command::Move(translation) = command {
             let isometry = Isometry2d {
                 rotation: Rot2::FRAC_PI_4,
                 translation,
             };
-            gizmos.cross_2d(isometry, 10.0, GREEN_500);
+            gizmos.cross_2d(isometry, 10.0, SELECTION_COLOR);
         }
     }
 }
@@ -370,27 +371,45 @@ impl FromWorld for UnitMesh {
     }
 }
 
-struct UnitMaterials {
-    blue: Handle<ColorMaterial>,
-    red: Handle<ColorMaterial>,
-}
+#[derive(Deref)]
+struct UnitMaterials(HashMap<Team, Handle<ColorMaterial>>);
 
 impl FromWorld for UnitMaterials {
     fn from_world(world: &mut World) -> Self {
         let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
-        let red = materials.add(Color::from(RED_500));
-        let blue = materials.add(Color::from(BLUE_500));
 
-        Self { blue, red }
+        let mut map = HashMap::default();
+        for team in [Team::Red, Team::Blue] {
+            let color = materials.add(team.color());
+            map.insert(team, color);
+        }
+
+        Self(map)
     }
 }
 
 #[derive(Component, Serialize, Deserialize)]
 #[component(immutable)]
 #[require(Replicated, Command, Mesh2d, MeshMaterial2d<ColorMaterial>)]
-enum Unit {
+struct Unit {
+    team: Team,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+enum Team {
     Blue,
     Red,
+}
+
+impl Team {
+    fn color(self) -> Color {
+        let color = match self {
+            Team::Blue => BLUE_500,
+            Team::Red => RED_500,
+        };
+
+        color.into()
+    }
 }
 
 #[derive(Component, Default, Clone, Copy)]
