@@ -31,7 +31,7 @@ fn main() {
         .replicate_once::<Bias>()
         .replicate_once::<Velocity>()
         .replicate_with((
-            // Customize serialization to skip `scale`.
+            // Customize serialization to skip `scale` and avoid sending Z axis.
             RuleFns::new(serialize_transform, deserialize_transform),
             ReplicationMode::Once,
         ))
@@ -319,20 +319,20 @@ impl FromWorld for BoidMesh {
     }
 }
 
-/// Serializes [`Transform`] without [`Transform::scale`].
+/// Serializes [`Transform`] without [`Transform::scale`] and Z axis.
 fn serialize_transform(
     _ctx: &SerializeCtx,
     transform: &Transform,
     message: &mut Vec<u8>,
 ) -> Result<()> {
-    postcard_utils::to_extend_mut(&transform.translation, message)?;
+    postcard_utils::to_extend_mut(&transform.translation.truncate(), message)?;
     postcard_utils::to_extend_mut(&transform.rotation, message)?;
     Ok(())
 }
 
-/// Deserializes [`Transform`] without [`Transform::scale`].
+/// Deserializes [`Transform`] without [`Transform::scale`] and Z axis.
 fn deserialize_transform(_ctx: &mut WriteCtx, message: &mut Bytes) -> Result<Transform> {
-    let translation: Vec3 = postcard_utils::from_buf(message)?;
+    let translation: Vec2 = postcard_utils::from_buf(message)?;
     let rotation = postcard_utils::from_buf(message)?;
-    Ok(Transform::from_translation(translation).with_rotation(rotation))
+    Ok(Transform::from_translation(translation.extend(0.0)).with_rotation(rotation))
 }
