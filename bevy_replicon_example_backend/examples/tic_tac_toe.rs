@@ -1,4 +1,5 @@
 //! Tic-tac-toe game with optional multiplayer.
+//! Client sends commands and server replicates the state back.
 
 use std::fmt::{self, Formatter};
 
