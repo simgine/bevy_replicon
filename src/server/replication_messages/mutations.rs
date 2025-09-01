@@ -160,22 +160,23 @@ impl Mutations {
         entity_buffer: &mut EntityBuffer,
         serialized: &SerializedData,
         track_mutate_messages: bool,
-        server_tick: Range<usize>,
-        tick: Tick,
+        server_tick_range: Range<usize>,
+        server_tick: RepliconTick,
+        system_tick: Tick,
         timestamp: Duration,
         max_size: usize,
     ) -> Result<usize> {
         const MAX_COUNT_SIZE: usize = usize::POSTCARD_MAX_SIZE;
         let mut tick_buffer = [0; RepliconTick::POSTCARD_MAX_SIZE];
         let update_tick = postcard::to_slice(&ticks.update_tick(), &mut tick_buffer)?;
-        let mut metadata_size = update_tick.len() + server_tick.len();
+        let mut metadata_size = update_tick.len() + server_tick_range.len();
         if track_mutate_messages {
             metadata_size += MAX_COUNT_SIZE;
         }
 
         let chunks = EntityChunks::new(&self.related, &self.standalone);
         let (mut mutate_index, mut entities) =
-            ticks.register_mutate_message(entity_buffer, tick, timestamp);
+            ticks.register_mutate_message(entity_buffer, system_tick, server_tick, timestamp);
         let mut header_size = metadata_size + serialized_size(&mutate_index)?;
         let mut body_size = 0;
         let mut chunks_range = Range::<usize>::default();
@@ -194,8 +195,12 @@ impl Mutations {
                     .push((mutate_index, body_size + header_size, chunks_range.clone()));
 
                 chunks_range.start = chunks_range.end;
-                (mutate_index, entities) =
-                    ticks.register_mutate_message(entity_buffer, tick, timestamp);
+                (mutate_index, entities) = ticks.register_mutate_message(
+                    entity_buffer,
+                    system_tick,
+                    server_tick,
+                    timestamp,
+                );
                 header_size = metadata_size + serialized_size(&mutate_index)?; // Recalculate since the mutate index changed.
                 body_size = 0;
             }
@@ -226,7 +231,7 @@ impl Mutations {
             let mut message = Vec::with_capacity(message_size);
 
             message.extend_from_slice(update_tick);
-            message.extend_from_slice(&serialized[server_tick.clone()]);
+            message.extend_from_slice(&serialized[server_tick_range.clone()]);
             if track_mutate_messages {
                 postcard_utils::to_extend_mut(&self.messages.len(), &mut message)?;
             }
@@ -464,6 +469,7 @@ mod tests {
                 &mut Default::default(),
                 &serialized,
                 track_mutate_messages,
+                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),

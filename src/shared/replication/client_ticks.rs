@@ -14,7 +14,7 @@ use crate::prelude::*;
 #[derive(Component, Default)]
 pub struct ClientTicks {
     /// Lowest tick for use in change detection for each entity.
-    mutation_ticks: EntityHashMap<Tick>,
+    mutation_ticks: EntityHashMap<(Tick, RepliconTick)>,
 
     /// The last tick in which a replicated entity had an insertion, removal, or gained/lost a component from the
     /// perspective of the client.
@@ -51,7 +51,8 @@ impl ClientTicks {
     pub(crate) fn register_mutate_message(
         &mut self,
         entity_buffer: &mut EntityBuffer,
-        tick: Tick,
+        system_tick: Tick,
+        server_tick: RepliconTick,
         timestamp: Duration,
     ) -> (MutateIndex, &mut Vec<Entity>) {
         let mutate_index = self.mutate_index.advance();
@@ -59,7 +60,8 @@ impl ClientTicks {
         let mut entities = entity_buffer.pop().unwrap_or_default();
         entities.clear();
         let mutate_info = MutateInfo {
-            tick,
+            system_tick,
+            server_tick,
             timestamp,
             entities,
         };
@@ -76,12 +78,18 @@ impl ClientTicks {
     ///
     /// The mutation tick is the reference point for determining if components on an entity have mutated and
     /// need to be replicated. Component mutations older than the update tick are assumed to be acked by the client.
-    pub(crate) fn set_mutation_tick(&mut self, entity: Entity, tick: Tick) {
-        self.mutation_ticks.insert(entity, tick);
+    pub(crate) fn set_mutation_tick(
+        &mut self,
+        entity: Entity,
+        system_tick: Tick,
+        server_tick: RepliconTick,
+    ) {
+        self.mutation_ticks
+            .insert(entity, (system_tick, server_tick));
     }
 
     /// Gets the mutation tick for an entity that is replicated to this client.
-    pub(crate) fn mutation_tick(&self, entity: Entity) -> Option<Tick> {
+    pub(crate) fn mutation_tick(&self, entity: Entity) -> Option<(Tick, RepliconTick)> {
         self.mutation_ticks.get(&entity).copied()
     }
 
@@ -93,7 +101,7 @@ impl ClientTicks {
     pub(crate) fn ack_mutate_message(
         &mut self,
         client: Entity,
-        tick: Tick,
+        this_run: Tick,
         mutate_index: MutateIndex,
     ) -> Option<Vec<Entity>> {
         let Some(mutate_info) = self.mutations.remove(&mutate_index) else {
@@ -102,20 +110,21 @@ impl ClientTicks {
         };
 
         for entity in &mutate_info.entities {
-            let Some(last_tick) = self.mutation_ticks.get_mut(entity) else {
+            let Some((system_tick, server_tick)) = self.mutation_ticks.get_mut(entity) else {
                 // We ignore missing entities, since they were probably despawned.
                 continue;
             };
 
             // Received tick could be outdated because we bump it
             // if we detect any insertion on the entity in `collect_changes`.
-            if !last_tick.is_newer_than(mutate_info.tick, tick) {
-                *last_tick = mutate_info.tick;
+            if !system_tick.is_newer_than(mutate_info.system_tick, this_run) {
+                *system_tick = mutate_info.system_tick;
+                *server_tick = mutate_info.server_tick;
             }
         }
         trace!(
             "acknowledged mutate message with `{:?}` from client `{client}`",
-            mutate_info.tick,
+            mutate_info.server_tick,
         );
 
         Some(mutate_info.entities)
@@ -155,7 +164,8 @@ impl ClientTicks {
 pub(crate) struct EntityBuffer(Vec<Vec<Entity>>);
 
 struct MutateInfo {
-    tick: Tick,
+    system_tick: Tick,
+    server_tick: RepliconTick,
     timestamp: Duration,
     entities: Vec<Entity>,
 }

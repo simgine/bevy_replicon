@@ -184,13 +184,13 @@ impl Updates {
         server: &mut RepliconServer,
         client: Entity,
         serialized: &SerializedData,
-        server_tick: Range<usize>,
+        server_tick_range: Range<usize>,
     ) -> Result<()> {
         let flags = self.flags();
         let last_flag = flags.last();
 
         // Precalculate size first to avoid extra allocations.
-        let mut message_size = size_of::<UpdateMessageFlags>() + server_tick.len();
+        let mut message_size = size_of::<UpdateMessageFlags>() + server_tick_range.len();
         for (_, flag) in flags.iter_names() {
             match flag {
                 UpdateMessageFlags::MAPPINGS => {
@@ -229,7 +229,7 @@ impl Updates {
 
         let mut message = Vec::with_capacity(message_size);
         postcard_utils::to_extend_mut(&flags, &mut message)?;
-        message.extend_from_slice(&serialized[server_tick]);
+        message.extend_from_slice(&serialized[server_tick_range]);
         for (_, flag) in flags.iter_names() {
             match flag {
                 UpdateMessageFlags::MAPPINGS => {

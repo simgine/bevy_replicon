@@ -496,10 +496,20 @@ You can control which parts of the world are visible for each client by setting 
 in [`ServerPlugin`] to [`VisibilityPolicy::Whitelist`] or [`VisibilityPolicy::Blacklist`].
 
 To set which entity is visible, you need to use the [`ClientVisibility`] component
-on replicated clients (not to be confused with replicated entities).
+on authorized clients.
 
 Check also the [corresponding section](https://github.com/simgine/bevy_replicon#visibility)
 in our README for more high-level abstractions.
+
+### Prioritization
+
+By default, all unacknowledged mutations are sent every tick. This can be expensive if you
+have many entities with mutating components. The [`PriorityMap`] component lets you configure
+how often mutations are sent for each entity on authorized clients. See its documentation for
+more details.
+
+In addition, [`ClientVisibility`] can be used to further reduce bandwidth by hiding entities
+that are irrelevant to a given client.
 
 ### Spawning the client on an entity first
 
@@ -675,7 +685,7 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     pub use super::server::{
-        AuthorizedClient, ServerPlugin, ServerSet, TickPolicy, VisibilityPolicy,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, TickPolicy, VisibilityPolicy,
         client_entity_map::ClientEntityMap, client_visibility::ClientVisibility,
         event::ServerEventPlugin, related_entities::SyncRelatedAppExt,
     };
