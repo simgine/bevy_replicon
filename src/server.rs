@@ -884,7 +884,7 @@ pub struct AuthorizedClient;
 /// Controls how often mutations are sent for an authorized client.
 ///
 /// Associates entities with a priority number configurable by the user.
-/// If the priority is not set, it defaults to 0.0.
+/// If the priority is not set, it defaults to 1.0.
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
