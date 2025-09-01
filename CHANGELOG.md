@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace `ReplicationBundle` with `BundleRules`, which returns only `Vec<ComponentRule>` and uses an associated constant to customize the priority.
 - Hide `ServerEntityMap` mutation methods from public API.
 - Hide `BufferedMutations` from public API.
+- `ExampleClient::new` now accepts `impl Into<SocketAddr>`. This makes it easier for backend developers to port examples since they usually specify IP address.
 
 ## Removed
 

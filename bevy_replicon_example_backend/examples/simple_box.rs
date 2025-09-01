@@ -1,6 +1,9 @@
 //! A player sends inputs to move a box, and the server replicates the position back.
 
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    net::{IpAddr, Ipv4Addr},
+};
 
 use bevy::{
     color::palettes::css::GREEN,
@@ -71,11 +74,11 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
                 BoxOwner(ClientId::Server),
             ));
         }
-        Cli::Client { port } => {
-            info!("connecting to port {port}");
+        Cli::Client { ip, port } => {
+            info!("connecting to {ip}:{port}");
 
             // Backend initialization
-            let client = ExampleClient::new(port)?;
+            let client = ExampleClient::new((ip, port))?;
             let addr = client.local_addr()?;
             commands.insert_resource(client);
 
@@ -197,6 +200,9 @@ enum Cli {
     },
     /// Connect to a host.
     Client {
+        #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
+        ip: IpAddr,
+
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
     },

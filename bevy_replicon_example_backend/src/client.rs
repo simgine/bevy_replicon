@@ -1,6 +1,6 @@
 use std::{
     io,
-    net::{Ipv4Addr, SocketAddr, TcpStream},
+    net::{SocketAddr, TcpStream},
     time::Instant,
 };
 
@@ -105,8 +105,8 @@ pub struct ExampleClient {
 
 impl ExampleClient {
     /// Opens an example client socket connected to a server on the specified port.
-    pub fn new(port: u16) -> io::Result<Self> {
-        let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port))?;
+    pub fn new(addr: impl Into<SocketAddr>) -> io::Result<Self> {
+        let stream = TcpStream::connect(addr.into())?;
         stream.set_nonblocking(true)?;
         stream.set_nodelay(true)?;
         Ok(Self {
