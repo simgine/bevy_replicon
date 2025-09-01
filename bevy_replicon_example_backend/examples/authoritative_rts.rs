@@ -1,28 +1,42 @@
+use std::net::{IpAddr, Ipv4Addr};
+
 use bevy::{
-    color::palettes::tailwind::{BLUE_500, GREEN_500, RED_500},
+    color::palettes::tailwind::{
+        BLUE_500, GREEN_500, GREEN_700, ORANGE_500, PINK_500, PURPLE_500, RED_500, TEAL_500,
+        YELLOW_500,
+    },
     platform::collections::HashMap,
     prelude::*,
     render::primitives::Aabb,
 };
 use bevy_replicon::prelude::*;
-use bevy_replicon_example_backend::RepliconExampleBackendPlugins;
+use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
+use clap::{Parser, ValueEnum};
 use pathfinding::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
     App::new()
+        .init_resource::<Cli>() // Parse CLI before creating window.
         .add_plugins((
             DefaultPlugins,
             RepliconPlugins,
             RepliconExampleBackendPlugins,
         ))
         .init_resource::<Selection>()
+        .replicate::<Player>()
+        .replicate::<Unit>()
+        .add_server_trigger::<MakeLocal>(Channel::Unordered)
+        .add_client_trigger::<TeamRequest>(Channel::Unordered)
+        .add_observer(init_client)
+        .add_observer(make_local)
         .add_observer(init_unit)
         .add_observer(select_units)
         .add_observer(end_selection)
         .add_observer(clear_selection)
         .add_observer(move_command)
-        .add_systems(Startup, spawn_units)
+        .add_observer(spawn_units)
+        .add_systems(Startup, setup)
         .add_systems(
             Update,
             (
@@ -34,35 +48,98 @@ fn main() {
         .run();
 }
 
-const SPACING: f32 = 30.0;
-
-fn spawn_units(mut commands: Commands) {
+fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     commands.spawn(Camera2d);
 
+    match *cli {
+        Cli::Singleplayer { team } => {
+            info!("starting singleplayer as `{team:?}`");
+        }
+        Cli::Server { port, team } => {
+            info!("starting server as `{team:?}` at port {port}");
+
+            // Backend initialization
+            let server = ExampleServer::new(port)?;
+            commands.insert_resource(server);
+
+            commands.spawn(Text::new("Server"));
+        }
+        Cli::Client { port, ip, team } => {
+            info!("connecting to {ip}:{port}");
+
+            // Backend initialization
+            let client = ExampleClient::new((ip, port))?;
+            let addr = client.local_addr()?;
+            commands.insert_resource(client);
+
+            commands.spawn(Text(format!("Client: {addr}")));
+        }
+    }
+
+    Ok(())
+}
+
+fn init_client(
+    trigger: Trigger<FromClient<TeamRequest>>,
+    players: Query<&Player>,
+    mut commands: Commands,
+) {
+    let client_entity = trigger.client_id.entity().unwrap();
+    if players.iter().any(|p| p.team == trigger.team) {
+        error!(
+            "client `{client_entity}` requested team `{:?}`, but it's already taken",
+            trigger.team
+        );
+        return;
+    }
+
+    info!(
+        "associating client `{client_entity}` with team `{:?}`",
+        trigger.team
+    );
+
+    commands
+        .entity(client_entity)
+        .insert(Player { team: trigger.team });
+
+    commands.client_trigger_targets(MakeLocal, client_entity);
+}
+
+fn make_local(trigger: Trigger<MakeLocal>, mut commands: Commands) {
+    commands.entity(trigger.target()).insert(LocalPlayer);
+}
+
+const UNIT_SPACING: f32 = 30.0;
+
+fn spawn_units(
+    trigger: Trigger<OnAdd, Player>,
+    mut commands: Commands,
+    client: Option<Res<RepliconClient>>,
+    players: Query<&Player>,
+) {
+    if !server_or_singleplayer(client) {
+        return;
+    }
+
     const UNITS_COUNT: usize = 50;
-    const ROWS: usize = 5;
-    const COLS: usize = UNITS_COUNT / ROWS;
+    const COLS: usize = 10;
+    const ROWS: usize = UNITS_COUNT / COLS;
 
-    const BLUE_ORIGIN: Vec2 = Vec2::splat(200.0);
-    const RED_ORIGIN: Vec2 = Vec2::splat(-200.0);
+    let grid_offset = -Vec2::new(COLS as f32 - 1.0, ROWS as f32 - 1.0) / 2.0 * UNIT_SPACING;
+    let player = players.get(trigger.target()).unwrap();
 
-    let grid_offset = -Vec2::new(COLS as f32 - 1.0, ROWS as f32 - 1.0) / 2.0 * SPACING;
+    info!("spawning units for team `{:?}`", player.team);
 
     for index in 0..UNITS_COUNT {
-        let row = index / ROWS;
-        let col = index % ROWS;
+        let col = index % COLS;
+        let row = index / COLS;
 
-        let grid_position = grid_offset + Vec2::new(row as f32, col as f32) * SPACING;
-        let red_position = RED_ORIGIN + grid_position;
-        let blue_position = BLUE_ORIGIN + grid_position;
+        let grid_position = grid_offset + Vec2::new(col as f32, row as f32) * UNIT_SPACING;
+        let position = player.team.spawn_origin() + grid_position;
 
         commands.spawn((
-            Unit { team: Team::Red },
-            Transform::from_translation(red_position.extend(0.0)),
-        ));
-        commands.spawn((
-            Unit { team: Team::Blue },
-            Transform::from_translation(blue_position.extend(0.0)),
+            Unit { team: player.team },
+            Transform::from_translation(position.extend(0.0)),
         ));
     }
 }
@@ -146,7 +223,7 @@ fn move_command(
     let units_count = units.iter().len();
     let cols: usize = (units_count as f32).sqrt().ceil() as usize;
     let rows: usize = ((units_count + cols - 1) / cols).max(1);
-    let grid_offset = -Vec2::new(cols as f32 - 1.0, rows as f32 - 1.0) / 2.0 * SPACING;
+    let grid_offset = -Vec2::new(cols as f32 - 1.0, rows as f32 - 1.0) / 2.0 * UNIT_SPACING;
 
     let (camera, transform) = *camera;
     let click_point = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
@@ -168,7 +245,7 @@ fn move_command(
                 break;
             }
 
-            let grid_position = grid_offset + Vec2::new(col as f32, row as f32) * SPACING;
+            let grid_position = grid_offset + Vec2::new(col as f32, row as f32) * UNIT_SPACING;
             slots.push(click_point + rotation * grid_position);
         }
     }
@@ -245,9 +322,9 @@ fn move_units(
 
             // movers see idle neighbors as "smaller"
             let min_dist = if *other_moving {
-                SPACING
+                UNIT_SPACING
             } else {
-                SPACING * PASSTHROUGH_FACTOR
+                UNIT_SPACING * PASSTHROUGH_FACTOR
             };
 
             let distance = position.distance(*other_pos);
@@ -295,9 +372,9 @@ fn move_units(
 
         // Allow tighter squeeze only when exactly one side is idle.
         let min_dist = if a_moving ^ b_moving {
-            SPACING * PASSTHROUGH_FACTOR
+            UNIT_SPACING * PASSTHROUGH_FACTOR
         } else {
-            SPACING
+            UNIT_SPACING
         };
 
         if distance < min_dist {
@@ -324,7 +401,7 @@ fn move_units(
     cached_units.clear();
 }
 
-const SELECTION_COLOR: Srgba = GREEN_500;
+const SELECTION_COLOR: Srgba = GREEN_700;
 
 fn draw_selection(mut gizmos: Gizmos, selection: Res<Selection>) {
     gizmos.rect_2d(
@@ -346,6 +423,43 @@ fn draw_selected(mut gizmos: Gizmos, units: Query<(&GlobalTransform, &Command), 
             };
             gizmos.cross_2d(isometry, 10.0, SELECTION_COLOR);
         }
+    }
+}
+
+const DEFAULT_PORT: u16 = 5000;
+
+/// An RTS demo.
+#[derive(Parser, PartialEq, Resource)]
+enum Cli {
+    /// Play locally.
+    Singleplayer {
+        #[arg(short, long)]
+        team: Team,
+    },
+    /// Create a server that acts as both player and host.
+    Server {
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
+        port: u16,
+
+        #[arg(short, long)]
+        team: Team,
+    },
+    /// Connect to a host.
+    Client {
+        #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
+        ip: IpAddr,
+
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
+        port: u16,
+
+        #[arg(short, long)]
+        team: Team,
+    },
+}
+
+impl Default for Cli {
+    fn default() -> Self {
+        Self::parse()
     }
 }
 
@@ -379,7 +493,16 @@ impl FromWorld for UnitMaterials {
         let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
 
         let mut map = HashMap::default();
-        for team in [Team::Red, Team::Blue] {
+        for team in [
+            Team::Blue,
+            Team::Red,
+            Team::Teal,
+            Team::Purple,
+            Team::Yellow,
+            Team::Orange,
+            Team::Green,
+            Team::Pink,
+        ] {
             let color = materials.add(team.color());
             map.insert(team, color);
         }
@@ -390,15 +513,43 @@ impl FromWorld for UnitMaterials {
 
 #[derive(Component, Serialize, Deserialize)]
 #[component(immutable)]
+#[require(Replicated)]
+struct Player {
+    team: Team,
+}
+
+#[derive(Component)]
+struct LocalPlayer;
+
+/// A trigger that instructs the client to mark a specific entity as [`LocalPlayer`].
+#[derive(Event, Serialize, Deserialize)]
+struct MakeLocal;
+
+#[derive(Event, Serialize, Deserialize)]
+struct TeamRequest {
+    team: Team,
+}
+
+#[derive(Component, Serialize, Deserialize)]
+#[component(immutable)]
 #[require(Replicated, Command, Mesh2d, MeshMaterial2d<ColorMaterial>)]
 struct Unit {
     team: Team,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+/// Team colors from Warcraft 3.
+#[derive(
+    Serialize, Deserialize, Debug, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy,
+)]
 enum Team {
     Blue,
     Red,
+    Teal,
+    Purple,
+    Yellow,
+    Orange,
+    Green,
+    Pink,
 }
 
 impl Team {
@@ -406,9 +557,30 @@ impl Team {
         let color = match self {
             Team::Blue => BLUE_500,
             Team::Red => RED_500,
+            Team::Teal => TEAL_500,
+            Team::Purple => PURPLE_500,
+            Team::Yellow => YELLOW_500,
+            Team::Orange => ORANGE_500,
+            Team::Green => GREEN_500,
+            Team::Pink => PINK_500,
         };
 
         color.into()
+    }
+
+    fn spawn_origin(self) -> Vec2 {
+        const COLS: u16 = 4;
+        const ROWS: u16 = 2;
+        const SPAWN_SPACING: Vec2 = Vec2::splat(200.0);
+
+        let grid_offset = -Vec2::new(COLS as f32 - 1.0, ROWS as f32 - 1.0) / 2.0 * SPAWN_SPACING;
+
+        let index = self as u16;
+        let col = index % COLS;
+        let row = index / COLS;
+        debug_assert!(index < COLS * ROWS);
+
+        grid_offset + Vec2::new(col as f32, row as f32) * SPAWN_SPACING
     }
 }
 
