@@ -46,13 +46,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             commands.insert_resource(server);
 
             commands.spawn((UiRoot, children![ToggleButton(false)]));
-            commands.spawn((
-                Text::new("Server"),
-                TextFont {
-                    font_size: 30.0,
-                    ..Default::default()
-                },
-            ));
+            commands.spawn(Text::new("Server"));
         }
         Cli::Client { ip, port } => {
             info!("connecting to {ip}:{port}");
@@ -62,14 +56,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let addr = client.local_addr()?;
             commands.insert_resource(client);
 
-            commands.spawn((
-                Text(format!("Client: {addr}")),
-                TextFont {
-                    font_size: 30.0,
-                    ..default()
-                },
-                TextColor::WHITE,
-            ));
+            commands.spawn(Text(format!("Client: {addr}")));
         }
     }
 
