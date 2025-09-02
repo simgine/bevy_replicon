@@ -361,7 +361,10 @@ impl ClientEvent {
         let events: &mut Events<E> = unsafe { events.deref_mut() };
         let drained_count = events.drain().count();
         if drained_count > 0 {
-            warn!("discarded {drained_count} events due to a disconnect");
+            warn!(
+                "discarded {drained_count} events of type `{}` that were buffered before the connection",
+                any::type_name::<E>()
+            );
         }
     }
 
