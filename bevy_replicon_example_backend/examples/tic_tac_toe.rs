@@ -510,7 +510,7 @@ fn local_player_turn(
     players.iter().any(|&symbol| symbol == **turn_symbol)
 }
 
-const PORT: u16 = 5000;
+const DEFAULT_PORT: u16 = 5000;
 
 /// A Tic-tac-toe game.
 #[derive(Parser, PartialEq, Resource)]
@@ -519,7 +519,7 @@ enum Cli {
     Hotseat,
     /// Create a server that acts as both player and host.
     Server {
-        #[arg(short, long, default_value_t = PORT)]
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
         port: u16,
 
         #[arg(short, long, default_value_t = Symbol::Cross)]
@@ -530,7 +530,7 @@ enum Cli {
         #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
         ip: IpAddr,
 
-        #[arg(short, long, default_value_t = PORT)]
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
 }

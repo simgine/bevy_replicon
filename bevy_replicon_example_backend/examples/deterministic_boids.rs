@@ -263,7 +263,7 @@ fn update(
     cached_boids.clear();
 }
 
-const PORT: u16 = 5000;
+const DEFAULT_PORT: u16 = 5000;
 
 /// Deterministic Boids demo.
 #[derive(Parser, PartialEq, Resource)]
@@ -272,7 +272,7 @@ enum Cli {
     Local,
     /// Create a server.
     Server {
-        #[arg(short, long, default_value_t = PORT)]
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
     /// Connect to a host.
@@ -280,7 +280,7 @@ enum Cli {
         #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
         ip: IpAddr,
 
-        #[arg(short, long, default_value_t = PORT)]
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
 }

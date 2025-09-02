@@ -148,7 +148,7 @@ fn update_toggle_text(
     }
 }
 
-const PORT: u16 = 5000;
+const DEFAULT_PORT: u16 = 5000;
 
 /// A simple demo with a replicated button.
 #[derive(Parser, PartialEq, Resource)]
@@ -157,7 +157,7 @@ enum Cli {
     SinglePlayer,
     /// Create a server that acts as both player and host.
     Server {
-        #[arg(short, long, default_value_t = PORT)]
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
     /// Connect to a host.
@@ -165,7 +165,7 @@ enum Cli {
         #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
         ip: IpAddr,
 
-        #[arg(short, long, default_value_t = PORT)]
+        #[arg(short, long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
 }
