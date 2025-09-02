@@ -1,7 +1,10 @@
 //! Tic-tac-toe game with optional multiplayer.
 //! Client sends commands and server replicates the state back.
 
-use std::fmt::{self, Formatter};
+use std::{
+    fmt::{self, Formatter},
+    net::{IpAddr, Ipv4Addr},
+};
 
 use bevy::{
     ecs::{relationship::RelatedSpawner, spawn::SpawnWith},
@@ -102,11 +105,11 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
 
             commands.spawn((LocalPlayer, symbol));
         }
-        Cli::Client { port } => {
-            info!("connecting to port {port}");
+        Cli::Client { ip, port } => {
+            info!("connecting to {ip}:{port}");
 
             // Backend initialization
-            let client = ExampleClient::new(port)?;
+            let client = ExampleClient::new((ip, port))?;
             commands.insert_resource(client);
         }
     }
@@ -524,6 +527,9 @@ enum Cli {
     },
     /// Connect to a host.
     Client {
+        #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
+        ip: IpAddr,
+
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
     },

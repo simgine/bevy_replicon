@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, net::Ipv4Addr};
 
 use bevy::prelude::*;
 use bevy_replicon::prelude::*;
@@ -238,7 +238,7 @@ fn client_event() {
 fn setup(server_app: &mut App, client_app: &mut App) -> io::Result<()> {
     let server_socket = ExampleServer::new(0)?;
     let server_addr = server_socket.local_addr()?;
-    let client_socket = ExampleClient::new(server_addr.port())?;
+    let client_socket = ExampleClient::new((Ipv4Addr::LOCALHOST, server_addr.port()))?;
 
     server_app.insert_resource(server_socket);
     client_app.insert_resource(client_socket);

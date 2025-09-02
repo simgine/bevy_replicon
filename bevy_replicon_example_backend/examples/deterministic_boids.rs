@@ -9,7 +9,10 @@
 //! with authoritative replication for things that can't be simulated deterministically or need
 //! to be hidden from clients.
 
-use std::f32::consts::TAU;
+use std::{
+    f32::consts::TAU,
+    net::{IpAddr, Ipv4Addr},
+};
 
 use bevy::prelude::*;
 use bevy_replicon::{
@@ -77,11 +80,11 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             ));
             spawn_boids(&mut commands);
         }
-        Cli::Client { port } => {
-            info!("connecting to port {port}");
+        Cli::Client { ip, port } => {
+            info!("connecting to {ip}:{port}");
 
             // Backend initialization
-            let client = ExampleClient::new(port)?;
+            let client = ExampleClient::new((ip, port))?;
             let addr = client.local_addr()?;
             commands.insert_resource(client);
 
@@ -274,6 +277,9 @@ enum Cli {
     },
     /// Connect to a host.
     Client {
+        #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
+        ip: IpAddr,
+
         #[arg(short, long, default_value_t = PORT)]
         port: u16,
     },
