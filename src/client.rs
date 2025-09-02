@@ -782,7 +782,7 @@ pub enum ClientSet {
     ///
     /// Runs in [`PreUpdate`] immediately after the client connects to ensure client sessions have a fresh start.
     ///
-    /// This is a separate set from [`ClientSet::Reset`] to avoid sending events that were send before the connection.
+    /// This is a separate set from [`ClientSet::Reset`] to avoid sending events that were sent before the connection.
     ResetEvents,
     /// Systems that reset the client.
     ///
