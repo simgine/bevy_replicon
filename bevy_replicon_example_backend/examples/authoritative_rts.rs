@@ -24,36 +24,52 @@ fn main() {
             RepliconExampleBackendPlugins,
         ))
         .init_resource::<Selection>()
-        .replicate::<Player>()
         .replicate::<Unit>()
-        .add_server_trigger::<MakeLocal>(Channel::Unordered)
+        .replicate::<Transform>()
         .add_client_trigger::<TeamRequest>(Channel::Unordered)
+        .add_client_trigger::<UnitSpawn>(Channel::Unordered)
         .add_observer(init_client)
-        .add_observer(make_local)
+        .add_observer(trigger_unit_spawn)
+        .add_observer(apply_unit_spawn)
         .add_observer(init_unit)
         .add_observer(select_units)
         .add_observer(end_selection)
         .add_observer(clear_selection)
         .add_observer(move_command)
-        .add_observer(spawn_units)
         .add_systems(Startup, setup)
+        .add_systems(FixedUpdate, move_units)
         .add_systems(
             Update,
             (
+                request_team.run_if(client_just_connected),
                 draw_selection.run_if(|r: Res<Selection>| r.active),
                 draw_selected,
             ),
         )
-        .add_systems(FixedUpdate, move_units)
         .run();
 }
 
 fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     commands.spawn(Camera2d);
+    commands.spawn((
+        Node {
+            flex_direction: FlexDirection::Column,
+            align_self: AlignSelf::FlexEnd,
+            align_content: AlignContent::FlexEnd,
+            ..Default::default()
+        },
+        children![
+            Text::new("Left-click and drag to select"),
+            Text::new("Middle-click to spawn unit"),
+            Text::new("Right-click to move"),
+        ],
+    ));
 
     match *cli {
         Cli::Singleplayer { team } => {
             info!("starting singleplayer as `{team:?}`");
+            commands.insert_resource(team);
+            commands.insert_resource(ClientTeams::new(team));
         }
         Cli::Server { port, team } => {
             info!("starting server as `{team:?}` at port {port}");
@@ -62,6 +78,8 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
 
+            commands.insert_resource(team);
+            commands.insert_resource(ClientTeams::new(team));
             commands.spawn(Text::new("Server"));
         }
         Cli::Client { port, ip, team } => {
@@ -72,6 +90,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let addr = client.local_addr()?;
             commands.insert_resource(client);
 
+            commands.insert_resource(team);
             commands.spawn(Text(format!("Client: {addr}")));
         }
     }
@@ -79,69 +98,70 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     Ok(())
 }
 
+fn request_team(mut commands: Commands, team: Res<Team>) {
+    commands.client_trigger(TeamRequest { team: *team });
+}
+
 fn init_client(
     trigger: Trigger<FromClient<TeamRequest>>,
-    players: Query<&Player>,
-    mut commands: Commands,
+    mut events: EventWriter<DisconnectRequest>,
+    mut teams: ResMut<ClientTeams>,
 ) {
-    let client_entity = trigger.client_id.entity().unwrap();
-    if players.iter().any(|p| p.team == trigger.team) {
+    if let Some((client_id, team)) = teams.iter().find(|&(_, team)| *team == trigger.team) {
         error!(
-            "client `{client_entity}` requested team `{:?}`, but it's already taken",
-            trigger.team
+            "`{:?}` requested team `{team:?}`, but it's already taken by `{client_id}`",
+            trigger.client_id,
         );
+        let client = trigger
+            .client_id
+            .entity()
+            .expect("server can't request an invalid team");
+        events.write(DisconnectRequest { client });
         return;
     }
 
     info!(
-        "associating client `{client_entity}` with team `{:?}`",
-        trigger.team
+        "associating `{:?}` with team `{:?}`",
+        trigger.client_id, trigger.team
     );
 
-    commands
-        .entity(client_entity)
-        .insert(Player { team: trigger.team });
-
-    commands.client_trigger_targets(MakeLocal, client_entity);
+    teams.insert(trigger.client_id, trigger.team);
 }
 
-fn make_local(trigger: Trigger<MakeLocal>, mut commands: Commands) {
-    commands.entity(trigger.target()).insert(LocalPlayer);
-}
-
-const UNIT_SPACING: f32 = 30.0;
-
-fn spawn_units(
-    trigger: Trigger<OnAdd, Player>,
+fn trigger_unit_spawn(
+    trigger: Trigger<Pointer<Pressed>>,
     mut commands: Commands,
-    client: Option<Res<RepliconClient>>,
-    players: Query<&Player>,
+    camera: Single<(&Camera, &GlobalTransform)>,
+) -> Result<()> {
+    if trigger.button != PointerButton::Middle {
+        return Ok(());
+    }
+
+    let (camera, transform) = *camera;
+    let position = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
+
+    commands.client_trigger(UnitSpawn { position });
+
+    Ok(())
+}
+
+fn apply_unit_spawn(
+    trigger: Trigger<FromClient<UnitSpawn>>,
+    mut commands: Commands,
+    teams: Res<ClientTeams>,
 ) {
-    if !server_or_singleplayer(client) {
+    let Some(&team) = teams.get(&trigger.client_id) else {
+        error!(
+            "`{:?}` requested a spawn, but don't have an associated team",
+            trigger.client_id
+        );
         return;
-    }
+    };
 
-    const UNITS_COUNT: usize = 50;
-    const COLS: usize = 10;
-    const ROWS: usize = UNITS_COUNT / COLS;
-
-    let grid_offset = -Vec2::new(COLS as f32 - 1.0, ROWS as f32 - 1.0) / 2.0 * UNIT_SPACING;
-    let player = players.get(trigger.target()).unwrap();
-
-    info!("spawning units for team `{:?}`", player.team);
-
-    for index in 0..UNITS_COUNT {
-        let col = index % COLS;
-        let row = index / COLS;
-
-        let grid_position = grid_offset + Vec2::new(col as f32, row as f32) * UNIT_SPACING;
-        let position = player.team.spawn_origin() + grid_position;
-
-        commands.spawn((
-            Unit { team: player.team },
-            Transform::from_translation(position.extend(0.0)),
-        ));
-    }
+    commands.spawn((
+        Unit { team },
+        Transform::from_translation(trigger.position.extend(0.0)),
+    ));
 }
 
 fn init_unit(
@@ -158,9 +178,10 @@ fn init_unit(
 fn select_units(
     trigger: Trigger<Pointer<Drag>>,
     mut commands: Commands,
-    camera: Single<(&Camera, &GlobalTransform)>,
     mut selection: ResMut<Selection>,
-    units: Query<(Entity, &GlobalTransform, &Aabb, Has<Selected>)>,
+    team: Res<Team>,
+    camera: Single<(&Camera, &GlobalTransform)>,
+    units: Query<(Entity, &Unit, &GlobalTransform, &Aabb, Has<Selected>)>,
 ) -> Result<()> {
     if trigger.button != PointerButton::Primary {
         return Ok(());
@@ -177,15 +198,15 @@ fn select_units(
     selection.rect = Rect::from_corners(origin, end);
     selection.active = true;
 
-    for (unit, transform, aabb, prev_selected) in &units {
+    for (unit_entity, unit, transform, aabb, prev_selected) in &units {
         let center = transform.translation_vec3a() + aabb.center;
         let rect = Rect::from_center_half_size(center.truncate(), aabb.half_extents.truncate());
         let selected = !selection.rect.intersect(rect).is_empty();
         if selected != prev_selected {
-            if selected {
-                commands.entity(unit).insert(Selected);
+            if selected && unit.team == *team {
+                commands.entity(unit_entity).insert(Selected);
             } else {
-                commands.entity(unit).remove::<Selected>();
+                commands.entity(unit_entity).remove::<Selected>();
             }
         }
     }
@@ -209,6 +230,8 @@ fn clear_selection(
         commands.entity(unit).remove::<Selected>();
     }
 }
+
+const UNIT_SPACING: f32 = 30.0;
 
 fn move_command(
     trigger: Trigger<Pointer<Pressed>>,
@@ -363,9 +386,6 @@ fn move_units(
 
         let offset = b - a;
         let distance = offset.length();
-        if distance <= 0.0 {
-            continue;
-        }
 
         let a_moving = matches!(*a_cmd, Command::Move(_));
         let b_moving = matches!(*b_cmd, Command::Move(_));
@@ -378,7 +398,11 @@ fn move_units(
         };
 
         if distance < min_dist {
-            let push_dir = offset / distance;
+            let push_dir = if distance != 0.0 {
+                offset / distance
+            } else {
+                Vec2::ONE
+            };
             let overlap = min_dist - distance;
 
             // Push non-moving units less.
@@ -511,23 +535,14 @@ impl FromWorld for UnitMaterials {
     }
 }
 
-#[derive(Component, Serialize, Deserialize)]
-#[component(immutable)]
-#[require(Replicated)]
-struct Player {
-    team: Team,
-}
-
-#[derive(Component)]
-struct LocalPlayer;
-
-/// A trigger that instructs the client to mark a specific entity as [`LocalPlayer`].
-#[derive(Event, Serialize, Deserialize)]
-struct MakeLocal;
-
 #[derive(Event, Serialize, Deserialize)]
 struct TeamRequest {
     team: Team,
+}
+
+#[derive(Event, Serialize, Deserialize)]
+struct UnitSpawn {
+    position: Vec2,
 }
 
 #[derive(Component, Serialize, Deserialize)]
@@ -539,7 +554,18 @@ struct Unit {
 
 /// Team colors from Warcraft 3.
 #[derive(
-    Serialize, Deserialize, Debug, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy,
+    Resource,
+    Serialize,
+    Deserialize,
+    Debug,
+    ValueEnum,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Clone,
+    Copy,
 )]
 enum Team {
     Blue,
@@ -567,20 +593,14 @@ impl Team {
 
         color.into()
     }
+}
 
-    fn spawn_origin(self) -> Vec2 {
-        const COLS: u16 = 4;
-        const ROWS: u16 = 2;
-        const SPAWN_SPACING: Vec2 = Vec2::splat(200.0);
+#[derive(Resource, Deref, DerefMut)]
+struct ClientTeams(HashMap<ClientId, Team>);
 
-        let grid_offset = -Vec2::new(COLS as f32 - 1.0, ROWS as f32 - 1.0) / 2.0 * SPAWN_SPACING;
-
-        let index = self as u16;
-        let col = index % COLS;
-        let row = index / COLS;
-        debug_assert!(index < COLS * ROWS);
-
-        grid_offset + Vec2::new(col as f32, row as f32) * SPAWN_SPACING
+impl ClientTeams {
+    fn new(server_team: Team) -> Self {
+        Self([(ClientId::Server, server_team)].into())
     }
 }
 
