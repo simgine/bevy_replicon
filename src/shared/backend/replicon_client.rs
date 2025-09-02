@@ -124,7 +124,7 @@ impl RepliconClient {
     pub fn set_status(&mut self, status: RepliconClientStatus) {
         debug!("changing status to `{status:?}`");
 
-        if self.is_connected() && !matches!(status, RepliconClientStatus::Connected) {
+        if self.is_connected() && status != RepliconClientStatus::Connected {
             for channel_messages in &mut self.received_messages {
                 channel_messages.clear();
             }
