@@ -164,6 +164,8 @@ fn update(
 ) {
     // Store all boids data to avoid issues with borrow checker,
     // since since each boid must be iterated against all others.
+    cached_boids.clear();
+    cached_boids.reserve(boids.iter().len());
     cached_boids.extend(
         boids
             .iter()
@@ -259,8 +261,6 @@ fn update(
         // visualization and never read back, it does not affect simulation determinism.
         transform.rotation = Quat::from_rotation_z(velocity.to_angle());
     }
-
-    cached_boids.clear();
 }
 
 const DEFAULT_PORT: u16 = 5000;
