@@ -486,7 +486,7 @@ fn move_units(
             let push_dir = if distance != 0.0 {
                 offset / distance
             } else {
-                Vec2::ONE
+                Vec2::Y
             };
             let overlap = min_dist - distance;
 
