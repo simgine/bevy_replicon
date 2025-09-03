@@ -5,6 +5,7 @@ use bevy::{
         BLUE_500, GREEN_500, GREEN_700, ORANGE_500, PINK_500, PURPLE_500, RED_500, TEAL_500,
         YELLOW_500,
     },
+    ecs::entity::MapEntities,
     platform::collections::HashMap,
     prelude::*,
     render::primitives::Aabb,
@@ -24,24 +25,27 @@ fn main() {
             RepliconExampleBackendPlugins,
         ))
         .init_resource::<Selection>()
+        .init_resource::<ClientTeams>()
         .replicate::<Unit>()
         .replicate::<Transform>()
         .add_client_trigger::<TeamRequest>(Channel::Unordered)
         .add_client_trigger::<UnitSpawn>(Channel::Unordered)
-        .add_observer(init_client)
+        .add_mapped_client_trigger::<UnitsMove>(Channel::Unordered)
+        .add_observer(apply_team_request)
         .add_observer(trigger_unit_spawn)
         .add_observer(apply_unit_spawn)
         .add_observer(init_unit)
         .add_observer(select_units)
         .add_observer(end_selection)
         .add_observer(clear_selection)
-        .add_observer(move_command)
+        .add_observer(trigger_units_move)
+        .add_observer(apply_units_move)
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, move_units)
         .add_systems(
             Update,
             (
-                request_team.run_if(client_just_connected),
+                trigger_team_request.run_if(client_just_connected),
                 draw_selection.run_if(|r: Res<Selection>| r.active),
                 draw_selected,
             ),
@@ -68,8 +72,8 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     match *cli {
         Cli::Singleplayer { team } => {
             info!("starting singleplayer as `{team:?}`");
+            commands.client_trigger(TeamRequest { team });
             commands.insert_resource(team);
-            commands.insert_resource(ClientTeams::new(team));
         }
         Cli::Server { port, team } => {
             info!("starting server as `{team:?}` at port {port}");
@@ -78,8 +82,11 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
 
+            // The server can also trigger client events.
+            // These are re-emitted as `FromClient` with `ClientId::Server`.
+            // This allows the code to work simultaneously in both client and listen-server modes.
+            commands.client_trigger(TeamRequest { team });
             commands.insert_resource(team);
-            commands.insert_resource(ClientTeams::new(team));
             commands.spawn(Text::new("Server"));
         }
         Cli::Client { port, ip, team } => {
@@ -98,18 +105,20 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     Ok(())
 }
 
-fn request_team(mut commands: Commands, team: Res<Team>) {
+/// Sends the client's team choice to the server.
+fn trigger_team_request(mut commands: Commands, team: Res<Team>) {
     commands.client_trigger(TeamRequest { team: *team });
 }
 
-fn init_client(
+/// Assigns a team to a player.
+fn apply_team_request(
     trigger: Trigger<FromClient<TeamRequest>>,
     mut events: EventWriter<DisconnectRequest>,
     mut teams: ResMut<ClientTeams>,
 ) {
     if let Some((client_id, team)) = teams.iter().find(|&(_, team)| *team == trigger.team) {
         error!(
-            "`{:?}` requested team `{team:?}`, but it's already taken by `{client_id}`",
+            "`{}` requested team `{team:?}`, but it's already taken by `{client_id}`",
             trigger.client_id,
         );
         let client = trigger
@@ -121,13 +130,21 @@ fn init_client(
     }
 
     info!(
-        "associating `{:?}` with team `{:?}`",
+        "associating `{}` with team `{:?}`",
         trigger.client_id, trigger.team
     );
 
     teams.insert(trigger.client_id, trigger.team);
 }
 
+/// Requests spawning a unit at the click location.
+///
+/// We could network the [`Pointer`] event directly, but it carries a lot of
+/// extra data and we only care about middle clicks. Instead, we created a
+/// custom event and trigger it on clicks.
+///
+/// This also makes the logic independent of camera position - even though in
+/// this demo the camera cannot move.
 fn trigger_unit_spawn(
     trigger: Trigger<Pointer<Pressed>>,
     mut commands: Commands,
@@ -145,6 +162,10 @@ fn trigger_unit_spawn(
     Ok(())
 }
 
+/// Applies a spawn request.
+///
+/// Executed on server and singleplayer.
+/// The unit will be replicated back to clients.
 fn apply_unit_spawn(
     trigger: Trigger<FromClient<UnitSpawn>>,
     mut commands: Commands,
@@ -152,7 +173,7 @@ fn apply_unit_spawn(
 ) {
     let Some(&team) = teams.get(&trigger.client_id) else {
         error!(
-            "`{:?}` requested a spawn, but don't have an associated team",
+            "`{}` attempted to spawn a unit but has no team",
             trigger.client_id
         );
         return;
@@ -164,6 +185,16 @@ fn apply_unit_spawn(
     ));
 }
 
+/// Initializes visuals for the unit.
+///
+/// We don't replicate materials and meshes, since they aren't dynamically
+/// generated and are already known to clients. Instead, we replicate only
+/// the minimal information needed, such as the team, to pick the correct
+/// material. If units had different meshes, we would replicate the unit
+/// type and initialize the corresponding mesh on the client.
+///
+/// Works for initialization on both the server (when a unit
+/// is spawned) and the client (when the unit is replicated).
 fn init_unit(
     trigger: Trigger<OnInsert, Unit>,
     unit_mesh: Local<UnitMesh>,
@@ -175,6 +206,9 @@ fn init_unit(
     **material = unit_materials.get(&unit.team).unwrap().clone();
 }
 
+/// Selects the player's units within a selection rectangle.
+///
+/// The selection is local to the player and is not networked.
 fn select_units(
     trigger: Trigger<Pointer<Drag>>,
     mut commands: Commands,
@@ -214,6 +248,7 @@ fn select_units(
     Ok(())
 }
 
+/// Stops displaying the selection rectangle.
 fn end_selection(_trigger: Trigger<Pointer<DragEnd>>, mut rect: ResMut<Selection>) {
     rect.active = false;
 }
@@ -231,71 +266,120 @@ fn clear_selection(
     }
 }
 
-const UNIT_SPACING: f32 = 30.0;
-
-fn move_command(
+/// Requests movement into a location for previously the selected units.
+fn trigger_units_move(
     trigger: Trigger<Pointer<Pressed>>,
-    mut slots: Local<Vec<Vec2>>,
+    mut commands: Commands,
     camera: Single<(&Camera, &GlobalTransform)>,
-    mut units: Populated<(&GlobalTransform, &mut Command), With<Selected>>,
+    units: Populated<Entity, With<Selected>>,
 ) -> Result<()> {
     if trigger.button != PointerButton::Secondary {
         return Ok(());
     }
 
-    let units_count = units.iter().len();
-    let cols: usize = (units_count as f32).sqrt().ceil() as usize;
-    let rows: usize = ((units_count + cols - 1) / cols).max(1);
-    let grid_offset = -Vec2::new(cols as f32 - 1.0, rows as f32 - 1.0) / 2.0 * UNIT_SPACING;
-
     let (camera, transform) = *camera;
-    let click_point = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
+    let position = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
 
-    // Orientation basis to make grid facing from group centroid toward the click.
-    let positions_sum = units
-        .iter()
-        .map(|(t, _)| t.translation().truncate())
-        .sum::<Vec2>();
-    let centroid = positions_sum / units_count as f32;
-    let forward = (click_point - centroid).normalize_or(Vec2::Y);
-    let right = Vec2::new(forward.y, -forward.x);
-    let rotation = Mat2::from_cols(forward, right);
-
-    slots.clear();
-    for row in 0..rows {
-        for col in 0..cols {
-            if slots.len() == units_count {
-                break;
-            }
-
-            let grid_position = grid_offset + Vec2::new(col as f32, row as f32) * UNIT_SPACING;
-            slots.push(click_point + rotation * grid_position);
-        }
-    }
-    debug_assert_eq!(slots.len(), units_count);
-
-    // Pick closest slot for each unit using
-    // Hungarian with squared distance as cost.
-    let weights: Matrix<_> = units
-        .iter()
-        .map(|(transform, _)| {
-            let position = transform.translation().truncate();
-            slots
-                .iter()
-                .map(|s| position.distance_squared(*s) as i64)
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    let (_, slot_for_unit) = kuhn_munkres_min(&weights);
-
-    for (index, (_, mut command)) in units.iter_mut().enumerate() {
-        let slot_index = slot_for_unit[index];
-        *command = Command::Move(slots[slot_index]);
-    }
+    commands.client_trigger(UnitsMove {
+        units: units.iter().collect(),
+        position,
+    });
 
     Ok(())
 }
 
+const MOVE_SPACING: f32 = 30.0;
+
+/// Applies a move request to the specified units.
+///
+/// Each unit receives a unique `Command::Move`, arranged in a grid formation
+/// centered on the requested position. The grid is oriented toward that position.
+fn apply_units_move(
+    trigger: Trigger<FromClient<UnitsMove>>,
+    teams: Res<ClientTeams>,
+    mut slots: Local<Vec<Vec2>>,
+    mut positions: Local<Vec<Vec2>>,
+    mut units: Query<(&Unit, &GlobalTransform, &mut Command)>,
+) {
+    // Validate the received data since the client could be malicious.
+    // For example, on the client side we skip empty selections, but a modified
+    // client could bypass this and cause a division by zero on the server.
+    if trigger.units.is_empty() {
+        error!("`{}` attempted to move zero units", trigger.client_id);
+        return;
+    }
+
+    let Some(&client_team) = teams.get(&trigger.client_id) else {
+        error!(
+            "`{}` attempted to move units but has no team",
+            trigger.client_id
+        );
+        return;
+    };
+
+    positions.clear();
+    positions.reserve(trigger.units.len());
+    for (unit, transform, _) in units.iter_many(&trigger.units) {
+        if unit.team != client_team {
+            error!(
+                "`{}` has team `{client_team:?}`, but tried to move unit with team `{:?}`",
+                trigger.client_id, unit.team
+            );
+            return;
+        }
+
+        positions.push(transform.translation().truncate());
+    }
+
+    let units_count = trigger.units.len();
+    let cols = (units_count as f32).sqrt().ceil() as usize;
+    let rows = ((units_count + cols - 1) / cols).max(1);
+    let centering_offset = -Vec2::new(cols as f32 - 1.0, rows as f32 - 1.0) / 2.0 * MOVE_SPACING;
+
+    // Orientation basis to make grid facing from group centroid toward the click.
+    let positions_sum = positions.iter().sum::<Vec2>();
+    let centroid = positions_sum / units_count as f32;
+    let forward = (trigger.position - centroid).normalize_or(Vec2::Y);
+    let right = Vec2::new(forward.y, -forward.x);
+    let rotation = Mat2::from_cols(right, forward);
+
+    slots.clear();
+    slots.reserve(units_count);
+    for index in 0..units_count {
+        let row = index / cols;
+        let col = index % cols;
+
+        let grid_position = centering_offset + Vec2::new(col as f32, row as f32) * MOVE_SPACING;
+        slots.push(trigger.position + rotation * grid_position);
+    }
+
+    // Pick closest slot for each unit using
+    // Hungarian with squared distance as cost.
+    let weights: Matrix<_> = positions
+        .iter()
+        .map(|p| {
+            slots
+                .iter()
+                .map(|s| p.distance_squared(*s) as i64)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let (_, unit_to_slot) = kuhn_munkres_min(&weights);
+
+    let mut iter = units.iter_many_mut(&trigger.units);
+    for &slot_index in &unit_to_slot {
+        let (.., mut command) = iter.fetch_next().unwrap();
+        *command = Command::Move(slots[slot_index]);
+    }
+}
+
+/// Moves and spaces units.
+///
+/// Steers moving units toward their targets. Applies the separation
+/// force from the [Boids](https://en.wikipedia.org/wiki/Boids)
+/// model to reduce crowding.
+///
+/// Also resolves overlaps by applying simple circle–collision physics.
 fn move_units(
     mut cached_units: Local<Vec<(Entity, Vec2, bool)>>,
     time: Res<Time>,
@@ -307,7 +391,7 @@ fn move_units(
     const STOP_DIST: f32 = 6.0; // Consider slot reached.
     const SEP_STRENGTH: f32 = 600.0;
     const DAMPING: f32 = 0.97; // Tame tiny jitters.
-    const PASSTHROUGH_FACTOR: f32 = 0.6; // Reduces the spacing for non-moving units.
+    const IDLE_SPACING: f32 = 18.0;
     const MOVE_MASS: f32 = 1.0;
     const IDLE_MASS: f32 = 3.0;
 
@@ -333,6 +417,7 @@ fn move_units(
             continue;
         }
 
+        // Slowdown near the target to make it look coller,
         let speed_factor = (dist / SLOWDOWN_RADIUS).clamp(0.15, 1.0);
         let move_dir = to_target / dist;
         let mut velocity = move_dir * MAX_SPEED * speed_factor;
@@ -343,11 +428,11 @@ fn move_units(
                 continue;
             }
 
-            // movers see idle neighbors as "smaller"
+            // Allow a tighter squeeze when passing through non-moving units.
             let min_dist = if *other_moving {
-                UNIT_SPACING
+                MOVE_SPACING
             } else {
-                UNIT_SPACING * PASSTHROUGH_FACTOR
+                IDLE_SPACING
             };
 
             let distance = position.distance(*other_pos);
@@ -392,9 +477,9 @@ fn move_units(
 
         // Allow tighter squeeze only when exactly one side is idle.
         let min_dist = if a_moving ^ b_moving {
-            UNIT_SPACING * PASSTHROUGH_FACTOR
+            IDLE_SPACING
         } else {
-            UNIT_SPACING
+            MOVE_SPACING
         };
 
         if distance < min_dist {
@@ -427,6 +512,7 @@ fn move_units(
 
 const SELECTION_COLOR: Srgba = GREEN_700;
 
+/// Draws a mouse selection rectangle.
 fn draw_selection(mut gizmos: Gizmos, selection: Res<Selection>) {
     gizmos.rect_2d(
         selection.rect.center(),
@@ -435,6 +521,7 @@ fn draw_selection(mut gizmos: Gizmos, selection: Res<Selection>) {
     );
 }
 
+/// Draws circles around selected units and a cross at their move target positions.
 fn draw_selected(mut gizmos: Gizmos, units: Query<(&GlobalTransform, &Command), With<Selected>>) {
     for (transform, &command) in &units {
         let position = transform.translation().truncate();
@@ -487,12 +574,16 @@ impl Default for Cli {
     }
 }
 
+/// Mouse rectangle selection.
 #[derive(Resource, Default)]
 struct Selection {
     rect: Rect,
     active: bool,
 }
 
+/// Mesh for all units.
+///
+/// Used as a [`Local`] inside [`init_unit`] to re-use the same handle.
 struct UnitMesh(Handle<Mesh>);
 
 impl FromWorld for UnitMesh {
@@ -509,6 +600,9 @@ impl FromWorld for UnitMesh {
     }
 }
 
+/// Unit materials for each team color.
+///
+/// Used as a [`Local`] inside [`init_boid`] to re-use the same handle for each team.
 #[derive(Deref)]
 struct UnitMaterials(HashMap<Team, Handle<ColorMaterial>>);
 
@@ -535,13 +629,23 @@ impl FromWorld for UnitMaterials {
     }
 }
 
+/// A trigger to join a specific team for a client.
 #[derive(Event, Serialize, Deserialize)]
 struct TeamRequest {
     team: Team,
 }
 
+/// A trigger that spawns a unit at a location.
 #[derive(Event, Serialize, Deserialize)]
 struct UnitSpawn {
+    position: Vec2,
+}
+
+/// A trigger that orders units to move to a specified location.
+#[derive(Event, Serialize, Deserialize, MapEntities, Clone)]
+struct UnitsMove {
+    #[entities]
+    units: Vec<Entity>,
     position: Vec2,
 }
 
@@ -552,7 +656,11 @@ struct Unit {
     team: Team,
 }
 
-/// Team colors from Warcraft 3.
+/// Team color.
+///
+/// This palette matches the team colors from Warcraft III.
+///
+/// When used as a resource, it represents the local player's team.
 #[derive(
     Resource,
     Serialize,
@@ -595,15 +703,11 @@ impl Team {
     }
 }
 
-#[derive(Resource, Deref, DerefMut)]
+/// Associated team for each player.
+#[derive(Resource, Default, Deref, DerefMut)]
 struct ClientTeams(HashMap<ClientId, Team>);
 
-impl ClientTeams {
-    fn new(server_team: Team) -> Self {
-        Self([(ClientId::Server, server_team)].into())
-    }
-}
-
+/// Current command for a [`Unit`].
 #[derive(Component, Default, Clone, Copy)]
 enum Command {
     #[default]
@@ -611,6 +715,7 @@ enum Command {
     Move(Vec2),
 }
 
+/// Marker for selected units.
 #[derive(Component)]
 #[require(Gizmo)]
 struct Selected;
