@@ -120,7 +120,7 @@ fn spawn_boids(commands: &mut Commands) {
 
         let x = rng.f32_range(-0.200..=200.0);
         let y = rng.f32_range(-0.200..=200.0);
-        let angle = rng.f32_range(0.0..=TAU);
+        let angle = rng.f32_range(0.0..TAU);
 
         commands.spawn((
             Boid { color, group },
