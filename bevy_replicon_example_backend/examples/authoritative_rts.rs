@@ -30,6 +30,7 @@ fn main() {
         .init_resource::<Selection>()
         .init_resource::<ClientTeams>()
         .replicate::<Unit>()
+        .replicate::<Command>()
         .replicate::<Transform>()
         .add_client_trigger::<TeamRequest>(Channel::Unordered)
         .add_client_trigger::<UnitSpawn>(Channel::Unordered)
@@ -44,7 +45,7 @@ fn main() {
         .add_observer(trigger_units_move)
         .add_observer(apply_units_move)
         .add_systems(Startup, setup)
-        .add_systems(FixedUpdate, move_units)
+        .add_systems(FixedUpdate, move_units.run_if(server_or_singleplayer))
         .add_systems(
             Update,
             (
@@ -711,7 +712,7 @@ impl Team {
 struct ClientTeams(HashMap<ClientId, Team>);
 
 /// Current command for a [`Unit`].
-#[derive(Component, Default, Clone, Copy)]
+#[derive(Component, Serialize, Deserialize, Default, Clone, Copy)]
 enum Command {
     #[default]
     None,
