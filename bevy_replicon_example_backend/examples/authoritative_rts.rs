@@ -1,3 +1,15 @@
+//! An RTS demo with authoritative replication: the server executes all game logic,
+//! and clients primarily render.
+//!
+//! This uses more bandwidth than deterministic replication, but it's
+//! more secure because clients don't necessarily need the full state, and it's
+//! easier to implement because it removes the determinism requirement from the
+//! game logic.
+//!
+//! In this example, clients don't predict or rollback. They simply wait for
+//! state updates from the server. It's a common strategy for RTS because the
+//! input delay won't be noticeable.
+
 use std::{
     f32::consts::TAU,
     net::{IpAddr, Ipv4Addr},
