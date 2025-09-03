@@ -1,4 +1,7 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::{
+    f32::consts::TAU,
+    net::{IpAddr, Ipv4Addr},
+};
 
 use bevy::{
     color::palettes::tailwind::{
@@ -486,7 +489,7 @@ fn move_units(
             let push_dir = if distance != 0.0 {
                 offset / distance
             } else {
-                Vec2::Y
+                Vec2::from_angle(fastrand_contrib::f32_range(0.0..TAU))
             };
             let overlap = min_dist - distance;
 
