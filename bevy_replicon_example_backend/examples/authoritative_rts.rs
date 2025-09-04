@@ -417,7 +417,8 @@ fn move_units(
     const MOVE_MASS: f32 = 1.0;
     const IDLE_MASS: f32 = 3.0;
 
-    let delta = time.delta_secs();
+    cached_units.clear();
+    cached_units.reserve(units.iter().len());
     cached_units.extend(
         units
             .iter()
@@ -465,6 +466,8 @@ fn move_units(
                 separation += away_dir * overlap_ratio * SEP_STRENGTH;
             }
         }
+
+        let delta = time.delta_secs();
 
         velocity += separation * delta;
         velocity *= DAMPING;
@@ -528,8 +531,6 @@ fn move_units(
             b_transform.translation.y = b.y;
         }
     }
-
-    cached_units.clear();
 }
 
 const SELECTION_COLOR: Srgba = GREEN_700;
