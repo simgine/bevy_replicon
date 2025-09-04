@@ -355,7 +355,7 @@ fn apply_units_move(
 
     let units_count = trigger.units.len();
     let cols = (units_count as f32).sqrt().ceil() as usize;
-    let rows = ((units_count + cols - 1) / cols).max(1);
+    let rows = units_count.div_ceil(cols);
     let centering_offset = -Vec2::new(cols as f32 - 1.0, rows as f32 - 1.0) / 2.0 * MOVE_SPACING;
 
     // Orientation basis to make grid facing from group centroid toward the click.
