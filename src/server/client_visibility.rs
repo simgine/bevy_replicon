@@ -12,11 +12,13 @@ use bevy::{
 /// # Examples
 ///
 /// ```
-/// # use bevy::prelude::*;
-/// # use bevy_replicon::prelude::*;
+/// use bevy::{prelude::*, state::app::StatesPlugin};
+/// use bevy_replicon::prelude::*;
+///
 /// # let mut app = App::new();
 /// app.add_plugins((
 ///     MinimalPlugins,
+///     StatesPlugin,
 ///     RepliconPlugins.set(ServerPlugin {
 ///         visibility_policy: VisibilityPolicy::Whitelist, // Makes all entities invisible for clients by default.
 ///         ..Default::default()

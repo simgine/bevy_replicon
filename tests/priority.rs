@@ -1,6 +1,6 @@
 use test_log::test;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     test_app::{ServerTestAppExt, TestClientEntity},
@@ -14,6 +14,7 @@ fn regular() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -73,6 +74,7 @@ fn with_miss() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()

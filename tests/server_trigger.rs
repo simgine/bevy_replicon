@@ -1,4 +1,4 @@
-use bevy::{ecs::entity::MapEntities, prelude::*, time::TimePlugin};
+use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     client::ServerUpdateTick, prelude::*, shared::server_entity_map::ServerEntityMap,
     test_app::ServerTestAppExt,
@@ -13,6 +13,7 @@ fn regular() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -45,6 +46,7 @@ fn with_target() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -89,6 +91,7 @@ fn mapped() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -131,6 +134,7 @@ fn without_plugins() {
     server_app
         .add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .build()
                 .set(ServerPlugin {
@@ -145,6 +149,7 @@ fn without_plugins() {
     client_app
         .add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
@@ -174,6 +179,7 @@ fn local_resending() {
     let mut app = App::new();
     app.add_plugins((
         TimePlugin,
+        StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
             tick_policy: TickPolicy::EveryFrame,
             ..Default::default()
@@ -204,6 +210,7 @@ fn independent() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()

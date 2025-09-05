@@ -16,12 +16,12 @@ We provide a [`prelude`] module, which exports most of the typically used traits
 Add [`RepliconPlugins`] and plugins for your chosen messaging backend to your app:
 
 ```
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::prelude::*;
 # use bevy::app::PluginGroupBuilder;
 
 let mut app = App::new();
-app.add_plugins((MinimalPlugins, RepliconPlugins, MyMessagingPlugins));
+app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins, MyMessagingPlugins));
 # struct MyMessagingPlugins;
 # impl PluginGroup for MyMessagingPlugins {
 #     fn build(self) -> PluginGroupBuilder {
@@ -71,9 +71,10 @@ You can use [`TickPolicy::Manual`] and then add the [`increment_tick`](server::i
 system to [`FixedUpdate`]:
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # let mut app = App::new();
+# app.add_plugins(StatesPlugin);
 app.add_plugins(
     RepliconPlugins
         .build()
@@ -107,11 +108,11 @@ By default no components are replicated, you need to define rules for it.
 Use [`AppRuleExt::replicate`] to create a replication rule for a single component:
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
-# app.add_plugins(RepliconPlugins);
+# app.add_plugins((StatesPlugin, RepliconPlugins));
 app.replicate::<ExampleComponent>();
 
 #[derive(Component, Deserialize, Serialize)]
@@ -146,11 +147,11 @@ necessary to send over the network. Components that can be calculated on the cli
 be inserted using Bevy's required components feature.
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
-# app.add_plugins(RepliconPlugins);
+# app.add_plugins((StatesPlugin, RepliconPlugins));
 // Replicate only transform and player marker.
 app.replicate::<Transform>()
     .replicate::<Player>()
@@ -249,11 +250,11 @@ These events will appear on server as [`FromClient`] wrapper event that
 contains sender ID and the sent event.
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
-# app.add_plugins(RepliconPlugins);
+# app.add_plugins((StatesPlugin, RepliconPlugins));
 app.add_client_event::<ExampleEvent>(Channel::Ordered)
     .add_systems(
         PreUpdate,
@@ -293,11 +294,11 @@ Alternatively, you can use triggers with a similar API. First, you need to regis
 using [`ClientTriggerAppExt::add_client_trigger`], and then use [`ClientTriggerExt::client_trigger`].
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
-# app.add_plugins(RepliconPlugins);
+# app.add_plugins((StatesPlugin, RepliconPlugins));
 app.add_client_trigger::<ExampleEvent>(Channel::Ordered)
     .add_observer(receive_events)
     .add_systems(Update, send_events.run_if(client_connected));
@@ -327,11 +328,11 @@ and send it from server using [`ToClients`]. This wrapper contains send paramete
 and the event itself.
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
-# app.add_plugins(RepliconPlugins);
+# app.add_plugins((StatesPlugin, RepliconPlugins));
 app.add_server_event::<ExampleEvent>(Channel::Ordered)
     .add_systems(
         PreUpdate,
@@ -368,11 +369,11 @@ Trigger-based API available for server events as well. First, you need to regist
 with [`ServerTriggerAppExt::add_server_trigger`] and then use [`ServerTriggerExt::server_trigger`]:
 
 ```
-# use bevy::prelude::*;
+# use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
-# app.add_plugins(RepliconPlugins);
+# app.add_plugins((StatesPlugin, RepliconPlugins));
 app.add_server_trigger::<ExampleEvent>(Channel::Ordered)
     .add_observer(receive_events)
     .add_systems(Update, send_events.run_if(server_running));

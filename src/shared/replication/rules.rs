@@ -46,11 +46,11 @@ pub trait AppRuleExt {
     /// # Examples
     ///
     /// ```
-    /// # use bevy::prelude::*;
+    /// # use bevy::{prelude::*, state::app::StatesPlugin};
     /// # use bevy_replicon::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # let mut app = App::new();
-    /// # app.add_plugins(RepliconPlugins);
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
     /// app.replicate_filtered::<Transform, With<Player>>() // Replicate `Transform` only for players.
     ///     .replicate_filtered::<Health, Or<(With<Player>, With<Enemy>)>>() // Replicate `Health` only for player and enemies.
     ///     .replicate_filtered::<Platform, (With<Active>, Without<Moving>)>(); // Replicate only active and non-moving platforms.
@@ -119,6 +119,7 @@ pub trait AppRuleExt {
     Pass [`RuleFns`] to ser/de only specific field:
 
     ```
+    # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
@@ -131,7 +132,7 @@ pub trait AppRuleExt {
     };
 
     # let mut app = App::new();
-    # app.add_plugins(RepliconPlugins);
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
     // We override in-place as well to apply only translation when the component is already inserted.
     app.replicate_with(
         RuleFns::new(serialize_translation, deserialize_translation)
@@ -177,12 +178,13 @@ pub trait AppRuleExt {
     A rule with multiple components:
 
     ```
+    # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
     use bevy_replicon::prelude::*;
     use serde::{Deserialize, Serialize};
 
     # let mut app = App::new();
-    # app.add_plugins(RepliconPlugins);
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
     app.replicate_with((
         // You can also use `replicate_bundle` if you don't want
         // to tweak functions or send rate.
@@ -208,6 +210,7 @@ pub trait AppRuleExt {
     Ser/de with compression:
 
     ```
+    # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
@@ -223,7 +226,7 @@ pub trait AppRuleExt {
     use serde::{Deserialize, Serialize};
 
     # let mut app = App::new();
-    # app.add_plugins(RepliconPlugins);
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
     app.replicate_with(RuleFns::new(
         serialize_big_component,
         deserialize_big_component,
@@ -275,6 +278,7 @@ pub trait AppRuleExt {
     Custom ser/de with entity mapping:
 
     ```
+    # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
@@ -288,8 +292,8 @@ pub trait AppRuleExt {
     };
     use serde::{Deserialize, Serialize};
 
-    let mut app = App::new();
-    app.add_plugins(RepliconPlugins);
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
     app.replicate_with(RuleFns::new(
         serialize_mapped_component,
         deserialize_mapped_component,
@@ -330,6 +334,7 @@ pub trait AppRuleExt {
     Component with [`Box<dyn PartialReflect>`]:
 
     ```
+    # use bevy::state::app::StatesPlugin;
     use bevy::{
         prelude::*,
         reflect::serde::{ReflectDeserializer, ReflectSerializer},
@@ -346,8 +351,8 @@ pub trait AppRuleExt {
     };
     use serde::{de::DeserializeSeed, Serialize};
 
-    let mut app = App::new();
-    app.add_plugins(RepliconPlugins);
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
@@ -388,11 +393,11 @@ pub trait AppRuleExt {
     /// # Examples
     ///
     /// ```
-    /// # use bevy::prelude::*;
+    /// # use bevy::{prelude::*, state::app::StatesPlugin};
     /// # use bevy_replicon::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # let mut app = App::new();
-    /// # app.add_plugins(RepliconPlugins);
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
     /// app.replicate_with_filtered::<_, With<StaticBox>>((
     ///     RuleFns::<Health>::default(),
     ///     (RuleFns::<Transform>::default(), ReplicationMode::Once),
@@ -444,6 +449,7 @@ pub trait AppRuleExt {
     # Examples
 
     ```
+    # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
@@ -459,7 +465,7 @@ pub trait AppRuleExt {
     use serde::{Deserialize, Serialize};
 
     # let mut app = App::new();
-    # app.add_plugins(RepliconPlugins);
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
     app.replicate_bundle::<(Name, City)>() // Tuple of components is also a bundle!
         .replicate_bundle::<PlayerBundle>();
 

@@ -32,11 +32,12 @@ pub trait SyncRelatedAppExt {
     ///
     /// # Examples
     /// ```
+    /// # use bevy::state::app::StatesPlugin;
     /// use bevy::prelude::*;
     /// use bevy_replicon::prelude::*;
     ///
     /// # let mut app = App::new();
-    /// # app.add_plugins(RepliconPlugins);
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
     /// app.sync_related_entities::<ChildOf>();
     ///
     /// // Changes to any replicated components on these

@@ -34,10 +34,10 @@ impl ProtocolHasher {
     /// Include a game version.
     ///
     /// ```
-    /// use bevy::prelude::*;
+    /// use bevy::{prelude::*, state::app::StatesPlugin};
     /// use bevy_replicon::prelude::*;
     /// let mut app = App::new();
-    /// app.add_plugins((MinimalPlugins, RepliconPlugins));
+    /// app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
     ///
     /// // Should be called before `app.run()` or `app.finish()`.
     /// // Can also be done inside your game's plugin.

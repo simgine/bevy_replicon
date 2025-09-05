@@ -8,7 +8,7 @@ Extension for [`App`] to communicate with other instances like it's a server.
 # Example
 
 ```
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 
 let mut server_app = App::new();
@@ -16,6 +16,7 @@ let mut client_app = App::new();
 for app in [&mut server_app, &mut client_app] {
     app.add_plugins((
         MinimalPlugins,
+        StatesPlugin,
         // No messaging library plugin required.
         RepliconPlugins.set(ServerPlugin {
             tick_policy: TickPolicy::EveryFrame, // To tick each app update.

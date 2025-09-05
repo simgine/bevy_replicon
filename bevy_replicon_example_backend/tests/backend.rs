@@ -1,6 +1,6 @@
 use std::{io, net::Ipv4Addr};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ fn connect_disconnect() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -55,6 +56,7 @@ fn disconnect_request() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -107,6 +109,7 @@ fn server_stop() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -154,6 +157,7 @@ fn replication() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -181,6 +185,7 @@ fn server_event() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -212,6 +217,7 @@ fn client_event() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()

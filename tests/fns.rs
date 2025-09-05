@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     shared::{
@@ -22,7 +22,7 @@ use test_log::test;
 #[should_panic]
 fn serialize_missing_component() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 
     let tick = RepliconTick::default();
     let (_, fns_id) =
@@ -38,7 +38,7 @@ fn serialize_missing_component() {
 #[test]
 fn write() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 
     let tick = RepliconTick::default();
     let (_, fns_id) =
@@ -57,7 +57,7 @@ fn write() {
 #[test]
 fn remove() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 
     let tick = RepliconTick::default();
     let (_, fns_id) =
@@ -74,7 +74,7 @@ fn remove() {
 #[test]
 fn write_with_command() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>);
 
     let tick = RepliconTick::default();
@@ -93,7 +93,7 @@ fn write_with_command() {
 #[test]
 fn remove_with_command() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>);
 
     let tick = RepliconTick::default();
@@ -111,7 +111,7 @@ fn remove_with_command() {
 #[test]
 fn write_without_marker() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
@@ -135,7 +135,7 @@ fn write_without_marker() {
 #[test]
 fn remove_without_marker() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
@@ -157,7 +157,7 @@ fn remove_without_marker() {
 #[test]
 fn write_with_marker() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
@@ -180,7 +180,7 @@ fn write_with_marker() {
 #[test]
 fn remove_with_marker() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
@@ -202,7 +202,7 @@ fn remove_with_marker() {
 #[test]
 fn write_with_multiple_markers() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker::<Marker>()
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
@@ -235,7 +235,7 @@ fn write_with_multiple_markers() {
 #[test]
 fn remove_with_multiple_markers() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker::<Marker>()
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
@@ -267,7 +267,7 @@ fn remove_with_multiple_markers() {
 #[test]
 fn write_with_priority_marker() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker_with::<ReplaceMarker>(MarkerConfig {
             priority: 1,
             ..Default::default()
@@ -300,7 +300,7 @@ fn write_with_priority_marker() {
 #[test]
 fn remove_with_priority_marker() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins))
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .register_marker_with::<ReplaceMarker>(MarkerConfig {
             priority: 1,
             ..Default::default()
@@ -332,7 +332,7 @@ fn remove_with_priority_marker() {
 #[test]
 fn despawn() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 
     let mut registry = app.world_mut().resource_mut::<ReplicationRegistry>();
     registry.despawn = mark_despawned;
