@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     server::server_tick::ServerTick,
@@ -15,7 +15,8 @@ fn client_connect_disconnect() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((MinimalPlugins, RepliconPlugins)).finish();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .finish();
     }
 
     server_app.connect_client(&mut client_app);
@@ -37,6 +38,7 @@ fn server_start_stop() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .set(RepliconSharedPlugin {
                     auth_method: AuthMethod::Custom,
@@ -72,12 +74,12 @@ fn protocol_mismatch() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     server_app
-        .add_plugins((MinimalPlugins, RepliconPlugins))
+        .add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .add_client_event::<TestEvent>(Channel::Ordered)
         .finish();
     client_app
         .init_resource::<TriggerCounter<ProtocolMismatch>>()
-        .add_plugins((MinimalPlugins, RepliconPlugins))
+        .add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .finish();
 
     server_app.connect_client(&mut client_app);
@@ -100,6 +102,7 @@ fn custom_auth() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(RepliconSharedPlugin {
                 auth_method: AuthMethod::Custom,
             }),
@@ -120,6 +123,7 @@ fn disabled_auth() {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
+        StatesPlugin,
         RepliconPlugins.set(RepliconSharedPlugin {
             auth_method: AuthMethod::None,
         }),
@@ -133,7 +137,8 @@ fn disabled_auth() {
 #[test]
 fn network_id_map() {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins)).finish();
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+        .finish();
 
     let client_entity = app.world_mut().spawn(NetworkId::new(0)).id();
     assert_eq!(app.world().resource::<NetworkIdMap>().len(), 1);

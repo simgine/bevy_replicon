@@ -31,13 +31,14 @@ pub struct RepliconSharedPlugin {
     only with [`AuthMethod::ProtocolCheck`], but it could be any event.
 
     ```
-    use bevy::prelude::*;
+    use bevy::{prelude::*, state::app::StatesPlugin};
     use bevy_replicon::prelude::*;
     use serde::{Deserialize, Serialize};
 
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
+        StatesPlugin,
         RepliconPlugins.set(RepliconSharedPlugin {
             auth_method: AuthMethod::Custom,
         }),

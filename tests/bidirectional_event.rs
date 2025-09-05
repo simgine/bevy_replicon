@@ -1,4 +1,4 @@
-use bevy::{ecs::event::Events, prelude::*};
+use bevy::{ecs::event::Events, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use serde::{Deserialize, Serialize};
 use test_log::test;
@@ -8,7 +8,7 @@ fn event() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .add_client_event::<TestEvent>(Channel::Ordered)
             .add_server_event::<TestEvent>(Channel::Ordered)
             .finish();
@@ -46,6 +46,7 @@ fn trigger() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()

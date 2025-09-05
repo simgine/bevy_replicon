@@ -71,6 +71,7 @@ pub trait ClientEventAppExt {
     use bevy::{
         prelude::*,
         reflect::serde::{ReflectDeserializer, ReflectSerializer},
+        state::app::StatesPlugin,
     };
     use bevy_replicon::{
         bytes::Bytes,
@@ -82,7 +83,7 @@ pub trait ClientEventAppExt {
     use serde::{de::DeserializeSeed, Serialize};
 
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
     app.add_client_event_with(Channel::Ordered, serialize_reflect, deserialize_reflect);
 
     fn serialize_reflect(

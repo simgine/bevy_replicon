@@ -29,7 +29,6 @@ fastrand-contrib = "0.1"
 [dev-dependencies]
 bevy = { version = "0.16.0", default-features = false, features = [
   "bevy_gizmos",
-  "bevy_state",
   "bevy_text",
   "bevy_ui_picking_backend",
   "bevy_ui",
