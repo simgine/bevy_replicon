@@ -80,6 +80,7 @@ pub trait ServerEventAppExt {
     use bevy::{
         prelude::*,
         reflect::serde::{ReflectDeserializer, ReflectSerializer},
+        state::app::StatesPlugin,
     };
     use bevy_replicon::{
         bytes::Bytes,
@@ -91,7 +92,7 @@ pub trait ServerEventAppExt {
     use serde::{de::DeserializeSeed, Serialize};
 
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
     app.add_server_event_with(Channel::Ordered, serialize_reflect, deserialize_reflect);
 
     fn serialize_reflect(
@@ -303,11 +304,13 @@ impl ServerEvent {
         &self,
         ctx: &mut ServerSendCtx,
         server_events: &Ptr,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
         buffered_events: &mut BufferedServerEvents,
     ) {
-        unsafe { (self.send_or_buffer)(self, ctx, server_events, server, clients, buffered_events) }
+        unsafe {
+            (self.send_or_buffer)(self, ctx, server_events, messages, clients, buffered_events)
+        }
     }
 
     /// Typed version of [`Self::send_or_buffer`].
@@ -320,7 +323,7 @@ impl ServerEvent {
         &self,
         ctx: &mut ServerSendCtx,
         server_events: &Ptr,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
         buffered_events: &mut BufferedServerEvents,
     ) {
@@ -332,7 +335,7 @@ impl ServerEvent {
 
             if self.independent {
                 unsafe {
-                    self.send_independent_event::<E, I>(ctx, event, mode, server, clients)
+                    self.send_independent_event::<E, I>(ctx, event, mode, messages, clients)
                         .expect("independent server event should be serializable");
                 }
             } else {
@@ -356,7 +359,7 @@ impl ServerEvent {
         ctx: &mut ServerSendCtx,
         event: &E,
         mode: &SendMode,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
     ) -> Result<()> {
         let mut message = Vec::new();
@@ -366,19 +369,19 @@ impl ServerEvent {
         match *mode {
             SendMode::Broadcast => {
                 for client_entity in clients {
-                    server.send(client_entity, self.channel_id, message.clone());
+                    messages.send(client_entity, self.channel_id, message.clone());
                 }
             }
             SendMode::BroadcastExcept(ignored_id) => {
                 for client in clients {
                     if ignored_id != client.into() {
-                        server.send(client, self.channel_id, message.clone());
+                        messages.send(client, self.channel_id, message.clone());
                     }
                 }
             }
             SendMode::Direct(client_id) => {
                 if let ClientId::Client(client) = client_id {
-                    server.send(client, self.channel_id, message.clone());
+                    messages.send(client, self.channel_id, message.clone());
                 }
             }
         }
@@ -435,10 +438,10 @@ impl ServerEvent {
         ctx: &mut ClientReceiveCtx,
         events: PtrMut,
         queue: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
         update_tick: RepliconTick,
     ) {
-        unsafe { (self.receive)(self, ctx, events, queue, client, update_tick) }
+        unsafe { (self.receive)(self, ctx, events, queue, messages, update_tick) }
     }
 
     /// Typed version of [`ServerEvent::receive`].
@@ -452,7 +455,7 @@ impl ServerEvent {
         ctx: &mut ClientReceiveCtx,
         events: PtrMut,
         queue: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
         update_tick: RepliconTick,
     ) {
         let events: &mut Events<E> = unsafe { events.deref_mut() };
@@ -476,7 +479,7 @@ impl ServerEvent {
             }
         }
 
-        for mut message in client.receive(self.channel_id) {
+        for mut message in messages.receive(self.channel_id) {
             if !self.independent {
                 let tick = match postcard_utils::from_buf(&mut message) {
                     Ok(tick) => tick,
@@ -632,7 +635,7 @@ type SendOrBufferFn = unsafe fn(
     &ServerEvent,
     &mut ServerSendCtx,
     &Ptr,
-    &mut RepliconServer,
+    &mut ServerMessages,
     &Query<Entity, With<ConnectedClient>>,
     &mut BufferedServerEvents,
 );
@@ -643,7 +646,7 @@ type ReceiveFn = unsafe fn(
     &mut ClientReceiveCtx,
     PtrMut,
     PtrMut,
-    &mut RepliconClient,
+    &mut ClientMessages,
     RepliconTick,
 );
 
@@ -724,12 +727,12 @@ struct BufferedServerEvent {
 impl BufferedServerEvent {
     fn send(
         &mut self,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         client_entity: Entity,
         client: &ClientTicks,
     ) -> Result<()> {
         let message = self.message.get_bytes(client.update_tick())?;
-        server.send(client_entity, self.channel_id, message);
+        messages.send(client_entity, self.channel_id, message);
         Ok(())
     }
 }
@@ -793,7 +796,7 @@ impl BufferedServerEvents {
 
     pub(crate) fn send_all(
         &mut self,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         clients: &Query<(Entity, Option<&ClientTicks>), With<ConnectedClient>>,
     ) -> Result<()> {
         for mut set in self.buffer.drain(..) {
@@ -804,7 +807,7 @@ impl BufferedServerEvents {
                             clients.iter().filter(|(e, _)| !set.excluded.contains(e))
                         {
                             if let Some(ticks) = ticks {
-                                event.send(server, client, ticks)?;
+                                event.send(messages, client, ticks)?;
                             } else {
                                 debug!(
                                     "ignoring broadcast for channel {} for non-authorized client `{client}`",
@@ -822,7 +825,7 @@ impl BufferedServerEvents {
                             }
 
                             if let Some(ticks) = ticks {
-                                event.send(server, client, ticks)?;
+                                event.send(messages, client, ticks)?;
                             } else {
                                 debug!(
                                     "ignoring broadcast except `{ignored_id}` for channel {} for non-authorized client `{client}`",
@@ -837,7 +840,7 @@ impl BufferedServerEvents {
                             && !set.excluded.contains(&client)
                         {
                             if let Some(ticks) = ticks {
-                                event.send(server, client, ticks)?;
+                                event.send(messages, client, ticks)?;
                             } else {
                                 error!(
                                     "ignoring direct event for non-authorized client `{client}`, \

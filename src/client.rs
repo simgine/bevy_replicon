@@ -38,7 +38,8 @@ pub struct ClientPlugin;
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<RepliconClient>()
+        app.init_resource::<ClientMessages>()
+            .init_resource::<ClientStats>()
             .init_resource::<ServerEntityMap>()
             .init_resource::<ServerUpdateTick>()
             .init_resource::<BufferedMutations>()
@@ -48,10 +49,15 @@ impl Plugin for ClientPlugin {
                 PreUpdate,
                 (
                     ClientSet::ReceivePackets,
-                    (
-                        ClientSet::ResetEvents.run_if(client_just_connected),
-                        ClientSet::Reset.run_if(client_just_disconnected),
-                    ),
+                    ClientSet::Receive,
+                    ClientSet::Diagnostics,
+                )
+                    .chain(),
+            )
+            .configure_sets(
+                OnEnter(ClientState::Connected),
+                (
+                    ClientSet::ResetEvents,
                     ClientSet::Receive,
                     ClientSet::Diagnostics,
                 )
@@ -59,29 +65,29 @@ impl Plugin for ClientPlugin {
             )
             .configure_sets(
                 PostUpdate,
-                (
-                    ClientSet::PrepareSend,
-                    ClientSet::Send,
-                    ClientSet::SendPackets,
-                )
-                    .chain(),
+                (ClientSet::Send, ClientSet::SendPackets).chain(),
             )
             .add_systems(
                 PreUpdate,
                 receive_replication
                     .in_set(ClientSet::Receive)
-                    .run_if(client_connected),
+                    .run_if(in_state(ClientState::Connected)),
             )
-            .add_systems(PreUpdate, reset.in_set(ClientSet::Reset));
+            .add_systems(
+                OnEnter(ClientState::Connected),
+                receive_replication.in_set(ClientSet::Receive),
+            )
+            .add_systems(
+                OnExit(ClientState::Connected),
+                reset.in_set(ClientSet::Reset),
+            );
 
         let auth_method = *app.world().resource::<AuthMethod>();
         debug!("using authorization method `{auth_method:?}`");
         if auth_method == AuthMethod::ProtocolCheck {
             app.add_observer(log_protocol_error).add_systems(
-                PreUpdate,
-                send_protocol_hash
-                    .in_set(ClientSet::Receive)
-                    .run_if(client_just_connected),
+                OnEnter(ClientState::Connected),
+                send_protocol_hash.in_set(ClientSet::SendHash),
             );
         }
     }
@@ -92,9 +98,9 @@ impl Plugin for ClientPlugin {
         }
 
         app.world_mut()
-            .resource_scope(|world, mut client: Mut<RepliconClient>| {
+            .resource_scope(|world, mut messages: Mut<ClientMessages>| {
                 let channels = world.resource::<RepliconChannels>();
-                client.setup_server_channels(channels.server_channels().len());
+                messages.setup_server_channels(channels.server_channels().len());
             });
     }
 }
@@ -120,7 +126,7 @@ pub(super) fn receive_replication(
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,
 ) {
-    world.resource_scope(|world, mut client: Mut<RepliconClient>| {
+    world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
             world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
                 world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
@@ -145,7 +151,7 @@ pub(super) fn receive_replication(
                                 apply_replication(
                                     world,
                                     &mut params,
-                                    &mut client,
+                                    &mut messages,
                                     &mut buffered_mutations,
                                 );
 
@@ -165,20 +171,24 @@ pub(super) fn receive_replication(
 }
 
 fn reset(
+    mut messages: ResMut<ClientMessages>,
+    mut stats: ResMut<ClientStats>,
     mut update_tick: ResMut<ServerUpdateTick>,
     mut entity_map: ResMut<ServerEntityMap>,
     mut buffered_mutations: ResMut<BufferedMutations>,
     mutate_ticks: Option<ResMut<ServerMutateTicks>>,
-    stats: Option<ResMut<ClientReplicationStats>>,
+    replication_stats: Option<ResMut<ClientReplicationStats>>,
 ) {
+    messages.clear();
+    *stats = Default::default();
     *update_tick = Default::default();
     entity_map.clear();
     buffered_mutations.clear();
     if let Some(mut mutate_ticks) = mutate_ticks {
         mutate_ticks.clear();
     }
-    if let Some(mut stats) = stats {
-        *stats = Default::default();
+    if let Some(mut replication_stats) = replication_stats {
+        *replication_stats = Default::default();
     }
 }
 
@@ -199,10 +209,10 @@ fn log_protocol_error(_trigger: Trigger<ProtocolMismatch>) {
 fn apply_replication(
     world: &mut World,
     params: &mut ReceiveParams,
-    client: &mut RepliconClient,
+    messages: &mut ClientMessages,
     buffered_mutations: &mut BufferedMutations,
 ) {
-    for mut message in client.receive(ServerChannel::Updates) {
+    for mut message in messages.receive(ServerChannel::Updates) {
         if let Err(e) = apply_update_message(world, params, &mut message) {
             error!("unable to apply update message: {e}");
         }
@@ -215,15 +225,15 @@ fn apply_replication(
     // (unless user requested history via marker).
     let update_tick = *world.resource::<ServerUpdateTick>();
     let acks_size =
-        MutateIndex::POSTCARD_MAX_SIZE * client.received_count(ServerChannel::Mutations);
+        MutateIndex::POSTCARD_MAX_SIZE * messages.received_count(ServerChannel::Mutations);
     if acks_size != 0 {
         let mut acks = Vec::with_capacity(acks_size);
-        for message in client.receive(ServerChannel::Mutations) {
+        for message in messages.receive(ServerChannel::Mutations) {
             if let Err(e) = buffer_mutate_message(params, buffered_mutations, message, &mut acks) {
                 error!("unable to buffer mutate message: {e}");
             }
         }
-        client.send(ClientChannel::MutationAcks, acks);
+        messages.send(ClientChannel::MutationAcks, acks);
     }
 
     apply_mutate_messages(world, params, buffered_mutations, update_tick);
@@ -744,31 +754,25 @@ struct ReceiveParams<'a> {
 /// Set with replication and event systems related to client.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum ClientSet {
-    /// Systems that receive packets from the messaging backend.
+    /// Systems that receive packets from the messaging backend and update [`ClientState`].
     ///
     /// Used by messaging backend implementations.
     ///
     /// Runs in [`PreUpdate`].
     ReceivePackets,
-    /// Systems that receive data from [`RepliconClient`].
+    /// Systems that read data from [`ClientMessages`].
     ///
-    /// Used by `bevy_replicon`.
-    ///
-    /// Runs in [`PreUpdate`].
+    /// Runs in [`PreUpdate`] and [`OnEnter`] for [`ClientState::Connected`] (to avoid 1 frame delay).
     Receive,
     /// Systems that populate Bevy's [`Diagnostics`](bevy::diagnostic::Diagnostics).
     ///
-    /// Used by `bevy_replicon`.
-    ///
-    /// Runs in [`PreUpdate`].
+    /// Runs in [`PreUpdate`] and [`OnEnter`] for [`ClientState::Connected`] (to avoid 1 frame delay).
     Diagnostics,
-    /// Systems that prepare for sending data to [`RepliconClient`].
+    /// System that sends [`ProtocolHash`].
     ///
-    /// Can be used by backends to add custom logic before sending data, such as transition to a disconnected or connecting state.
-    PrepareSend,
-    /// Systems that send data to [`RepliconClient`].
-    ///
-    /// Used by `bevy_replicon`.
+    /// Runs in [`OnEnter`] for [`ClientState::Connected`].
+    SendHash,
+    /// Systems that write data to [`ClientMessages`].
     ///
     /// Runs in [`PostUpdate`].
     Send,
@@ -780,13 +784,13 @@ pub enum ClientSet {
     SendPackets,
     /// Systems that reset queued server events.
     ///
-    /// Runs in [`PreUpdate`] immediately after the client connects to ensure client sessions have a fresh start.
-    ///
     /// This is a separate set from [`ClientSet::Reset`] to avoid sending events that were sent before the connection.
+    ///
+    /// Runs in [`OnEnter`] for [`ClientState::Connected`].
     ResetEvents,
     /// Systems that reset the client.
     ///
-    /// Runs in [`PreUpdate`] when the client just disconnected.
+    /// Runs in [`OnExit`] for [`ClientState::Connected`].
     Reset,
 }
 

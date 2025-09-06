@@ -56,19 +56,17 @@ fn main() {
         .add_systems(OnEnter(GameState::Winner), show_winner_text)
         .add_systems(OnEnter(GameState::Tie), show_tie_text)
         .add_systems(OnEnter(GameState::Disconnected), stop_networking)
+        .add_systems(OnEnter(ClientState::Connected), client_start)
+        .add_systems(OnEnter(ClientState::Connecting), show_connecting_text)
+        .add_systems(OnExit(ClientState::Connected), disconnect_by_server)
+        .add_systems(OnEnter(ServerState::Running), show_waiting_client_text)
         .add_systems(
             Update,
             (
-                show_connecting_text.run_if(resource_added::<ExampleClient>),
-                show_waiting_client_text.run_if(resource_added::<ExampleServer>),
-                client_start.run_if(client_just_connected),
-                (
-                    disconnect_by_server.run_if(client_just_disconnected),
-                    update_buttons_background.run_if(local_player_turn),
-                    show_turn_symbol.run_if(resource_changed::<TurnSymbol>),
-                )
-                    .run_if(in_state(GameState::InGame)),
-            ),
+                update_buttons_background.run_if(local_player_turn),
+                show_turn_symbol.run_if(resource_changed::<TurnSymbol>),
+            )
+                .run_if(in_state(GameState::InGame)),
         )
         .run();
 }

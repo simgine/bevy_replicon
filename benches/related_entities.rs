@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::prelude::*;
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -11,13 +11,14 @@ fn hierarchy_spawning(c: &mut Criterion) {
 
     group.bench_function("regular", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins)).finish();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .finish();
 
         b.iter(|| spawn_then_despawn(&mut app));
     });
     group.bench_function("related_without_server", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .sync_related_entities::<ChildOf>()
             .finish();
 
@@ -25,12 +26,13 @@ fn hierarchy_spawning(c: &mut Criterion) {
     });
     group.bench_function("related", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .sync_related_entities::<ChildOf>()
             .finish();
 
-        let mut server = app.world_mut().resource_mut::<RepliconServer>();
-        server.set_running(true);
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
 
         b.iter(|| spawn_then_despawn(&mut app));
     });
@@ -47,7 +49,8 @@ fn hierarchy_changes(c: &mut Criterion) {
 
     group.bench_function("regular", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins)).finish();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .finish();
 
         spawn_hierarchy(app.world_mut());
 
@@ -55,7 +58,7 @@ fn hierarchy_changes(c: &mut Criterion) {
     });
     group.bench_function("related_without_server", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .sync_related_entities::<ChildOf>()
             .finish();
 
@@ -65,14 +68,15 @@ fn hierarchy_changes(c: &mut Criterion) {
     });
     group.bench_function("related", |b| {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .sync_related_entities::<ChildOf>()
             .finish();
 
         spawn_hierarchy(app.world_mut());
 
-        let mut server = app.world_mut().resource_mut::<RepliconServer>();
-        server.set_running(true);
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
 
         b.iter(|| trigger_hierarchy_change(&mut app));
     });

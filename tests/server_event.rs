@@ -1,6 +1,7 @@
 use bevy::{
     ecs::{entity::MapEntities, event::Events},
     prelude::*,
+    state::app::StatesPlugin,
     time::TimePlugin,
 };
 use bevy_replicon::{
@@ -20,6 +21,7 @@ fn channels() {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
+        StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
             tick_policy: TickPolicy::EveryFrame,
             ..Default::default()
@@ -41,6 +43,7 @@ fn regular() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -86,6 +89,7 @@ fn mapped() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -131,6 +135,7 @@ fn without_plugins() {
     server_app
         .add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .build()
                 .set(ServerPlugin {
@@ -145,6 +150,7 @@ fn without_plugins() {
     client_app
         .add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
@@ -187,6 +193,7 @@ fn local_resending() {
     let mut app = App::new();
     app.add_plugins((
         TimePlugin,
+        StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
             tick_policy: TickPolicy::EveryFrame,
             ..Default::default()
@@ -229,6 +236,7 @@ fn server_buffering() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::Manual, // To artificially delay replication after sending.
                 ..Default::default()
@@ -275,6 +283,7 @@ fn client_queue() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -325,6 +334,7 @@ fn client_queue_and_mapping() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -388,6 +398,7 @@ fn multiple_client_queues() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -450,6 +461,7 @@ fn independent() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -521,6 +533,7 @@ fn before_started_replication() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .set(ServerPlugin {
                     tick_policy: TickPolicy::EveryFrame,
@@ -564,6 +577,7 @@ fn independent_before_started_replication() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .set(ServerPlugin {
                     tick_policy: TickPolicy::EveryFrame,
@@ -613,6 +627,7 @@ fn different_ticks() {
     for app in [&mut server_app, &mut client_app1, &mut client_app2] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()

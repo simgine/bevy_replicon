@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{prelude::*, scene};
 use serde::{Deserialize, Serialize};
 use test_log::test;
@@ -6,7 +6,7 @@ use test_log::test;
 #[test]
 fn replicated_entity() {
     let mut app = App::new();
-    app.add_plugins(RepliconPlugins)
+    app.add_plugins((StatesPlugin, RepliconPlugins))
         .register_type::<TestComponent>()
         .register_type::<NonReflectedComponent>()
         .replicate::<TestComponent>()
@@ -42,7 +42,7 @@ fn replicated_entity() {
 #[test]
 fn empty_entity() {
     let mut app = App::new();
-    app.add_plugins(RepliconPlugins).finish();
+    app.add_plugins((StatesPlugin, RepliconPlugins)).finish();
 
     let entity = app.world_mut().spawn(Replicated).id();
 
@@ -61,7 +61,7 @@ fn empty_entity() {
 #[test]
 fn not_replicated_entity() {
     let mut app = App::new();
-    app.add_plugins(RepliconPlugins)
+    app.add_plugins((StatesPlugin, RepliconPlugins))
         .register_type::<TestComponent>()
         .replicate::<TestComponent>()
         .finish();
@@ -78,7 +78,7 @@ fn not_replicated_entity() {
 #[test]
 fn entity_update() {
     let mut app = App::new();
-    app.add_plugins(RepliconPlugins)
+    app.add_plugins((StatesPlugin, RepliconPlugins))
         .register_type::<TestComponent>()
         .replicate::<TestComponent>()
         .register_type::<ReflectedComponent>()

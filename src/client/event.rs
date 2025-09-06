@@ -32,7 +32,7 @@ impl Plugin for ClientEventPlugin {
             .remove_resource::<RemoteEventRegistry>()
             .expect("event registry should be initialized on app build");
 
-        let send = (
+        let send_fn = (
             FilteredResourcesParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_read_by_id(event.events_id());
@@ -51,7 +51,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(send);
 
-        let receive = (
+        let receive_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_server() {
                     builder.add_write_by_id(event.events_id());
@@ -67,11 +67,18 @@ impl Plugin for ClientEventPlugin {
             ParamBuilder,
             ParamBuilder,
             ParamBuilder,
-        )
+        );
+
+        let receive_fn = receive_builder
+            .clone()
             .build_state(app.world_mut())
             .build_system(receive);
 
-        let trigger = (
+        let enter_receive_fn = receive_builder
+            .build_state(app.world_mut())
+            .build_system(receive);
+
+        let trigger_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for trigger in event_registry.iter_server_triggers() {
                     builder.add_write_by_id(trigger.event().events_id());
@@ -79,11 +86,18 @@ impl Plugin for ClientEventPlugin {
             }),
             ParamBuilder,
             ParamBuilder,
-        )
+        );
+
+        let trigger_fn = trigger_builder
+            .clone()
             .build_state(app.world_mut())
             .build_system(trigger);
 
-        let resend_locally = (
+        let enter_trigger_fn = trigger_builder
+            .build_state(app.world_mut())
+            .build_system(trigger);
+
+        let resend_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_write_by_id(event.client_events_id());
@@ -99,7 +113,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(resend_locally);
 
-        let reset = (
+        let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_write_by_id(event.events_id());
@@ -119,22 +133,28 @@ impl Plugin for ClientEventPlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    reset.in_set(ClientSet::ResetEvents),
-                    (
-                        receive
-                            .after(super::receive_replication)
-                            .run_if(client_connected),
-                        trigger,
-                    )
+                    receive_fn.run_if(in_state(ClientState::Connected)),
+                    trigger_fn,
+                )
+                    .chain()
+                    .after(super::receive_replication)
+                    .in_set(ClientSet::Receive),
+            )
+            .add_systems(
+                OnEnter(ClientState::Connected),
+                (
+                    reset_fn.in_set(ClientSet::ResetEvents),
+                    (enter_receive_fn, enter_trigger_fn)
                         .chain()
+                        .after(super::receive_replication)
                         .in_set(ClientSet::Receive),
                 ),
             )
             .add_systems(
                 PostUpdate,
                 (
-                    send.run_if(client_connected),
-                    resend_locally.run_if(server_or_singleplayer),
+                    send_fn.run_if(in_state(ClientState::Connected)),
+                    resend_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .in_set(ClientSet::Send),
@@ -145,7 +165,7 @@ impl Plugin for ClientEventPlugin {
 fn send(
     events: FilteredResources,
     mut readers: FilteredResourcesMut,
-    mut client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     event_registry: Res<RemoteEventRegistry>,
@@ -166,7 +186,7 @@ fn send(
 
         // SAFETY: passed pointers were obtained using this event data.
         unsafe {
-            event.send(&mut ctx, &events, reader.into_inner(), &mut client);
+            event.send(&mut ctx, &events, reader.into_inner(), &mut messages);
         }
     }
 }
@@ -174,7 +194,7 @@ fn send(
 fn receive(
     mut events: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
-    mut client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     event_registry: Res<RemoteEventRegistry>,
@@ -200,7 +220,7 @@ fn receive(
                 &mut ctx,
                 events.into_inner(),
                 queue.into_inner(),
-                &mut client,
+                &mut messages,
                 **update_tick,
             )
         };
