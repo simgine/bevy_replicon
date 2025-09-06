@@ -75,6 +75,31 @@ pub struct DisconnectRequest {
     pub client: Entity,
 }
 
+/// Statistic associated with [`RepliconClient`](replicon_client::RepliconClient) or
+/// [`ConnectedClient`](connected_client::ConnectedClient).
+///
+/// All values can be zero if not provided by the backend.
+///
+/// <div class="warning">
+///
+/// Should only be modified from the messaging backend.
+///
+/// </div>
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+pub struct NetworkStats {
+    /// Round-time trip in seconds for the connection.
+    pub rtt: f64,
+
+    /// Packet loss % for the connection.
+    pub packet_loss: f64,
+
+    /// Bytes sent per second for the connection.
+    pub sent_bps: f64,
+
+    /// Bytes received per second for the connection.
+    pub received_bps: f64,
+}
+
 #[cfg(test)]
 mod tests {
     use test_log::test;

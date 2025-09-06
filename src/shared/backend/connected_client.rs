@@ -6,6 +6,8 @@ use bevy::{
 use log::error;
 use serde::{Deserialize, Serialize};
 
+use crate::prelude::*;
+
 /// Marker for a connected client.
 ///
 /// Backends should spawn and despawn entities with this component on connect and disconnect
@@ -24,7 +26,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// </div>
 ///
-/// See also [`AuthorizedClient`](crate::server::AuthorizedClient).
+/// See also [`AuthorizedClient`].
 #[derive(Component, Reflect)]
 #[require(Name::new("Connected client"), NetworkStats)]
 pub struct ConnectedClient {
@@ -104,29 +106,4 @@ fn on_id_remove(mut world: DeferredWorld, ctx: HookContext) {
     let network_id = *world.get::<NetworkId>(ctx.entity).unwrap();
     let mut network_map = world.resource_mut::<NetworkIdMap>();
     network_map.0.remove(&network_id);
-}
-
-/// Statistic associated with [`RepliconClient`](super::replicon_client::RepliconClient) or
-/// [`ConnectedClient`].
-///
-/// All values can be zero if not provided by the backend.
-///
-/// <div class="warning">
-///
-/// Should only be modified from the messaging backend.
-///
-/// </div>
-#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
-pub struct NetworkStats {
-    /// Round-time trip in seconds for the connection.
-    pub rtt: f64,
-
-    /// Packet loss % for the connection.
-    pub packet_loss: f64,
-
-    /// Bytes sent per second for the connection.
-    pub sent_bps: f64,
-
-    /// Bytes received per second for the connection.
-    pub received_bps: f64,
 }
