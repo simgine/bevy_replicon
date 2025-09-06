@@ -229,9 +229,9 @@ impl ClientEvent {
         ctx: &mut ClientSendCtx,
         events: &Ptr,
         reader: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
     ) {
-        unsafe { (self.send)(self, ctx, events, reader, client) };
+        unsafe { (self.send)(self, ctx, events, reader, messages) };
     }
 
     /// Typed version of [`Self::send`].
@@ -245,7 +245,7 @@ impl ClientEvent {
         ctx: &mut ClientSendCtx,
         events: &Ptr,
         reader: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
     ) {
         let reader: &mut ClientEventReader<E> = unsafe { reader.deref_mut() };
         let events = unsafe { events.deref() };
@@ -260,7 +260,7 @@ impl ClientEvent {
             }
 
             debug!("sending event `{}`", any::type_name::<E>());
-            client.send(self.channel_id, message);
+            messages.send(self.channel_id, message);
         }
     }
 
@@ -418,7 +418,7 @@ impl ClientEvent {
 }
 
 /// Signature of client event sending functions.
-type SendFn = unsafe fn(&ClientEvent, &mut ClientSendCtx, &Ptr, PtrMut, &mut RepliconClient);
+type SendFn = unsafe fn(&ClientEvent, &mut ClientSendCtx, &Ptr, PtrMut, &mut ClientMessages);
 
 /// Signature of client event receiving functions.
 type ReceiveFn = unsafe fn(&ClientEvent, &mut ServerReceiveCtx, PtrMut, &mut RepliconServer);

@@ -38,7 +38,7 @@ pub struct ClientPlugin;
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<RepliconClient>()
+        app.init_resource::<ClientMessages>()
             .init_resource::<ClientStats>()
             .init_resource::<ServerEntityMap>()
             .init_resource::<ServerUpdateTick>()
@@ -98,9 +98,9 @@ impl Plugin for ClientPlugin {
         }
 
         app.world_mut()
-            .resource_scope(|world, mut client: Mut<RepliconClient>| {
+            .resource_scope(|world, mut messages: Mut<ClientMessages>| {
                 let channels = world.resource::<RepliconChannels>();
-                client.setup_server_channels(channels.server_channels().len());
+                messages.setup_server_channels(channels.server_channels().len());
             });
     }
 }
@@ -126,7 +126,7 @@ pub(super) fn receive_replication(
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,
 ) {
-    world.resource_scope(|world, mut client: Mut<RepliconClient>| {
+    world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
             world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
                 world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
@@ -151,7 +151,7 @@ pub(super) fn receive_replication(
                                 apply_replication(
                                     world,
                                     &mut params,
-                                    &mut client,
+                                    &mut messages,
                                     &mut buffered_mutations,
                                 );
 
@@ -171,7 +171,7 @@ pub(super) fn receive_replication(
 }
 
 fn reset(
-    mut client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     mut stats: ResMut<ClientStats>,
     mut update_tick: ResMut<ServerUpdateTick>,
     mut entity_map: ResMut<ServerEntityMap>,
@@ -179,7 +179,7 @@ fn reset(
     mutate_ticks: Option<ResMut<ServerMutateTicks>>,
     replication_stats: Option<ResMut<ClientReplicationStats>>,
 ) {
-    client.clear();
+    messages.clear();
     *stats = Default::default();
     *update_tick = Default::default();
     entity_map.clear();
@@ -209,10 +209,10 @@ fn log_protocol_error(_trigger: Trigger<ProtocolMismatch>) {
 fn apply_replication(
     world: &mut World,
     params: &mut ReceiveParams,
-    client: &mut RepliconClient,
+    messages: &mut ClientMessages,
     buffered_mutations: &mut BufferedMutations,
 ) {
-    for mut message in client.receive(ServerChannel::Updates) {
+    for mut message in messages.receive(ServerChannel::Updates) {
         if let Err(e) = apply_update_message(world, params, &mut message) {
             error!("unable to apply update message: {e}");
         }
@@ -225,15 +225,15 @@ fn apply_replication(
     // (unless user requested history via marker).
     let update_tick = *world.resource::<ServerUpdateTick>();
     let acks_size =
-        MutateIndex::POSTCARD_MAX_SIZE * client.received_count(ServerChannel::Mutations);
+        MutateIndex::POSTCARD_MAX_SIZE * messages.received_count(ServerChannel::Mutations);
     if acks_size != 0 {
         let mut acks = Vec::with_capacity(acks_size);
-        for message in client.receive(ServerChannel::Mutations) {
+        for message in messages.receive(ServerChannel::Mutations) {
             if let Err(e) = buffer_mutate_message(params, buffered_mutations, message, &mut acks) {
                 error!("unable to buffer mutate message: {e}");
             }
         }
-        client.send(ClientChannel::MutationAcks, acks);
+        messages.send(ClientChannel::MutationAcks, acks);
     }
 
     apply_mutate_messages(world, params, buffered_mutations, update_tick);
@@ -760,7 +760,7 @@ pub enum ClientSet {
     ///
     /// Runs in [`PreUpdate`].
     ReceivePackets,
-    /// Systems that receive data from [`RepliconClient`].
+    /// Systems that read data from [`ClientMessages`].
     ///
     /// Runs in [`PreUpdate`] and [`OnEnter`] for [`ClientState::Connected`] (to avoid 1 frame delay).
     Receive,
@@ -772,7 +772,7 @@ pub enum ClientSet {
     ///
     /// Runs in [`OnEnter`] for [`ClientState::Connected`].
     SendHash,
-    /// Systems that send data to [`RepliconClient`].
+    /// Systems that write data to [`ClientMessages`].
     ///
     /// Runs in [`PostUpdate`].
     Send,

@@ -436,10 +436,10 @@ impl ServerEvent {
         ctx: &mut ClientReceiveCtx,
         events: PtrMut,
         queue: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
         update_tick: RepliconTick,
     ) {
-        unsafe { (self.receive)(self, ctx, events, queue, client, update_tick) }
+        unsafe { (self.receive)(self, ctx, events, queue, messages, update_tick) }
     }
 
     /// Typed version of [`ServerEvent::receive`].
@@ -453,7 +453,7 @@ impl ServerEvent {
         ctx: &mut ClientReceiveCtx,
         events: PtrMut,
         queue: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
         update_tick: RepliconTick,
     ) {
         let events: &mut Events<E> = unsafe { events.deref_mut() };
@@ -477,7 +477,7 @@ impl ServerEvent {
             }
         }
 
-        for mut message in client.receive(self.channel_id) {
+        for mut message in messages.receive(self.channel_id) {
             if !self.independent {
                 let tick = match postcard_utils::from_buf(&mut message) {
                     Ok(tick) => tick,
@@ -644,7 +644,7 @@ type ReceiveFn = unsafe fn(
     &mut ClientReceiveCtx,
     PtrMut,
     PtrMut,
-    &mut RepliconClient,
+    &mut ClientMessages,
     RepliconTick,
 );
 
