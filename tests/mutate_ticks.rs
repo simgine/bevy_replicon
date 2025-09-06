@@ -1,4 +1,4 @@
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
     prelude::*,
@@ -18,7 +18,7 @@ fn without_changes() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -54,7 +54,7 @@ fn one_message() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -122,7 +122,7 @@ fn multiple_messages() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

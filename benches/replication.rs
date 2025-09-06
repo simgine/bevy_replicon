@@ -1,7 +1,10 @@
 use core::time::Duration;
 
 use bevy::{
-    ecs::component::Mutable, platform::time::Instant, prelude::*, state::app::StatesPlugin,
+    ecs::{component::Mutable, schedule::ScheduleLabel},
+    platform::time::Instant,
+    prelude::*,
+    state::app::StatesPlugin,
 };
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
@@ -188,7 +191,7 @@ fn create_app<C: BenchmarkComponent>() -> App {
         MinimalPlugins,
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
-            tick_schedule: TickSchedule::PostUpdate,
+            tick_schedule: PostUpdate.intern(),
             ..Default::default()
         }),
     ))

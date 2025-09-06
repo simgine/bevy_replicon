@@ -1,4 +1,4 @@
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::confirm_history::ConfirmHistory,
     prelude::*,
@@ -17,7 +17,7 @@ fn empty() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -60,7 +60,7 @@ fn with_component() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -89,7 +89,7 @@ fn with_multiple_components() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -126,7 +126,7 @@ fn with_old_component() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -170,7 +170,7 @@ fn before_connection() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -199,7 +199,7 @@ fn pre_spawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -266,7 +266,7 @@ fn after_despawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

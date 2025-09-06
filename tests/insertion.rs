@@ -1,4 +1,8 @@
-use bevy::{ecs::system::SystemState, prelude::*, state::app::StatesPlugin};
+use bevy::{
+    ecs::{schedule::ScheduleLabel, system::SystemState},
+    prelude::*,
+    state::app::StatesPlugin,
+};
 use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,
@@ -25,7 +29,7 @@ fn table_storage() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -64,7 +68,7 @@ fn sparse_set_storage() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -103,7 +107,7 @@ fn immutable() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -155,7 +159,7 @@ fn mapped_existing_entity() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -206,7 +210,7 @@ fn mapped_new_entity() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -253,7 +257,7 @@ fn multiple_components() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -300,7 +304,7 @@ fn command_fns() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -342,7 +346,7 @@ fn marker() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -393,7 +397,7 @@ fn group() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -432,7 +436,7 @@ fn not_replicated() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -467,7 +471,7 @@ fn after_removal() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -521,7 +525,7 @@ fn before_started_replication() {
                     auth_method: AuthMethod::Custom,
                 })
                 .set(ServerPlugin {
-                    tick_schedule: TickSchedule::PostUpdate,
+                    tick_schedule: PostUpdate.intern(),
                     ..Default::default()
                 }),
         ))
@@ -572,7 +576,7 @@ fn after_started_replication() {
                     auth_method: AuthMethod::Custom,
                 })
                 .set(ServerPlugin {
-                    tick_schedule: TickSchedule::PostUpdate,
+                    tick_schedule: PostUpdate.intern(),
                     ..Default::default()
                 }),
         ))
@@ -613,7 +617,7 @@ fn confirm_history() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

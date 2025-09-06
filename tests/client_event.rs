@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::{entity::MapEntities, event::Events},
+    ecs::{entity::MapEntities, event::Events, schedule::ScheduleLabel},
     prelude::*,
     state::app::StatesPlugin,
     time::TimePlugin,
@@ -21,7 +21,7 @@ fn channels() {
         MinimalPlugins,
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
-            tick_schedule: TickSchedule::PostUpdate,
+            tick_schedule: PostUpdate.intern(),
             ..Default::default()
         }),
     ))
@@ -67,7 +67,7 @@ fn mapped() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

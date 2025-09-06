@@ -9,8 +9,9 @@ use crate::prelude::*;
 /// available to the client in the custom deserialization, despawn, and component
 /// removal functions.
 ///
-/// The server sends replication data in [`ServerSet::Send`] any time this resource changes.
-/// You can configure when the tick is incremented via [`ServerPlugin::tick_schedule`].
+/// The server sends replication data in [`ServerSet::Send`] when the state is
+/// [`ServerState::Running`] any time this resource changes. You can configure
+/// when the tick is incremented via [`ServerPlugin::tick_schedule`].
 ///
 /// Note that component mutations are replicated over the unreliable channel.
 /// If a component mutation message is lost, the mutation will not be resent
