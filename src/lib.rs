@@ -709,9 +709,9 @@ pub mod prelude {
         shared::{
             AuthMethod, RepliconSharedPlugin,
             backend::{
-                ClientState, DisconnectRequest, ServerState,
+                ClientState, DisconnectRequest, NetworkStats, ServerState,
                 channels::{Channel, RepliconChannels},
-                connected_client::{ConnectedClient, NetworkStats},
+                connected_client::ConnectedClient,
                 replicon_client::RepliconClient,
                 replicon_server::RepliconServer,
             },
