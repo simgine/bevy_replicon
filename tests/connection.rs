@@ -44,7 +44,7 @@ fn server_start_stop() {
                     auth_method: AuthMethod::Custom,
                 })
                 .set(ServerPlugin {
-                    tick_policy: TickPolicy::EveryFrame,
+                    tick_schedule: TickSchedule::PostUpdate,
                     ..Default::default()
                 }),
         ))

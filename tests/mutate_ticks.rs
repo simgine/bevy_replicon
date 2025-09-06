@@ -18,7 +18,7 @@ fn without_changes() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
@@ -54,7 +54,7 @@ fn one_message() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
@@ -122,7 +122,7 @@ fn multiple_messages() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))

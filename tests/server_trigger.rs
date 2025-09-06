@@ -15,7 +15,7 @@ fn regular() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
@@ -48,7 +48,7 @@ fn with_target() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
@@ -93,7 +93,7 @@ fn mapped() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
@@ -138,7 +138,7 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .set(ServerPlugin {
-                    tick_policy: TickPolicy::EveryFrame,
+                    tick_schedule: TickSchedule::PostUpdate,
                     ..Default::default()
                 })
                 .disable::<ClientPlugin>()
@@ -181,7 +181,7 @@ fn local_resending() {
         TimePlugin,
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
-            tick_policy: TickPolicy::EveryFrame,
+            tick_schedule: TickSchedule::PostUpdate,
             ..Default::default()
         }),
     ))
@@ -212,7 +212,7 @@ fn independent() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))

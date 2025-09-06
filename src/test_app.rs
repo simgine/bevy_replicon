@@ -19,7 +19,7 @@ for app in [&mut server_app, &mut client_app] {
         StatesPlugin,
         // No messaging library plugin required.
         RepliconPlugins.set(ServerPlugin {
-            tick_policy: TickPolicy::EveryFrame, // To tick each app update.
+            tick_schedule: TickSchedule::PostUpdate, // To tick each app update.
             ..Default::default()
         }),
     ))

@@ -16,7 +16,7 @@ fn regular() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
@@ -76,7 +76,7 @@ fn with_miss() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: TickSchedule::PostUpdate,
                 ..Default::default()
             }),
         ))
