@@ -93,8 +93,8 @@ impl Plugin for ServerEventPlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    receive_fn.run_if(server_running),
-                    trigger_fn.run_if(server_or_singleplayer),
+                    receive_fn.run_if(in_state(ServerState::Running)),
+                    trigger_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .in_set(ServerSet::Receive),
@@ -102,11 +102,11 @@ impl Plugin for ServerEventPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    send_or_buffer_fn.run_if(server_running),
+                    send_or_buffer_fn.run_if(in_state(ServerState::Running)),
                     send_buffered
-                        .run_if(server_running)
+                        .run_if(in_state(ServerState::Running))
                         .run_if(resource_changed::<ServerTick>),
-                    resend_locally_fn.run_if(server_or_singleplayer),
+                    resend_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .after(super::send_replication)

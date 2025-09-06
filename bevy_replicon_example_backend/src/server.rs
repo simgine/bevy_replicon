@@ -20,32 +20,31 @@ impl Plugin for RepliconExampleServerPlugin {
         app.add_systems(
             PreUpdate,
             (
+                (
+                    receive_packets.run_if(resource_exists::<ExampleServer>),
+                    // Run after since the resource might be removed after receiving packets.
+                    set_stopped.run_if(resource_removed::<ExampleServer>),
+                )
+                    .chain(),
                 set_running.run_if(resource_added::<ExampleServer>),
-                receive_packets.run_if(resource_exists::<ExampleServer>),
             )
-                .chain()
                 .in_set(ServerSet::ReceivePackets),
         )
         .add_systems(
             PostUpdate,
-            (
-                set_stopped
-                    .in_set(ServerSet::PrepareSend)
-                    .run_if(resource_removed::<ExampleServer>),
-                send_packets
-                    .in_set(ServerSet::SendPackets)
-                    .run_if(resource_exists::<ExampleServer>),
-            ),
+            send_packets
+                .run_if(resource_exists::<ExampleServer>)
+                .in_set(ServerSet::SendPackets),
         );
     }
 }
 
-fn set_stopped(mut server: ResMut<RepliconServer>) {
-    server.set_running(false);
+fn set_running(mut state: ResMut<NextState<ServerState>>) {
+    state.set(ServerState::Running);
 }
 
-fn set_running(mut server: ResMut<RepliconServer>) {
-    server.set_running(true);
+fn set_stopped(mut state: ResMut<NextState<ServerState>>) {
+    state.set(ServerState::Stopped);
 }
 
 fn receive_packets(

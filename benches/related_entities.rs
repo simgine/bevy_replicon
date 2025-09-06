@@ -30,8 +30,9 @@ fn hierarchy_spawning(c: &mut Criterion) {
             .sync_related_entities::<ChildOf>()
             .finish();
 
-        let mut server = app.world_mut().resource_mut::<RepliconServer>();
-        server.set_running(true);
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
 
         b.iter(|| spawn_then_despawn(&mut app));
     });
@@ -73,8 +74,9 @@ fn hierarchy_changes(c: &mut Criterion) {
 
         spawn_hierarchy(app.world_mut());
 
-        let mut server = app.world_mut().resource_mut::<RepliconServer>();
-        server.set_running(true);
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
 
         b.iter(|| trigger_hierarchy_change(&mut app));
     });

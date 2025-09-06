@@ -92,12 +92,7 @@ impl Plugin for ServerPlugin {
             )
             .configure_sets(
                 PostUpdate,
-                (
-                    ServerSet::PrepareSend,
-                    ServerSet::Send,
-                    ServerSet::SendPackets,
-                )
-                    .chain(),
+                (ServerSet::Send, ServerSet::SendPackets).chain(),
             )
             .add_observer(handle_connects)
             .add_observer(handle_disconnects)
@@ -110,20 +105,18 @@ impl Plugin for ServerPlugin {
                 )
                     .chain()
                     .in_set(ServerSet::Receive)
-                    .run_if(server_running),
+                    .run_if(in_state(ServerState::Running)),
             )
+            .add_systems(OnExit(ServerState::Running), reset)
             .add_systems(
                 PostUpdate,
                 (
-                    (
-                        buffer_removals,
-                        send_replication.run_if(resource_changed::<ServerTick>),
-                    )
-                        .chain()
-                        .in_set(ServerSet::Send)
-                        .run_if(server_running),
-                    reset.run_if(server_just_stopped),
-                ),
+                    buffer_removals,
+                    send_replication.run_if(resource_changed::<ServerTick>),
+                )
+                    .chain()
+                    .in_set(ServerSet::Send)
+                    .run_if(in_state(ServerState::Running)),
             );
 
         debug!("using tick policy `{:?}`", self.tick_policy);
@@ -134,7 +127,7 @@ impl Plugin for ServerPlugin {
                     PostUpdate,
                     increment_tick
                         .before(send_replication)
-                        .run_if(server_running)
+                        .run_if(in_state(ServerState::Running))
                         .run_if(on_timer(tick_time)),
                 );
             }
@@ -143,7 +136,7 @@ impl Plugin for ServerPlugin {
                     PostUpdate,
                     increment_tick
                         .before(send_replication)
-                        .run_if(server_running),
+                        .run_if(in_state(ServerState::Running)),
                 );
             }
             TickPolicy::Manual => (),
@@ -279,9 +272,9 @@ fn receive_acks(
 fn buffer_despawns(
     trigger: Trigger<OnRemove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
-    server: Res<RepliconServer>,
+    state: Res<State<ServerState>>,
 ) {
-    if server.is_running() {
+    if *state == ServerState::Running {
         despawn_buffer.push(trigger.target());
     }
 }
@@ -371,11 +364,13 @@ fn send_replication(
 
 fn reset(
     mut commands: Commands,
+    mut server: ResMut<RepliconServer>,
     mut server_tick: ResMut<ServerTick>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
     mut buffered_events: ResMut<BufferedServerEvents>,
 ) {
+    server.clear();
     *server_tick = Default::default();
     buffered_events.clear();
     related_entities.clear();
@@ -797,7 +792,7 @@ fn write_tick_cached(
 /// Set with replication and event systems related to server.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum ServerSet {
-    /// Systems that receive packets from the messaging backend.
+    /// Systems that receive packets from the messaging backend and update [`ServerState`].
     ///
     /// Used by the messaging backend.
     ///
@@ -805,17 +800,16 @@ pub enum ServerSet {
     ReceivePackets,
     /// Systems that receive data from [`RepliconServer`].
     ///
-    /// Used by `bevy_replicon`.
-    ///
     /// Runs in [`PreUpdate`].
     Receive,
-    /// Systems that prepare for sending data to [`RepliconServer`].
+    /// Systems that build the initial graph with all related entities registered via
+    /// [`SyncRelatedAppExt::sync_related_entities`].
     ///
-    /// Can be used by backends to add custom logic before sending data, such as transition to a stopped state.
-    PrepareSend,
+    /// The graph is kept in sync with observers.
+    ///
+    /// Runs in [`OnEnter`] for [`ServerState::Running`].
+    ReadRelations,
     /// Systems that send data to [`RepliconServer`].
-    ///
-    /// Used by `bevy_replicon`.
     ///
     /// Runs in [`PostUpdate`] on server tick, see [`TickPolicy`].
     Send,

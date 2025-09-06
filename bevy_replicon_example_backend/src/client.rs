@@ -20,32 +20,31 @@ impl Plugin for RepliconExampleClientPlugin {
         app.add_systems(
             PreUpdate,
             (
+                (
+                    receive_packets.run_if(resource_exists::<ExampleClient>),
+                    // Run after since the resource might be removed after receiving packets.
+                    set_disconnected.run_if(resource_removed::<ExampleClient>),
+                )
+                    .chain(),
                 set_connected.run_if(resource_added::<ExampleClient>),
-                receive_packets.run_if(resource_exists::<ExampleClient>),
             )
-                .chain()
                 .in_set(ClientSet::ReceivePackets),
         )
         .add_systems(
             PostUpdate,
-            (
-                set_disconnected
-                    .in_set(ClientSet::PrepareSend)
-                    .run_if(resource_removed::<ExampleClient>),
-                send_packets
-                    .in_set(ClientSet::SendPackets)
-                    .run_if(resource_exists::<ExampleClient>),
-            ),
+            send_packets
+                .run_if(resource_exists::<ExampleClient>)
+                .in_set(ClientSet::SendPackets),
         );
     }
 }
 
-fn set_disconnected(mut replicon_client: ResMut<RepliconClient>) {
-    replicon_client.set_status(RepliconClientStatus::Disconnected);
+fn set_connected(mut state: ResMut<NextState<ClientState>>) {
+    state.set(ClientState::Connected);
 }
 
-fn set_connected(mut replicon_client: ResMut<RepliconClient>) {
-    replicon_client.set_status(RepliconClientStatus::Connected);
+fn set_disconnected(mut state: ResMut<NextState<ClientState>>) {
+    state.set(ClientState::Disconnected);
 }
 
 fn receive_packets(

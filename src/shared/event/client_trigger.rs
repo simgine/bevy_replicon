@@ -23,7 +23,7 @@ pub trait ClientTriggerAppExt {
     ///
     /// After triggering `E` event on the client, [`FromClient<E>`] event will be triggered on the server.
     ///
-    /// If [`ServerEventPlugin`] is enabled and [`RepliconClient`] is inactive, the event will also be triggered
+    /// If [`ServerEventPlugin`] is enabled and the client state is [`ClientState::Disconnected`], the event will also be triggered
     /// locally as [`FromClient<E>`] event with [`FromClient::client_id`] equal to [`ClientId::Server`].
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
@@ -186,7 +186,7 @@ fn trigger_deserialize<'a, E>(
 ///
 /// See also [`ClientTriggerAppExt`].
 pub trait ClientTriggerExt {
-    /// Like [`Commands::trigger`], but triggers [`FromClient`] on server and locally if [`RepliconClient`] is inactive.
+    /// Like [`Commands::trigger`], but triggers [`FromClient`] on server and locally if the client state is [`ClientState::Disconnected`].
     fn client_trigger(&mut self, event: impl Event);
 
     /// Like [`Self::client_trigger`], but allows you to specify target entities, similar to [`Commands::trigger_targets`].

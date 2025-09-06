@@ -48,10 +48,15 @@ impl Plugin for ClientPlugin {
                 PreUpdate,
                 (
                     ClientSet::ReceivePackets,
-                    (
-                        ClientSet::ResetEvents.run_if(client_just_connected),
-                        ClientSet::Reset.run_if(client_just_disconnected),
-                    ),
+                    ClientSet::Receive,
+                    ClientSet::Diagnostics,
+                )
+                    .chain(),
+            )
+            .configure_sets(
+                OnEnter(ClientState::Connected),
+                (
+                    ClientSet::ResetEvents,
                     ClientSet::Receive,
                     ClientSet::Diagnostics,
                 )
@@ -59,29 +64,29 @@ impl Plugin for ClientPlugin {
             )
             .configure_sets(
                 PostUpdate,
-                (
-                    ClientSet::PrepareSend,
-                    ClientSet::Send,
-                    ClientSet::SendPackets,
-                )
-                    .chain(),
+                (ClientSet::Send, ClientSet::SendPackets).chain(),
             )
             .add_systems(
                 PreUpdate,
                 receive_replication
                     .in_set(ClientSet::Receive)
-                    .run_if(client_connected),
+                    .run_if(in_state(ClientState::Connected)),
             )
-            .add_systems(PreUpdate, reset.in_set(ClientSet::Reset));
+            .add_systems(
+                OnEnter(ClientState::Connected),
+                receive_replication.in_set(ClientSet::Receive),
+            )
+            .add_systems(
+                OnExit(ClientState::Connected),
+                reset.in_set(ClientSet::Reset),
+            );
 
         let auth_method = *app.world().resource::<AuthMethod>();
         debug!("using authorization method `{auth_method:?}`");
         if auth_method == AuthMethod::ProtocolCheck {
             app.add_observer(log_protocol_error).add_systems(
-                PreUpdate,
-                send_protocol_hash
-                    .in_set(ClientSet::Receive)
-                    .run_if(client_just_connected),
+                OnEnter(ClientState::Connected),
+                send_protocol_hash.in_set(ClientSet::SendHash),
             );
         }
     }
@@ -165,12 +170,14 @@ pub(super) fn receive_replication(
 }
 
 fn reset(
+    mut client: ResMut<RepliconClient>,
     mut update_tick: ResMut<ServerUpdateTick>,
     mut entity_map: ResMut<ServerEntityMap>,
     mut buffered_mutations: ResMut<BufferedMutations>,
     mutate_ticks: Option<ResMut<ServerMutateTicks>>,
     stats: Option<ResMut<ClientReplicationStats>>,
 ) {
+    client.clear();
     *update_tick = Default::default();
     entity_map.clear();
     buffered_mutations.clear();
@@ -744,7 +751,7 @@ struct ReceiveParams<'a> {
 /// Set with replication and event systems related to client.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum ClientSet {
-    /// Systems that receive packets from the messaging backend.
+    /// Systems that receive packets from the messaging backend and update [`ClientState`].
     ///
     /// Used by messaging backend implementations.
     ///
@@ -752,23 +759,17 @@ pub enum ClientSet {
     ReceivePackets,
     /// Systems that receive data from [`RepliconClient`].
     ///
-    /// Used by `bevy_replicon`.
-    ///
-    /// Runs in [`PreUpdate`].
+    /// Runs in [`PreUpdate`] and [`OnEnter`] for [`ClientState::Connected`] (to avoid 1 frame delay).
     Receive,
     /// Systems that populate Bevy's [`Diagnostics`](bevy::diagnostic::Diagnostics).
     ///
-    /// Used by `bevy_replicon`.
-    ///
-    /// Runs in [`PreUpdate`].
+    /// Runs in [`PreUpdate`] and [`OnEnter`] for [`ClientState::Connected`] (to avoid 1 frame delay).
     Diagnostics,
-    /// Systems that prepare for sending data to [`RepliconClient`].
+    /// System that sends [`ProtocolHash`].
     ///
-    /// Can be used by backends to add custom logic before sending data, such as transition to a disconnected or connecting state.
-    PrepareSend,
+    /// Runs in [`OnEnter`] for [`ClientState::Connected`].
+    SendHash,
     /// Systems that send data to [`RepliconClient`].
-    ///
-    /// Used by `bevy_replicon`.
     ///
     /// Runs in [`PostUpdate`].
     Send,
@@ -780,13 +781,13 @@ pub enum ClientSet {
     SendPackets,
     /// Systems that reset queued server events.
     ///
-    /// Runs in [`PreUpdate`] immediately after the client connects to ensure client sessions have a fresh start.
-    ///
     /// This is a separate set from [`ClientSet::Reset`] to avoid sending events that were sent before the connection.
+    ///
+    /// Runs in [`OnEnter`] for [`ClientState::Connected`].
     ResetEvents,
     /// Systems that reset the client.
     ///
-    /// Runs in [`PreUpdate`] when the client just disconnected.
+    /// Runs in [`OnExit`] for [`ClientState::Connected`].
     Reset,
 }
 

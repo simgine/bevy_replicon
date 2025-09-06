@@ -18,7 +18,11 @@ impl Plugin for ClientDiagnosticsPlugin {
                 PreUpdate,
                 add_measurements
                     .in_set(ClientSet::Diagnostics)
-                    .run_if(client_connected),
+                    .run_if(in_state(ClientState::Connected)),
+            )
+            .add_systems(
+                OnEnter(ClientState::Connected),
+                add_measurements.in_set(ClientSet::Diagnostics),
             )
             .register_diagnostic(
                 Diagnostic::new(RTT)

@@ -24,7 +24,7 @@ use bevy::{
 ///         ..Default::default()
 ///     }),
 /// ))
-/// .add_systems(Update, update_visibility.run_if(server_running));
+/// .add_systems(Update, update_visibility.run_if(in_state(ServerState::Running)));
 ///
 /// /// Disables the visibility of other players' entities that are further away than the visible distance.
 /// fn update_visibility(

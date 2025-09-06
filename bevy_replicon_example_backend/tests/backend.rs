@@ -25,15 +25,16 @@ fn connect_disconnect() {
 
     setup(&mut server_app, &mut client_app).unwrap();
 
-    assert!(server_app.world().resource::<RepliconServer>().is_running());
+    let server_state = server_app.world().resource::<State<ServerState>>();
+    assert_eq!(*server_state, ServerState::Running);
 
     let mut clients = server_app
         .world_mut()
         .query::<(&ConnectedClient, &AuthorizedClient)>();
     assert_eq!(clients.iter(server_app.world()).len(), 1);
 
-    let replicon_client = client_app.world().resource::<RepliconClient>();
-    assert!(replicon_client.is_connected());
+    let client_state = client_app.world().resource::<State<ClientState>>();
+    assert_eq!(*client_state, ClientState::Connected);
 
     let renet_client = client_app.world().resource::<ExampleClient>();
     assert!(renet_client.is_connected());
@@ -45,8 +46,8 @@ fn connect_disconnect() {
 
     assert_eq!(clients.iter(server_app.world()).len(), 0);
 
-    let replicon_client = client_app.world().resource::<RepliconClient>();
-    assert!(replicon_client.is_disconnected());
+    let client_state = client_app.world().resource::<State<ClientState>>();
+    assert_eq!(*client_state, ClientState::Disconnected);
 }
 
 #[test]
@@ -88,8 +89,8 @@ fn disconnect_request() {
 
     assert_eq!(clients.iter(server_app.world()).len(), 0);
 
-    let client = client_app.world().resource::<RepliconClient>();
-    assert!(client.is_disconnected());
+    let client_state = client_app.world().resource::<State<ClientState>>();
+    assert_eq!(*client_state, ClientState::Disconnected);
 
     let events = client_app.world().resource::<Events<TestEvent>>();
     assert_eq!(events.len(), 1, "last event should be received");
@@ -134,10 +135,12 @@ fn server_stop() {
 
     let mut clients = server_app.world_mut().query::<&ConnectedClient>();
     assert_eq!(clients.iter(server_app.world()).len(), 0);
-    assert!(!server_app.world().resource::<RepliconServer>().is_running());
 
-    let client = client_app.world().resource::<RepliconClient>();
-    assert!(client.is_disconnected());
+    let server_state = server_app.world().resource::<State<ServerState>>();
+    assert_eq!(*server_state, ServerState::Stopped);
+
+    let client_state = client_app.world().resource::<State<ClientState>>();
+    assert_eq!(*client_state, ClientState::Disconnected);
 
     let events = client_app.world().resource::<Events<TestEvent>>();
     assert!(events.is_empty(), "event after stop shouldn't be received");

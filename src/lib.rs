@@ -30,13 +30,13 @@ app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins, MyMessagingPlugi
 # }
 ```
 
+If you use [`MinimalPlugins`], you need to add [`StatesPlugin`](bevy::state::app::StatesPlugin)
+manually. It's included by default with [`DefaultPlugins`].
+
 ## Server and client creation
 
 This part is specific to your messaging backend. For `bevy_replicon_renet`,
 see [this section](https://docs.rs/bevy_replicon_renet#server-and-client-creation).
-
-Backends manage [`RepliconServer`] and [`RepliconClient`] resources. They can be used
-to obtain things like state or statistic in backend-independent way.
 
 On server connected clients represented as entities with [`ConnectedClient`] component.
 Their data represented as components, such as [`NetworkStats`]. Users can also attach their
@@ -48,6 +48,57 @@ to disconnect after sending messages.
 
 You can use [`Trigger<OnAdd, ConnectedClient>`] to react to new connections,
 or use backend-provided events if you need the disconnect reason.
+
+## States
+
+We provide [`ClientState`] and [`ServerState`], which are Bevy [`States`].
+These are managed by your messaging backend, and you can use them to control when your systems run.
+
+For systems that should run continuously while in a specific state, use [`IntoScheduleConfigs::run_if`]
+with the [`in_state`] run condition:
+
+```
+# use bevy::prelude::*;
+# use bevy_replicon::prelude::*;
+# let mut app = App::new();
+app.add_systems(
+    Update,
+    (
+        apply_damage.run_if(in_state(ServerState::Running)), // Runs every frame on the server.
+        display_vfx.run_if(in_state(ClientState::Connected)), // Runs every frame on the client.
+    ),
+);
+# fn apply_damage() {}
+# fn display_vfx() {}
+```
+
+To run systems when entering or exiting a state, use the [`OnEnter`] or [`OnExit`] schedules:
+
+```
+# use bevy::prelude::*;
+# use bevy_replicon::prelude::*;
+# let mut app = App::new();
+app.add_systems(OnEnter(ClientState::Connecting), display_connection_message) // Runs when the client starts connecting.
+    .add_systems(OnExit(ClientState::Connected), show_disconnected_message) // Runs when the client disconnects.
+    .add_systems(OnEnter(ServerState::Running), initialize_match); // Runs when the server starts.
+# fn display_connection_message() {}
+# fn show_disconnected_message() {}
+# fn initialize_match() {}
+```
+
+You can also use these states with [`StateScoped`], but you'll need to call
+[`AppExtStates::enable_state_scoped_entities`] in your app:
+
+```
+# use bevy::prelude::*;
+# use bevy_replicon::prelude::*;
+# let mut app = App::new();
+app.enable_state_scoped_entities::<ClientState>()
+    .enable_state_scoped_entities::<ServerState>();
+```
+
+Read more about system patterns in the [Abstracting over configurations](#abstracting-over-configurations)
+section.
 
 ## Replication
 
@@ -260,11 +311,11 @@ app.add_client_event::<ExampleEvent>(Channel::Ordered)
         PreUpdate,
         receive_events
             .after(ServerSet::Receive)
-            .run_if(server_running),
+            .run_if(in_state(ServerState::Running)),
     )
     .add_systems(
         PostUpdate,
-        send_events.before(ClientSet::Send).run_if(client_connected),
+        send_events.before(ClientSet::Send).run_if(in_state(ClientState::Connected)),
     );
 
 fn send_events(mut events: EventWriter<ExampleEvent>) {
@@ -301,7 +352,7 @@ using [`ClientTriggerAppExt::add_client_trigger`], and then use [`ClientTriggerE
 # app.add_plugins((StatesPlugin, RepliconPlugins));
 app.add_client_trigger::<ExampleEvent>(Channel::Ordered)
     .add_observer(receive_events)
-    .add_systems(Update, send_events.run_if(client_connected));
+    .add_systems(Update, send_events.run_if(in_state(ClientState::Connected)));
 
 fn send_events(mut commands: Commands) {
     commands.client_trigger(ExampleEvent);
@@ -338,11 +389,11 @@ app.add_server_event::<ExampleEvent>(Channel::Ordered)
         PreUpdate,
         receive_events
             .after(ClientSet::Receive)
-            .run_if(client_connected),
+            .run_if(in_state(ClientState::Connected)),
     )
     .add_systems(
         PostUpdate,
-        send_events.before(ServerSet::Send).run_if(server_running),
+        send_events.before(ServerSet::Send).run_if(in_state(ServerState::Running)),
     );
 
 fn send_events(mut events: EventWriter<ToClients<ExampleEvent>>) {
@@ -376,7 +427,7 @@ with [`ServerTriggerAppExt::add_server_trigger`] and then use [`ServerTriggerExt
 # app.add_plugins((StatesPlugin, RepliconPlugins));
 app.add_server_trigger::<ExampleEvent>(Channel::Ordered)
     .add_observer(receive_events)
-    .add_systems(Update, send_events.run_if(server_running));
+    .add_systems(Update, send_events.run_if(in_state(ServerState::Running)));
 
 fn send_events(mut commands: Commands) {
     commands.server_trigger(ToClients {
@@ -435,30 +486,32 @@ without actually running them:
 - Listen server configuration runs only the server and both logics.
 - Singleplayer configuration doesn't run the client or server but runs both logics.
 
-To achieve this, just use provided [run conditions](shared::common_conditions):
+To achieve this, use the provided [`ClientState`] and [`ServerState`] states:
 
-- Use [`server_or_singleplayer`] for systems that require server authority. For example, systems that
-  apply damage or send server events.
-- Use client or server conditions like [`client_connecting`], [`client_connected`], [`server_running`], etc.
+- Use [`ClientState::Disconnected`] for systems that require server authority.
+  For example, systems that apply damage or send server events. This basically means "run when not a client",
+  which applies to both server **and** singleplayer.
+- Use [`ClientState::Connecting`], [`ClientState::Connected`], [`ServerState::Running`], etc.
   **only** for miscellaneous things, like display a connection message or a menu to kick connected players
   (things that actually require server or client running)
-- For everything else don't use Replicon's conditions.
-
-We also provide [`ClientSet`] and [`ServerSet`] to schedule your system at specific time in the frame.
-For example, you can run your systems right after receive using [`ClientSet::Receive`] or [`ServerSet::Receive`].
+- For everything else don't use Replicon's states.
 
 Everything else is done automatically by the crate. All provided
 [examples](https://github.com/simgine/bevy_replicon/tree/master/bevy_replicon_example_backend/examples)
 use this approach.
 
-Internally we run replication sending system only if [`server_running`] and replication receiving
-only if [`client_connected`]. This way for singleplayer replication systems won't run at all and
+Internally we run replication sending system only in [`ServerState::Running`] and replication receiving
+only in [`ClientState::Connected`]. This way for singleplayer replication systems won't run at all and
 for listen server replication will only be sending (server world is already in the correct state).
 
-For events it's a bit trickier. For all client events we internally drain events as `E` and re-emit
-them as [`FromClient<E>`] locally with [`ClientId::Server`] if [`server_or_singleplayer`] is `true`.
+For events, it's a bit trickier. For all client events, we internally drain events as `E` and re-emit
+them as [`FromClient<E>`] locally with [`ClientId::Server`] in [`ClientState::Disconnected`].
 For server events we drain [`ToClients<E>`] and, if the [`ClientId::Server`] is the recipient of the event,
-re-emit it as `E` locally.
+re-emit it as `E` locally. This emulates event receiving for both server and singleplayer without actually
+transmitting data over the network.
+
+We also provide [`ClientSet`] and [`ServerSet`] to schedule your system at specific time in the frame.
+For example, you can run your systems right after receive using [`ClientSet::Receive`] or [`ServerSet::Receive`].
 
 ## Organizing your game code
 
@@ -656,14 +709,13 @@ pub mod prelude {
         shared::{
             AuthMethod, RepliconSharedPlugin,
             backend::{
-                DisconnectRequest,
+                ClientState, DisconnectRequest, ServerState,
                 channels::{Channel, RepliconChannels},
                 connected_client::{ConnectedClient, NetworkStats},
-                replicon_client::{RepliconClient, RepliconClientStatus},
+                replicon_client::RepliconClient,
                 replicon_server::RepliconServer,
             },
             client_id::ClientId,
-            common_conditions::*,
             event::{
                 client_event::{ClientEventAppExt, FromClient},
                 client_trigger::{ClientTriggerAppExt, ClientTriggerExt},
