@@ -165,7 +165,7 @@ impl Plugin for ClientEventPlugin {
 fn send(
     events: FilteredResources,
     mut readers: FilteredResourcesMut,
-    mut client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     event_registry: Res<RemoteEventRegistry>,
@@ -186,7 +186,7 @@ fn send(
 
         // SAFETY: passed pointers were obtained using this event data.
         unsafe {
-            event.send(&mut ctx, &events, reader.into_inner(), &mut client);
+            event.send(&mut ctx, &events, reader.into_inner(), &mut messages);
         }
     }
 }
@@ -194,7 +194,7 @@ fn send(
 fn receive(
     mut events: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
-    mut client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     event_registry: Res<RemoteEventRegistry>,
@@ -220,7 +220,7 @@ fn receive(
                 &mut ctx,
                 events.into_inner(),
                 queue.into_inner(),
-                &mut client,
+                &mut messages,
                 **update_tick,
             )
         };

@@ -135,16 +135,16 @@ impl ServerTestAppExt for App {
 
     fn exchange_with_client(&mut self, client_app: &mut App) {
         let client_entity = **client_app.world().resource::<TestClientEntity>();
-        let mut client = client_app.world_mut().resource_mut::<RepliconClient>();
+        let mut client_messages = client_app.world_mut().resource_mut::<ClientMessages>();
 
         let mut server = self.world_mut().resource_mut::<RepliconServer>();
-        for (channel_id, message) in client.drain_sent() {
+        for (channel_id, message) in client_messages.drain_sent() {
             server.insert_received(client_entity, channel_id, message)
         }
 
         server.retain_sent(|(entity, channel_id, message)| {
             if *entity == client_entity {
-                client.insert_received(*channel_id, message.clone());
+                client_messages.insert_received(*channel_id, message.clone());
                 false
             } else {
                 true

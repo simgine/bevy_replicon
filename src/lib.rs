@@ -711,8 +711,8 @@ pub mod prelude {
             backend::{
                 ClientState, ClientStats, DisconnectRequest, ServerState,
                 channels::{Channel, RepliconChannels},
+                client_messages::ClientMessages,
                 connected_client::ConnectedClient,
-                replicon_client::RepliconClient,
                 replicon_server::RepliconServer,
             },
             client_id::ClientId,

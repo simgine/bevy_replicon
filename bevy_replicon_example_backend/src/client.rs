@@ -50,7 +50,7 @@ fn set_disconnected(mut state: ResMut<NextState<ClientState>>) {
 fn receive_packets(
     mut commands: Commands,
     mut client: ResMut<ExampleClient>,
-    mut replicon_client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     config: Option<Res<ConditionerConfig>>,
 ) {
     let now = Instant::now();
@@ -77,16 +77,16 @@ fn receive_packets(
     }
 
     while let Some((channel_id, message)) = client.conditioner.pop(now) {
-        replicon_client.insert_received(channel_id, message);
+        messages.insert_received(channel_id, message);
     }
 }
 
 fn send_packets(
     mut commands: Commands,
     mut client: ResMut<ExampleClient>,
-    mut replicon_client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
 ) {
-    for (channel_id, message) in replicon_client.drain_sent() {
+    for (channel_id, message) in messages.drain_sent() {
         if let Err(e) = tcp::send_message(&mut client.stream, channel_id, &message) {
             error!("disconnecting due message write error: {e}");
             commands.remove_resource::<ExampleClient>();

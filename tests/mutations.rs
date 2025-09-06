@@ -1061,8 +1061,8 @@ fn acknowledgment() {
     let tick1 = component.last_changed();
 
     // Take and drop ack message.
-    let mut client = client_app.world_mut().resource_mut::<RepliconClient>();
-    assert_eq!(client.drain_sent().count(), 1);
+    let mut messages = client_app.world_mut().resource_mut::<ClientMessages>();
+    assert_eq!(messages.drain_sent().count(), 1);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
