@@ -120,13 +120,9 @@ impl Plugin for ClientEventPlugin {
                 PreUpdate,
                 (
                     reset_fn.in_set(ClientSet::ResetEvents),
-                    (
-                        receive_fn
-                            .after(super::receive_replication)
-                            .run_if(client_connected),
-                        trigger_fn,
-                    )
+                    (receive_fn.run_if(client_connected), trigger_fn)
                         .chain()
+                        .after(super::receive_replication)
                         .in_set(ClientSet::Receive),
                 ),
             )
