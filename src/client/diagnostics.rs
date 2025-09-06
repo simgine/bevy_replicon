@@ -109,7 +109,7 @@ fn add_measurements(
     mut diagnostics: Diagnostics,
     mut last_replication_stats: Local<ClientReplicationStats>,
     replication_stats: Res<ClientReplicationStats>,
-    stats: Res<NetworkStats>,
+    stats: Res<ClientStats>,
 ) {
     diagnostics.add_measurement(&RTT, || stats.rtt);
     diagnostics.add_measurement(&PACKET_LOSS, || stats.packet_loss);

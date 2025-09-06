@@ -39,7 +39,7 @@ pub struct ClientPlugin;
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RepliconClient>()
-            .init_resource::<NetworkStats>()
+            .init_resource::<ClientStats>()
             .init_resource::<ServerEntityMap>()
             .init_resource::<ServerUpdateTick>()
             .init_resource::<BufferedMutations>()
@@ -172,7 +172,7 @@ pub(super) fn receive_replication(
 
 fn reset(
     mut client: ResMut<RepliconClient>,
-    mut stats: ResMut<NetworkStats>,
+    mut stats: ResMut<ClientStats>,
     mut update_tick: ResMut<ServerUpdateTick>,
     mut entity_map: ResMut<ServerEntityMap>,
     mut buffered_mutations: ResMut<BufferedMutations>,
