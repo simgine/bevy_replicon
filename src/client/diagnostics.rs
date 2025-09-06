@@ -107,28 +107,32 @@ pub const DIAGNOSTIC_HISTORY_LEN: usize = 60;
 
 fn add_measurements(
     mut diagnostics: Diagnostics,
-    stats: Res<ClientReplicationStats>,
-    mut last_stats: Local<ClientReplicationStats>,
-    client: Res<RepliconClient>,
+    mut last_replication_stats: Local<ClientReplicationStats>,
+    replication_stats: Res<ClientReplicationStats>,
+    stats: Res<NetworkStats>,
 ) {
-    diagnostics.add_measurement(&RTT, || client.stats().rtt);
-    diagnostics.add_measurement(&PACKET_LOSS, || client.stats().packet_loss);
-    diagnostics.add_measurement(&SENT_BPS, || client.stats().sent_bps);
-    diagnostics.add_measurement(&RECEIVED_BPS, || client.stats().received_bps);
+    diagnostics.add_measurement(&RTT, || stats.rtt);
+    diagnostics.add_measurement(&PACKET_LOSS, || stats.packet_loss);
+    diagnostics.add_measurement(&SENT_BPS, || stats.sent_bps);
+    diagnostics.add_measurement(&RECEIVED_BPS, || stats.received_bps);
 
     diagnostics.add_measurement(&ENTITIES_CHANGED, || {
-        (stats.entities_changed - last_stats.entities_changed) as f64
+        (replication_stats.entities_changed - last_replication_stats.entities_changed) as f64
     });
     diagnostics.add_measurement(&COMPONENTS_CHANGED, || {
-        (stats.components_changed - last_stats.components_changed) as f64
+        (replication_stats.components_changed - last_replication_stats.components_changed) as f64
     });
-    diagnostics.add_measurement(&MAPPINGS, || (stats.mappings - last_stats.mappings) as f64);
-    diagnostics.add_measurement(&DESPAWNS, || (stats.despawns - last_stats.despawns) as f64);
+    diagnostics.add_measurement(&MAPPINGS, || {
+        (replication_stats.mappings - last_replication_stats.mappings) as f64
+    });
+    diagnostics.add_measurement(&DESPAWNS, || {
+        (replication_stats.despawns - last_replication_stats.despawns) as f64
+    });
     diagnostics.add_measurement(&REPLICATION_MESSAGES, || {
-        (stats.messages - last_stats.messages) as f64
+        (replication_stats.messages - last_replication_stats.messages) as f64
     });
     diagnostics.add_measurement(&REPLICATION_BYTES, || {
-        (stats.bytes - last_stats.bytes) as f64
+        (replication_stats.bytes - last_replication_stats.bytes) as f64
     });
-    *last_stats = *stats;
+    *last_replication_stats = *replication_stats;
 }

@@ -2,18 +2,17 @@ use bevy::prelude::*;
 use bytes::Bytes;
 use log::trace;
 
-use crate::prelude::*;
-
 /// Stores information about a client independent from the messaging backend.
 ///
 /// The messaging backend is responsible for updating this resource:
 /// - For receiving messages, [`Self::insert_received`] should be to used.
-///   A system to forward backend messages to Replicon should run in [`ClientSet::ReceivePackets`].
+///   A system to forward backend messages to Replicon should run in
+///   [`ClientSet::ReceivePackets`](crate::prelude::ClientSet::ReceivePackets).
 /// - For sending messages, [`Self::drain_sent`] should be used to drain all sent messages.
-///   A system to forward Replicon messages to the backend should run in [`ClientSet::SendPackets`].
-/// - Optionally update statistic using [`Self::stats_mut`].
+///   A system to forward Replicon messages to the backend should run in
+///   [`ClientSet::SendPackets`](crate::prelude::ClientSet::SendPackets).
 ///
-/// Inserted as resource by [`ClientPlugin`].
+/// Inserted as resource by [`ClientPlugin`](crate::prelude::ClientPlugin).
 #[derive(Resource, Default)]
 pub struct RepliconClient {
     /// List of received messages for each channel.
@@ -24,8 +23,6 @@ pub struct RepliconClient {
 
     /// List of sent messages and their channels since the last tick.
     sent_messages: Vec<(usize, Bytes)>,
-
-    stats: NetworkStats,
 }
 
 impl RepliconClient {
@@ -95,8 +92,6 @@ impl RepliconClient {
             channel_messages.clear();
         }
         self.sent_messages.clear();
-
-        self.stats = Default::default();
     }
 
     /// Removes all sent messages, returning them as an iterator with channel.
@@ -125,21 +120,5 @@ impl RepliconClient {
             .unwrap_or_else(|| panic!("client should have a channel with id {channel_id}"));
 
         channel_messages.push(message.into());
-    }
-
-    /// Returns network statistic.
-    pub fn stats(&self) -> &NetworkStats {
-        &self.stats
-    }
-
-    /// Returns a mutable reference to set network statistic.
-    ///
-    /// <div class="warning">
-    ///
-    /// Should only be called from the messaging backend.
-    ///
-    /// </div>
-    pub fn stats_mut(&mut self) -> &mut NetworkStats {
-        &mut self.stats
     }
 }
