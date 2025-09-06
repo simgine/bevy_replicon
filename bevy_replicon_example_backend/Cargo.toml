@@ -24,7 +24,6 @@ include = ["/src", "../LICENSE*"]
 bevy = { version = "0.16.0", default-features = false, features = ["bevy_log"] }
 bevy_replicon = { path = "..", version = "0.34.0", default-features = false }
 fastrand = "2.3"
-fastrand-contrib = "0.1"
 
 [dev-dependencies]
 bevy = { version = "0.16.0", default-features = false, features = [
@@ -38,10 +37,11 @@ bevy = { version = "0.16.0", default-features = false, features = [
   "serialize",
   "x11",
 ] }
-test-log = "0.2"
-serde = "1.0"
-pathfinding = "4.14"
 clap = { version = "4.1", features = ["derive"] }
+fastrand-contrib = "0.1"
+pathfinding = "4.14"
+serde = "1.0"
+test-log = "0.2"
 
 [features]
 default = ["client", "server"]
