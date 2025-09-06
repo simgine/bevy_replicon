@@ -8,6 +8,7 @@
 //! - Update the [`RepliconServer`](replicon_server::RepliconServer) and [`RepliconClient`](replicon_client::RepliconClient) resources.
 //! - Spawn and despawn entities with [`ConnectedClient`](connected_client::ConnectedClient) component.
 //! - React on [`DisconnectRequest`] event.
+//! - Optionally update statistic in [`NetworkStats`] resource and components.
 //!
 //! This way, integrations can be provided as separate crates without requiring us or crate authors to maintain them under a feature.
 //! See the documentation on types in this module for details.
@@ -75,8 +76,9 @@ pub struct DisconnectRequest {
     pub client: Entity,
 }
 
-/// Statistic associated with [`RepliconClient`](replicon_client::RepliconClient) or
-/// [`ConnectedClient`](connected_client::ConnectedClient).
+/// Statistic for the current client when used as a resource,
+/// or for a connected client when used as a component
+/// on connected entities on the server.
 ///
 /// All values can be zero if not provided by the backend.
 ///
@@ -85,7 +87,7 @@ pub struct DisconnectRequest {
 /// Should only be modified from the messaging backend.
 ///
 /// </div>
-#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[derive(Resource, Component, Debug, Clone, Copy, Default, Reflect)]
 pub struct NetworkStats {
     /// Round-time trip in seconds for the connection.
     pub rtt: f64,

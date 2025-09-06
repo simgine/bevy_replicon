@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename `replication_rules` module into `rules`.
 - Rename `replication_registry` module into `registry`.
 - Rename `IntoComponentRule::register_component` to `IntoComponentRule::into_rule` and move it to the `shared::replication::rules::component` module.
-- Move `NetworkStats` from `shared::backend::connected_client` to `shared::backend`.
+- Move `NetworkStats` from `shared::backend::connected_client` to `shared::backend`. It's now a separate resource from `RepliconClient`.
 - Replace `IntoReplicationRule` with `IntoComponentRules`, which returns only `Vec<ComponentRule>`.
 - Replace `ReplicationBundle` with `BundleRules`, which returns only `Vec<ComponentRule>` and uses an associated constant to customize the priority.
 - Hide `ServerEntityMap` mutation methods from public API.
