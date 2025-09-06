@@ -17,7 +17,7 @@ use std::{
 
 use bevy::{
     color::palettes::tailwind::{
-        BLUE_500, GREEN_500, GREEN_700, ORANGE_500, PINK_500, PURPLE_500, RED_500, TEAL_500,
+        BLUE_500, GREEN_500, LIME_500, ORANGE_500, PINK_500, PURPLE_500, RED_500, TEAL_500,
         YELLOW_500,
     },
     ecs::entity::MapEntities,
@@ -533,7 +533,7 @@ fn move_units(
     }
 }
 
-const SELECTION_COLOR: Srgba = GREEN_700;
+const SELECTION_COLOR: Srgba = LIME_500;
 
 /// Draws a mouse selection rectangle.
 fn draw_selection(mut gizmos: Gizmos, selection: Res<Selection>) {
