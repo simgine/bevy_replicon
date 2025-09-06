@@ -5,7 +5,7 @@
 //! - Create channels defined in the [`RepliconChannels`](channels::RepliconChannels) resource.
 //!   This can be done via an extension trait that provides a conversion which the user needs to call manually to get channels for the backend.
 //! - Manage the [`ClientState`] and [`ServerState`] states.
-//! - Update the [`RepliconServer`](replicon_server::RepliconServer) and [`ClientMessages`](client_messages::ClientMessages) resources.
+//! - Update the [`ServerMessages`](server_messages::ServerMessages) and [`ClientMessages`](client_messages::ClientMessages) resources.
 //! - Spawn and despawn entities with [`ConnectedClient`](connected_client::ConnectedClient) component.
 //! - React on [`DisconnectRequest`] event.
 //! - Optionally update statistic in [`ClientStats`] resource and components.
@@ -25,7 +25,7 @@
 pub mod channels;
 pub mod client_messages;
 pub mod connected_client;
-pub mod replicon_server;
+pub mod server_messages;
 
 use bevy::prelude::*;
 
@@ -123,14 +123,14 @@ mod tests {
             client_messages.send(ClientChannel::MutationAcks, message);
         }
 
-        let mut server = RepliconServer::default();
-        server.setup_client_channels(channels.client_channels().len());
+        let mut server_messages = ServerMessages::default();
+        server_messages.setup_client_channels(channels.client_channels().len());
 
         for (channel_id, message) in client_messages.drain_sent() {
-            server.insert_received(Entity::PLACEHOLDER, channel_id, message);
+            server_messages.insert_received(Entity::PLACEHOLDER, channel_id, message);
         }
 
-        let messages: Vec<_> = server
+        let messages: Vec<_> = server_messages
             .receive(ClientChannel::MutationAcks)
             .map(|(_, message)| message)
             .collect();
@@ -140,18 +140,18 @@ mod tests {
     #[test]
     fn server_to_client() {
         let channels = RepliconChannels::default();
-        let mut server = RepliconServer::default();
-        server.setup_client_channels(channels.client_channels().len());
+        let mut server_messages = ServerMessages::default();
+        server_messages.setup_client_channels(channels.client_channels().len());
 
         const MESSAGES: &[&[u8]] = &[&[0], &[1]];
         for &message in MESSAGES {
-            server.send(Entity::PLACEHOLDER, ServerChannel::Mutations, message);
+            server_messages.send(Entity::PLACEHOLDER, ServerChannel::Mutations, message);
         }
 
         let mut client_messages = ClientMessages::default();
         client_messages.setup_server_channels(channels.server_channels().len());
 
-        for (_, channel_id, message) in server.drain_sent() {
+        for (_, channel_id, message) in server_messages.drain_sent() {
             client_messages.insert_received(channel_id, message);
         }
 

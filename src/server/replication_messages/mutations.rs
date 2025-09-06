@@ -154,7 +154,7 @@ impl Mutations {
     /// using the last up-to-date mutations to avoid re-sending old values.
     pub(crate) fn send(
         &mut self,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         client: Entity,
         ticks: &mut ClientTicks,
         entity_buffer: &mut EntityBuffer,
@@ -246,7 +246,7 @@ impl Mutations {
 
             debug_assert_eq!(message.len(), message_size);
 
-            server.send(client, ServerChannel::Mutations, message);
+            messages.send(client, ServerChannel::Mutations, message);
         }
 
         Ok(self.messages.len())
@@ -446,7 +446,7 @@ mod tests {
         track_mutate_messages: bool,
     ) -> usize {
         let mut serialized = SerializedData::default();
-        let mut server = RepliconServer::default();
+        let mut messages = ServerMessages::default();
         let mut mutations = Mutations::default();
 
         mutations.resize_related(related.len());
@@ -463,7 +463,7 @@ mod tests {
 
         mutations
             .send(
-                &mut server,
+                &mut messages,
                 Entity::PLACEHOLDER,
                 &mut Default::default(),
                 &mut Default::default(),

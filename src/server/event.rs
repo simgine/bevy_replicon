@@ -117,7 +117,7 @@ impl Plugin for ServerEventPlugin {
 
 fn send_or_buffer(
     server_events: FilteredResources,
-    mut server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
     mut buffered_events: ResMut<BufferedServerEvents>,
     type_registry: Res<AppTypeRegistry>,
     event_registry: Res<RemoteEventRegistry>,
@@ -138,7 +138,7 @@ fn send_or_buffer(
             event.send_or_buffer(
                 &mut ctx,
                 &server_events,
-                &mut server,
+                &mut messages,
                 &clients,
                 &mut buffered_events,
             );
@@ -147,18 +147,18 @@ fn send_or_buffer(
 }
 
 fn send_buffered(
-    mut server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
     mut buffered_events: ResMut<BufferedServerEvents>,
     clients: Query<(Entity, Option<&ClientTicks>), With<ConnectedClient>>,
 ) {
     buffered_events
-        .send_all(&mut server, &clients)
+        .send_all(&mut messages, &clients)
         .expect("buffered server events should send");
 }
 
 fn receive(
     mut client_events: FilteredResourcesMut,
-    mut server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
     type_registry: Res<AppTypeRegistry>,
     event_registry: Res<RemoteEventRegistry>,
 ) {
@@ -172,7 +172,7 @@ fn receive(
             .expect("client events resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this event data.
-        unsafe { event.receive(&mut ctx, client_events.into_inner(), &mut server) };
+        unsafe { event.receive(&mut ctx, client_events.into_inner(), &mut messages) };
     }
 }
 

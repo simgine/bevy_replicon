@@ -122,8 +122,8 @@ fn with_miss() {
     server_app.update();
 
     // Take and drop the mutation message.
-    let mut server = server_app.world_mut().resource_mut::<RepliconServer>();
-    assert_eq!(server.drain_sent().count(), 1);
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(messages.drain_sent().count(), 1);
 
     server_app.exchange_with_client(&mut client_app);
     client_app.update();

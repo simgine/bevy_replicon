@@ -49,8 +49,8 @@ fn set_stopped(mut state: ResMut<NextState<ServerState>>) {
 
 fn receive_packets(
     mut commands: Commands,
+    mut messages: ResMut<ServerMessages>,
     server: Res<ExampleServer>,
-    mut replicon_server: ResMut<RepliconServer>,
     mut clients: Query<(Entity, &mut ExampleConnection, Option<&ConditionerConfig>)>,
     global_config: Option<Res<ConditionerConfig>>,
 ) {
@@ -116,7 +116,7 @@ fn receive_packets(
         }
 
         while let Some((channel_id, message)) = connection.conditioner.pop(now) {
-            replicon_server.insert_received(client, channel_id, message)
+            messages.insert_received(client, channel_id, message)
         }
     }
 }
@@ -124,10 +124,10 @@ fn receive_packets(
 fn send_packets(
     mut commands: Commands,
     mut disconnect_events: EventReader<DisconnectRequest>,
-    mut replicon_server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
     mut clients: Query<&mut ExampleConnection>,
 ) {
-    for (client, channel_id, message) in replicon_server.drain_sent() {
+    for (client, channel_id, message) in messages.drain_sent() {
         let mut connection = clients
             .get_mut(client)
             .expect("all connected clients should have streams");
