@@ -61,8 +61,9 @@ fn server_start_stop() {
 
     server_app
         .world_mut()
-        .resource_mut::<RepliconServer>()
-        .set_running(false);
+        .resource_mut::<NextState<ServerState>>()
+        .set(ServerState::Stopped);
+
     server_app.update();
 
     assert_eq!(clients.iter(server_app.world()).len(), 0);

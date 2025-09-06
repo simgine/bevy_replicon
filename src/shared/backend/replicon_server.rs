@@ -1,15 +1,10 @@
 use bevy::prelude::*;
 use bytes::Bytes;
-use log::{debug, trace, warn};
+use log::trace;
 
 /// Stores information about the server independent from the messaging backend.
 ///
 /// The messaging backend is responsible for updating this resource:
-/// - When the server starts or stops, [`Self::set_running`] should be used to update its status:
-///   - Set to `true` in [`ServerSet::ReceivePackets`](crate::server::ServerSet::ReceivePackets) to
-///     allow immediate processing of received messages.
-///   - Set to `false` before [`ServerSet::Send`](crate::server::ServerSet::Send) to ensure
-///     the server stops immediately on the same frame.
 /// - For receiving messages, [`Self::insert_received`] should be used.
 ///   A system to forward messages from the backend to Replicon should run in [`ServerSet::ReceivePackets`](crate::server::ServerSet::ReceivePackets).
 /// - For sending messages, [`Self::drain_sent`] should be used to drain all sent messages.
@@ -18,11 +13,6 @@ use log::{debug, trace, warn};
 /// Inserted as resource by [`ServerPlugin`](crate::server::ServerPlugin).
 #[derive(Resource, Default)]
 pub struct RepliconServer {
-    /// Indicates if the server is open for connections.
-    ///
-    /// By default set to `false`.
-    running: bool,
-
     /// List of received messages for each channel.
     ///
     /// Top index is channel ID.
@@ -54,11 +44,6 @@ impl RepliconServer {
         &mut self,
         channel_id: I,
     ) -> impl Iterator<Item = (Entity, Bytes)> + '_ {
-        if !self.running {
-            // We can't return here because we need to return an empty iterator.
-            warn!("trying to receive a message when the server is not running");
-        }
-
         let channel_id = channel_id.into();
         let channel_messages = self
             .received_messages
@@ -92,43 +77,12 @@ impl RepliconServer {
         channel_id: I,
         message: B,
     ) {
-        if !self.running {
-            warn!("trying to send a message when the server is not running");
-            return;
-        }
-
         let channel_id = channel_id.into();
         let message: Bytes = message.into();
 
         trace!("sending {} bytes over channel {channel_id}", message.len());
 
         self.sent_messages.push((client, channel_id, message));
-    }
-
-    /// Marks the server as running or stopped.
-    ///
-    /// <div class="warning">
-    ///
-    /// Should only be called from the messaging backend when the server changes its state.
-    ///
-    /// </div>
-    pub fn set_running(&mut self, running: bool) {
-        debug!("changing running status to `{running}`");
-
-        if !running {
-            for receive_channel in &mut self.received_messages {
-                receive_channel.clear();
-            }
-            self.sent_messages.clear();
-        }
-
-        self.running = running;
-    }
-
-    /// Returns `true` if the server is running.
-    #[inline]
-    pub fn is_running(&self) -> bool {
-        self.running
     }
 
     /// Retains only the messages specified by the predicate.
@@ -165,11 +119,6 @@ impl RepliconServer {
         channel_id: I,
         message: B,
     ) {
-        if !self.running {
-            warn!("trying to insert a received message when the server is not running");
-            return;
-        }
-
         let channel_id = channel_id.into();
         let receive_channel = self
             .received_messages
@@ -178,44 +127,11 @@ impl RepliconServer {
 
         receive_channel.push((client, message.into()));
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use test_log::test;
-
-    use super::*;
-    use crate::{
-        prelude::*,
-        shared::backend::channels::{ClientChannel, ServerChannel},
-    };
-
-    #[test]
-    fn cleanup_on_stop() {
-        let channels = RepliconChannels::default();
-        let mut server = RepliconServer::default();
-        server.setup_client_channels(channels.client_channels().len());
-        server.set_running(true);
-
-        server.send(Entity::PLACEHOLDER, ServerChannel::Mutations, Vec::new());
-        server.insert_received(Entity::PLACEHOLDER, ClientChannel::MutationAcks, Vec::new());
-
-        server.set_running(false);
-
-        assert_eq!(server.drain_sent().count(), 0);
-        assert_eq!(server.receive(ClientChannel::MutationAcks).count(), 0);
-    }
-
-    #[test]
-    fn inactive() {
-        let channels = RepliconChannels::default();
-        let mut server = RepliconServer::default();
-        server.setup_client_channels(channels.client_channels().len());
-
-        server.send(Entity::PLACEHOLDER, ServerChannel::Mutations, Vec::new());
-        server.insert_received(Entity::PLACEHOLDER, ClientChannel::MutationAcks, Vec::new());
-
-        assert_eq!(server.drain_sent().count(), 0);
-        assert_eq!(server.receive(ClientChannel::MutationAcks).count(), 0);
+    pub(crate) fn clear(&mut self) {
+        for receive_channel in &mut self.received_messages {
+            receive_channel.clear();
+        }
+        self.sent_messages.clear();
     }
 }

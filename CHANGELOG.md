@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Rename `RepliconClientStatus` to `ClientState` and `RepliconServerStatus` to `ServerState`. They are now regular Bevy states. As result, we now require `StatesPlugin` to be added. It's present by default in `DefaultPlugins`, but with `MinimalPlugins` you have to add it manually.
 - Make custom entity ser/de compatible with `serde` attributes.
 - All contexts now store `AppTypeRegistry` instead of `TypeRegistry`. To get `TypeRegistry`, call `AppTypeRegistry::read`.
 - All events now use `ClientId` wrapper instead of `Entity`.
@@ -43,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `entity_serde::serialize_entity` and `entity_serde::deserialize_entity`. Use `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` respectively; just swap the argument order.
 - `SERVER`. Use `ClientId::Server` instead.
 - `ReplicationMode::Periodic`. Use `PriorityMap` instead.
+- All provided run conditions. Just use `in_state` or `OnEnter`/`OnExit` with `ServerState` and `ClientState` instead. `server_or_singleplayer` is just `in_state(ClientState::Disconnected)`.
 
 ## [0.34.4] - 2025-07-29
 

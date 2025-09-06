@@ -84,19 +84,26 @@ pub trait ServerTestAppExt {
 
 impl ServerTestAppExt for App {
     fn connect_client(&mut self, client_app: &mut App) {
-        let mut server = self.world_mut().resource_mut::<RepliconServer>();
-        server.set_running(true);
+        self.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
+
         let client_entity = self
             .world_mut()
             .spawn(ConnectedClient { max_size: 1200 })
             .id();
 
-        let mut client = client_app.world_mut().resource_mut::<RepliconClient>();
-        assert!(
-            client.is_disconnected(),
+        assert_eq!(
+            *client_app.world_mut().resource::<State<ClientState>>(),
+            ClientState::Disconnected,
             "client can't be connected multiple times"
         );
-        client.set_status(RepliconClientStatus::Connected);
+
+        client_app
+            .world_mut()
+            .resource_mut::<NextState<ClientState>>()
+            .set(ClientState::Connected);
+
         client_app
             .world_mut()
             .insert_resource(TestClientEntity(client_entity));
@@ -110,8 +117,11 @@ impl ServerTestAppExt for App {
     }
 
     fn disconnect_client(&mut self, client_app: &mut App) {
-        let mut client = client_app.world_mut().resource_mut::<RepliconClient>();
-        client.set_status(RepliconClientStatus::Disconnected);
+        client_app
+            .world_mut()
+            .resource_mut::<NextState<ClientState>>()
+            .set(ClientState::Disconnected);
+
         let client_entity = *client_app
             .world_mut()
             .remove_resource::<TestClientEntity>()

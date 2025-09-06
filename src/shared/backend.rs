@@ -4,6 +4,7 @@
 //!
 //! - Create channels defined in the [`RepliconChannels`](channels::RepliconChannels) resource.
 //!   This can be done via an extension trait that provides a conversion which the user needs to call manually to get channels for the backend.
+//! - Manage the [`ClientState`] and [`ServerState`] states.
 //! - Update the [`RepliconServer`](replicon_server::RepliconServer) and [`RepliconClient`](replicon_client::RepliconClient) resources.
 //! - Spawn and despawn entities with [`ConnectedClient`](connected_client::ConnectedClient) component.
 //! - React on [`DisconnectRequest`] event.
@@ -26,6 +27,42 @@ pub mod replicon_client;
 pub mod replicon_server;
 
 use bevy::prelude::*;
+
+/// Connection state of the client.
+///
+/// <div class="warning">
+///
+/// Should only be changed from the messaging backend when the client changes its state
+/// in [`ClientSet::ReceivePackets`](crate::client::ClientSet::ReceivePackets).
+///
+/// </div>
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
+pub enum ClientState {
+    /// Not connected or trying to connect.
+    #[default]
+    Disconnected,
+    /// Trying to connect to the server.
+    Connecting,
+    /// Connected to the server.
+    Connected,
+}
+
+/// Connection state of the server.
+///
+/// <div class="warning">
+///
+/// Should only be changed from the messaging backend when the server changes its state
+/// in [`ServerSet::ReceivePackets`](crate::server::ServerSet::ReceivePackets).
+///
+/// </div>
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]
+pub enum ServerState {
+    /// Inactive.
+    #[default]
+    Stopped,
+    /// Accepting and handling client connections.
+    Running,
+}
 
 /// An event for the messaging backend to queue a disconnection
 /// for a specific client on the server.
@@ -53,7 +90,6 @@ mod tests {
         let channels = RepliconChannels::default();
         let mut client = RepliconClient::default();
         client.setup_server_channels(channels.server_channels().len());
-        client.set_status(RepliconClientStatus::Connected);
 
         const MESSAGES: &[&[u8]] = &[&[0], &[1]];
         for &message in MESSAGES {
@@ -62,7 +98,6 @@ mod tests {
 
         let mut server = RepliconServer::default();
         server.setup_client_channels(channels.client_channels().len());
-        server.set_running(true);
 
         for (channel_id, message) in client.drain_sent() {
             server.insert_received(Entity::PLACEHOLDER, channel_id, message);
@@ -80,7 +115,6 @@ mod tests {
         let channels = RepliconChannels::default();
         let mut server = RepliconServer::default();
         server.setup_client_channels(channels.client_channels().len());
-        server.set_running(true);
 
         const MESSAGES: &[&[u8]] = &[&[0], &[1]];
         for &message in MESSAGES {
@@ -89,7 +123,6 @@ mod tests {
 
         let mut client = RepliconClient::default();
         client.setup_server_channels(channels.server_channels().len());
-        client.set_status(RepliconClientStatus::Connected);
 
         for (_, channel_id, message) in server.drain_sent() {
             client.insert_received(channel_id, message);
