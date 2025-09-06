@@ -32,7 +32,7 @@ impl Plugin for ClientEventPlugin {
             .remove_resource::<RemoteEventRegistry>()
             .expect("event registry should be initialized on app build");
 
-        let send = (
+        let send_fn = (
             FilteredResourcesParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_read_by_id(event.events_id());
@@ -51,7 +51,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(send);
 
-        let receive = (
+        let receive_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_server() {
                     builder.add_write_by_id(event.events_id());
@@ -71,7 +71,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(receive);
 
-        let trigger = (
+        let trigger_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for trigger in event_registry.iter_server_triggers() {
                     builder.add_write_by_id(trigger.event().events_id());
@@ -83,7 +83,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(trigger);
 
-        let resend_locally = (
+        let resend_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_write_by_id(event.client_events_id());
@@ -99,7 +99,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(resend_locally);
 
-        let reset = (
+        let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_write_by_id(event.events_id());
@@ -119,12 +119,12 @@ impl Plugin for ClientEventPlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    reset.in_set(ClientSet::ResetEvents),
+                    reset_fn.in_set(ClientSet::ResetEvents),
                     (
-                        receive
+                        receive_fn
                             .after(super::receive_replication)
                             .run_if(client_connected),
-                        trigger,
+                        trigger_fn,
                     )
                         .chain()
                         .in_set(ClientSet::Receive),
@@ -133,8 +133,8 @@ impl Plugin for ClientEventPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    send.run_if(client_connected),
-                    resend_locally.run_if(server_or_singleplayer),
+                    send_fn.run_if(client_connected),
+                    resend_locally_fn.run_if(server_or_singleplayer),
                 )
                     .chain()
                     .in_set(ClientSet::Send),

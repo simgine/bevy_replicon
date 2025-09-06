@@ -33,7 +33,7 @@ impl Plugin for ServerEventPlugin {
             .remove_resource::<RemoteEventRegistry>()
             .expect("event registry should be initialized on app build");
 
-        let send_or_buffer = (
+        let send_or_buffer_fn = (
             FilteredResourcesParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_server() {
                     builder.add_read_by_id(event.server_events_id());
@@ -48,7 +48,7 @@ impl Plugin for ServerEventPlugin {
             .build_state(app.world_mut())
             .build_system(send_or_buffer);
 
-        let receive = (
+        let receive_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_client() {
                     builder.add_write_by_id(event.client_events_id());
@@ -61,7 +61,7 @@ impl Plugin for ServerEventPlugin {
             .build_state(app.world_mut())
             .build_system(receive);
 
-        let trigger = (
+        let trigger_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for trigger in event_registry.iter_client_triggers() {
                     builder.add_write_by_id(trigger.event().client_events_id());
@@ -73,7 +73,7 @@ impl Plugin for ServerEventPlugin {
             .build_state(app.world_mut())
             .build_system(trigger);
 
-        let resend_locally = (
+        let resend_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in event_registry.iter_all_server() {
                     builder.add_write_by_id(event.server_events_id());
@@ -93,8 +93,8 @@ impl Plugin for ServerEventPlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    receive.run_if(server_running),
-                    trigger.run_if(server_or_singleplayer),
+                    receive_fn.run_if(server_running),
+                    trigger_fn.run_if(server_or_singleplayer),
                 )
                     .chain()
                     .in_set(ServerSet::Receive),
@@ -102,11 +102,11 @@ impl Plugin for ServerEventPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    send_or_buffer.run_if(server_running),
+                    send_or_buffer_fn.run_if(server_running),
                     send_buffered
                         .run_if(server_running)
                         .run_if(resource_changed::<ServerTick>),
-                    resend_locally.run_if(server_or_singleplayer),
+                    resend_locally_fn.run_if(server_or_singleplayer),
                 )
                     .chain()
                     .after(super::send_replication)
