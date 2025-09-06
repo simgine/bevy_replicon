@@ -50,10 +50,8 @@ use server_tick::ServerTick;
 use server_world::ServerWorld;
 
 pub struct ServerPlugin {
-    /// Tick configuration.
-    ///
-    /// By default it's 30 ticks per second.
-    pub tick_policy: TickPolicy,
+    /// Schedule in which [`ServerTick`] is incremented.
+    pub tick_schedule: TickSchedule,
 
     /// Visibility configuration.
     pub visibility_policy: VisibilityPolicy,
@@ -67,7 +65,7 @@ pub struct ServerPlugin {
 impl Default for ServerPlugin {
     fn default() -> Self {
         Self {
-            tick_policy: TickPolicy::MaxTickRate(30),
+            tick_schedule: Default::default(),
             visibility_policy: Default::default(),
             mutations_timeout: Duration::from_secs(10),
         }
@@ -119,19 +117,15 @@ impl Plugin for ServerPlugin {
                     .run_if(in_state(ServerState::Running)),
             );
 
-        debug!("using tick policy `{:?}`", self.tick_policy);
-        match self.tick_policy {
-            TickPolicy::MaxTickRate(max_tick_rate) => {
-                let tick_time = Duration::from_millis(1000 / max_tick_rate as u64);
+        debug!("using tick schedule `{:?}`", self.tick_schedule);
+        match self.tick_schedule {
+            TickSchedule::FixedPostUpdate => {
                 app.add_systems(
-                    PostUpdate,
-                    increment_tick
-                        .before(send_replication)
-                        .run_if(in_state(ServerState::Running))
-                        .run_if(on_timer(tick_time)),
+                    FixedPostUpdate,
+                    increment_tick.run_if(in_state(ServerState::Running)),
                 );
             }
-            TickPolicy::EveryFrame => {
+            TickSchedule::PostUpdate => {
                 app.add_systems(
                     PostUpdate,
                     increment_tick
@@ -139,7 +133,7 @@ impl Plugin for ServerPlugin {
                         .run_if(in_state(ServerState::Running)),
                 );
             }
-            TickPolicy::Manual => (),
+            TickSchedule::Custom => (),
         }
 
         debug!("using visibility policy `{:?}`", self.visibility_policy);
@@ -811,32 +805,50 @@ pub enum ServerSet {
     ReadRelations,
     /// Systems that write data to [`ServerMessages`].
     ///
-    /// Runs in [`PostUpdate`] on server tick, see [`TickPolicy`].
+    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
     Send,
     /// Systems that send packets to the messaging backend.
     ///
     /// Used by the messaging backend.
     ///
-    /// Runs in [`PostUpdate`] on server tick, see [`TickPolicy`].
+    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
     SendPackets,
 }
 
-/// Controls how often [`RepliconTick`] is incremented on the server.
+/// Controls when [`ServerTick`] is incremented on the server.
 ///
-/// When [`RepliconTick`] is mutated, the server's replication
-/// system will run. This means the tick policy controls how often server state is replicated.
-///
-/// Note that component mutations are replicated over the unreliable channel, so if a component mutate message is lost
-/// then component mutations won't be resent until the server's replication system runs again.
-#[derive(Debug, Copy, Clone)]
-pub enum TickPolicy {
-    /// The replicon tick is incremented at most max ticks per second. In practice the tick rate may be lower if the
-    /// app's update cycle duration is too long.
-    MaxTickRate(u16),
-    /// The replicon tick is incremented every frame.
-    EveryFrame,
-    /// The user should manually schedule [`increment_tick`] or increment [`RepliconTick`].
-    Manual,
+/// Can be set via [`ServerPlugin::tick_schedule`].
+#[derive(Debug, Default, Copy, Clone)]
+pub enum TickSchedule {
+    /// Increment in [`FixedPostUpdate`] when the fixed schedule
+    /// runs while the state is [`ServerState::Running`].
+    #[default]
+    FixedPostUpdate,
+    /// Increment in [`PostUpdate`] every frame while the state is
+    /// [`ServerState::Running`].
+    ///
+    /// Useful for tests.
+    PostUpdate,
+    /// Let user must manually schedule [`increment_tick`] or
+    /// directly increment [`ServerTick`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use bevy::{prelude::*, state::app::StatesPlugin, ecs::schedule::ScheduleLabel};
+    /// # use bevy_replicon::prelude::*;
+    /// # let mut app = App::new();
+    /// # app.add_plugins(StatesPlugin);
+    /// app.add_plugins(RepliconPlugins.build().set(ServerPlugin {
+    ///     tick_schedule: TickSchedule::Custom,
+    ///     ..Default::default()
+    /// }))
+    /// .add_systems(CustomSchedule, bevy_replicon::server::increment_tick);
+    ///
+    /// #[derive(ScheduleLabel, Debug, Hash, PartialEq, Eq, Clone, Copy)]
+    /// struct CustomSchedule;
+    /// ```
+    Custom,
 }
 
 /// Controls how visibility will be managed via [`ClientVisibility`].

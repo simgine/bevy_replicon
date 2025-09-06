@@ -113,30 +113,25 @@ For implementation details see [`ServerChannel`](shared::backend::channels::Serv
 
 ### Tick rate
 
-Typically updates are not sent every frame. Instead, they are sent at a certain interval
-to save traffic.
+By default, updates are not sent every frame in order to save bandwidth. Replication runs
+in [`ServerSet::Send`] whenever the [`ServerTick`](server::server_tick::ServerTick) resource
+changes and if the state is [`ServerState::Running`].
 
-On server current tick stored in [`RepliconTick`] resource. Replication runs when this resource changes.
+By default, the tick is incremented in [`FixedPostUpdate`] each time [`FixedMain`](bevy::app::FixedMain)
+runs. You can configure how often it runs by inserting [`Time<Fixed>`], which is 64 Hz by default.
 
-You can use [`TickPolicy::Manual`] and then add the [`increment_tick`](server::increment_tick)
-system to [`FixedUpdate`]:
+```rust
+use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy_replicon::prelude::*;
 
-```
-# use bevy::{prelude::*, state::app::StatesPlugin};
-# use bevy_replicon::prelude::*;
 # let mut app = App::new();
-# app.add_plugins(StatesPlugin);
-app.add_plugins(
-    RepliconPlugins
-        .build()
-        .disable::<ClientPlugin>()
-        .set(ServerPlugin {
-            tick_policy: TickPolicy::Manual,
-            ..Default::default()
-        }),
-)
-.add_systems(FixedPreUpdate, bevy_replicon::server::increment_tick);
+// `Time::from_hz` is implemented only for `Fixed`, so the type is inferred.
+app.insert_resource(Time::from_hz(30.0)) // Run 30 times per second.
+    .add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 ```
+
+You can also configure the schedule via [`ServerPlugin::tick_schedule`].
+For example, you can make it run every frame for tests.
 
 ### Entities
 
@@ -740,7 +735,7 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, TickPolicy, VisibilityPolicy,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, TickSchedule, VisibilityPolicy,
         client_entity_map::ClientEntityMap, client_visibility::ClientVisibility,
         event::ServerEventPlugin, related_entities::SyncRelatedAppExt,
     };

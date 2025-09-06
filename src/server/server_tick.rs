@@ -5,14 +5,16 @@ use crate::prelude::*;
 
 /// Stores current [`RepliconTick`].
 ///
-/// Used only on the server. The [`ServerPlugin`] sends replication data
-/// in [`PostUpdate`] any time this resource changes.
-/// By default, its incremented in [`PostUpdate`] per the [`TickPolicy`].
+/// Used only on the server. Can represent your simulation step, and is made
+/// available to the client in the custom deserialization, despawn, and component
+/// removal functions.
 ///
-/// If you set [`TickPolicy::Manual`], you can increment this resource
-/// at the start of your game loop (e.g. inside [`FixedMain`](bevy::app::FixedMain)).
-/// This value can be used to represent your simulation step, and is made available to the client in
-/// the custom deserialization, despawn, and component removal functions.
+/// The server sends replication data in [`ServerSet::Send`] any time this resource changes.
+/// You can configure when the tick is incremented via [`ServerPlugin::tick_schedule`].
+///
+/// Note that component mutations are replicated over the unreliable channel.
+/// If a component mutation message is lost, the mutation will not be resent
+/// until the server's replication system runs again.
 ///
 /// See [`ServerUpdateTick`](crate::client::ServerUpdateTick) for tracking the last received
 /// tick on clients.
