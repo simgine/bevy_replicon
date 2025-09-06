@@ -131,7 +131,6 @@ app.insert_resource(Time::from_hz(30.0)) // Run 30 times per second.
 ```
 
 You can also configure the schedule via [`ServerPlugin::tick_schedule`].
-For example, you can make it run every frame for tests.
 
 ### Entities
 
@@ -735,7 +734,7 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, TickSchedule, VisibilityPolicy,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, VisibilityPolicy,
         client_entity_map::ClientEntityMap, client_visibility::ClientVisibility,
         event::ServerEventPlugin, related_entities::SyncRelatedAppExt,
     };

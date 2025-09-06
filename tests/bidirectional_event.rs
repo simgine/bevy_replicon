@@ -1,4 +1,8 @@
-use bevy::{ecs::event::Events, prelude::*, state::app::StatesPlugin};
+use bevy::{
+    ecs::{event::Events, schedule::ScheduleLabel},
+    prelude::*,
+    state::app::StatesPlugin,
+};
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use serde::{Deserialize, Serialize};
 use test_log::test;
@@ -48,7 +52,7 @@ fn trigger() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: TickSchedule::PostUpdate,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

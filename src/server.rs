@@ -14,6 +14,8 @@ use bevy::{
         archetype::Archetypes,
         component::{StorageType, Tick},
         entity::{Entities, EntityHashMap},
+        intern::Interned,
+        schedule::ScheduleLabel,
         system::SystemChangeTick,
     },
     prelude::*,
@@ -51,7 +53,29 @@ use server_world::ServerWorld;
 
 pub struct ServerPlugin {
     /// Schedule in which [`ServerTick`] is incremented.
-    pub tick_schedule: TickSchedule,
+    ///
+    /// By default it's set to [`FixedPostUpdate`].
+    ///
+    /// # Examples
+    ///
+    /// Run every frame.
+    ///
+    /// ```
+    /// use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+    /// use bevy_replicon::prelude::*;
+    ///
+    /// # let mut app = App::new();
+    /// app.add_plugins((
+    ///     MinimalPlugins,
+    ///     StatesPlugin,
+    ///     RepliconPlugins.build().set(ServerPlugin {
+    ///         // `ScheduleLabel` needs to be imported to call `intern`.
+    ///         tick_schedule: PostUpdate.intern(),
+    ///         ..Default::default()
+    ///     }),
+    /// ));
+    /// ```
+    pub tick_schedule: Interned<dyn ScheduleLabel>,
 
     /// Visibility configuration.
     pub visibility_policy: VisibilityPolicy,
@@ -65,7 +89,7 @@ pub struct ServerPlugin {
 impl Default for ServerPlugin {
     fn default() -> Self {
         Self {
-            tick_schedule: Default::default(),
+            tick_schedule: FixedPostUpdate.intern(),
             visibility_policy: Default::default(),
             mutations_timeout: Duration::from_secs(10),
         }
@@ -90,7 +114,12 @@ impl Plugin for ServerPlugin {
             )
             .configure_sets(
                 PostUpdate,
-                (ServerSet::Send, ServerSet::SendPackets).chain(),
+                (
+                    ServerSet::IncrementTick,
+                    ServerSet::Send,
+                    ServerSet::SendPackets,
+                )
+                    .chain(),
             )
             .add_observer(handle_connects)
             .add_observer(handle_disconnects)
@@ -118,23 +147,12 @@ impl Plugin for ServerPlugin {
             );
 
         debug!("using tick schedule `{:?}`", self.tick_schedule);
-        match self.tick_schedule {
-            TickSchedule::FixedPostUpdate => {
-                app.add_systems(
-                    FixedPostUpdate,
-                    increment_tick.run_if(in_state(ServerState::Running)),
-                );
-            }
-            TickSchedule::PostUpdate => {
-                app.add_systems(
-                    PostUpdate,
-                    increment_tick
-                        .before(send_replication)
-                        .run_if(in_state(ServerState::Running)),
-                );
-            }
-            TickSchedule::Custom => (),
-        }
+        app.add_systems(
+            self.tick_schedule,
+            increment_tick
+                .in_set(ServerSet::IncrementTick)
+                .run_if(in_state(ServerState::Running)),
+        );
 
         debug!("using visibility policy `{:?}`", self.visibility_policy);
         match self.visibility_policy {
@@ -173,7 +191,7 @@ impl Plugin for ServerPlugin {
 }
 
 /// Increments current server tick which causes the server to replicate this frame.
-pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     server_tick.increment();
     trace!("incremented {server_tick:?}");
 }
@@ -803,6 +821,10 @@ pub enum ServerSet {
     ///
     /// Runs in [`OnEnter`] for [`ServerState::Running`].
     ReadRelations,
+    /// System that increments [`ServerTick`].
+    ///
+    /// Runs in [`ServerPlugin::tick_schedule`].
+    IncrementTick,
     /// Systems that write data to [`ServerMessages`].
     ///
     /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
@@ -813,42 +835,6 @@ pub enum ServerSet {
     ///
     /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
     SendPackets,
-}
-
-/// Controls when [`ServerTick`] is incremented on the server.
-///
-/// Can be set via [`ServerPlugin::tick_schedule`].
-#[derive(Debug, Default, Copy, Clone)]
-pub enum TickSchedule {
-    /// Increment in [`FixedPostUpdate`] when the fixed schedule
-    /// runs while the state is [`ServerState::Running`].
-    #[default]
-    FixedPostUpdate,
-    /// Increment in [`PostUpdate`] every frame while the state is
-    /// [`ServerState::Running`].
-    ///
-    /// Useful for tests.
-    PostUpdate,
-    /// Let user must manually schedule [`increment_tick`] or
-    /// directly increment [`ServerTick`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use bevy::{prelude::*, state::app::StatesPlugin, ecs::schedule::ScheduleLabel};
-    /// # use bevy_replicon::prelude::*;
-    /// # let mut app = App::new();
-    /// # app.add_plugins(StatesPlugin);
-    /// app.add_plugins(RepliconPlugins.build().set(ServerPlugin {
-    ///     tick_schedule: TickSchedule::Custom,
-    ///     ..Default::default()
-    /// }))
-    /// .add_systems(CustomSchedule, bevy_replicon::server::increment_tick);
-    ///
-    /// #[derive(ScheduleLabel, Debug, Hash, PartialEq, Eq, Clone, Copy)]
-    /// struct CustomSchedule;
-    /// ```
-    Custom,
 }
 
 /// Controls how visibility will be managed via [`ClientVisibility`].
