@@ -11,7 +11,7 @@ use crate::prelude::*;
 /// Marker for a connected client.
 ///
 /// Backends should spawn and despawn entities with this component on connect and disconnect
-/// and optionally update the [`NetworkStats`] component.
+/// and optionally update the [`ClientStats`] component.
 ///
 /// If the MTU of the connected client is dynamic, it's required for the backend to update
 /// [`Self::max_size`] to ensure message splitting works properly.
@@ -28,7 +28,7 @@ use crate::prelude::*;
 ///
 /// See also [`AuthorizedClient`].
 #[derive(Component, Reflect)]
-#[require(Name::new("Connected client"), NetworkStats)]
+#[require(Name::new("Connected client"), ClientStats)]
 pub struct ConnectedClient {
     /// Maximum size of a message that can be transferred over unreliable channel without
     /// splitting into multiple packets.

@@ -133,7 +133,7 @@ impl Plugin for RepliconSharedPlugin {
         app.register_type::<Replicated>()
             .register_type::<ConnectedClient>()
             .register_type::<NetworkIdMap>()
-            .register_type::<NetworkStats>()
+            .register_type::<ClientStats>()
             .init_state::<ClientState>()
             .init_state::<ServerState>()
             .init_resource::<ProtocolHasher>()
