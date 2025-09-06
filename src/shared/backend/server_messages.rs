@@ -2,17 +2,17 @@ use bevy::prelude::*;
 use bytes::Bytes;
 use log::trace;
 
-/// Stores information about the server independent from the messaging backend.
+/// Sent and received messages for exchange between Replicon and the messaging backend.
 ///
 /// The messaging backend is responsible for updating this resource:
-/// - For receiving messages, [`Self::insert_received`] should be used.
-///   A system to forward messages from the backend to Replicon should run in [`ServerSet::ReceivePackets`](crate::server::ServerSet::ReceivePackets).
-/// - For sending messages, [`Self::drain_sent`] should be used to drain all sent messages.
-///   A system to forward messages from Replicon to the backend should run in [`ServerSet::SendPackets`](crate::server::ServerSet::SendPackets).
+/// - Received messages should be forwarded to Replicon via [`Self::insert_received`] in
+///   [`ServerSet::ReceivePackets`](crate::prelude::ServerSet::ReceivePackets).
+/// - Replicon messages needs to be forwarded to the backend via [`Self::drain_sent`] in
+///   [`ServerSet::SendPackets`](crate::prelude::ServerSet::SendPackets).
 ///
 /// Inserted as resource by [`ServerPlugin`](crate::server::ServerPlugin).
 #[derive(Resource, Default)]
-pub struct RepliconServer {
+pub struct ServerMessages {
     /// List of received messages for each channel.
     ///
     /// Top index is channel ID.
@@ -23,7 +23,7 @@ pub struct RepliconServer {
     sent_messages: Vec<(Entity, usize, Bytes)>,
 }
 
-impl RepliconServer {
+impl ServerMessages {
     /// Changes the size of the receive messages storage according to the number of client channels.
     pub(crate) fn setup_client_channels(&mut self, channels_count: usize) {
         self.received_messages.resize(channels_count, Vec::new());

@@ -181,7 +181,7 @@ impl Updates {
     /// on deserialization just consume all remaining bytes.
     pub(crate) fn send(
         &self,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
         client: Entity,
         serialized: &SerializedData,
         server_tick_range: Range<usize>,
@@ -272,7 +272,7 @@ impl Updates {
 
         debug_assert_eq!(message.len(), message_size);
 
-        server.send(client, ServerChannel::Updates, message);
+        messages.send(client, ServerChannel::Updates, message);
 
         Ok(())
     }

@@ -713,7 +713,7 @@ pub mod prelude {
                 channels::{Channel, RepliconChannels},
                 client_messages::ClientMessages,
                 connected_client::ConnectedClient,
-                replicon_server::RepliconServer,
+                server_messages::ServerMessages,
             },
             client_id::ClientId,
             event::{

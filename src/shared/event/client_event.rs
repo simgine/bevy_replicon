@@ -274,9 +274,9 @@ impl ClientEvent {
         &self,
         ctx: &mut ServerReceiveCtx,
         client_events: PtrMut,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
     ) {
-        unsafe { (self.receive)(self, ctx, client_events, server) }
+        unsafe { (self.receive)(self, ctx, client_events, messages) }
     }
 
     /// Typed version of [`Self::receive`].
@@ -289,10 +289,10 @@ impl ClientEvent {
         &self,
         ctx: &mut ServerReceiveCtx,
         client_events: PtrMut,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
     ) {
         let client_events: &mut Events<FromClient<E>> = unsafe { client_events.deref_mut() };
-        for (client, mut message) in server.receive(self.channel_id) {
+        for (client, mut message) in messages.receive(self.channel_id) {
             match unsafe { self.deserialize::<E, I>(ctx, &mut message) } {
                 Ok(event) => {
                     debug!(
@@ -421,7 +421,7 @@ impl ClientEvent {
 type SendFn = unsafe fn(&ClientEvent, &mut ClientSendCtx, &Ptr, PtrMut, &mut ClientMessages);
 
 /// Signature of client event receiving functions.
-type ReceiveFn = unsafe fn(&ClientEvent, &mut ServerReceiveCtx, PtrMut, &mut RepliconServer);
+type ReceiveFn = unsafe fn(&ClientEvent, &mut ServerReceiveCtx, PtrMut, &mut ServerMessages);
 
 /// Signature of client event resending functions.
 type ResendLocallyFn = unsafe fn(PtrMut, PtrMut);
