@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::{entity::MapEntities, event::Events},
+    ecs::{entity::MapEntities, event::Events, schedule::ScheduleLabel},
     prelude::*,
     state::app::StatesPlugin,
     time::TimePlugin,
@@ -23,7 +23,7 @@ fn channels() {
         MinimalPlugins,
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
-            tick_policy: TickPolicy::EveryFrame,
+            tick_schedule: PostUpdate.intern(),
             ..Default::default()
         }),
     ))
@@ -45,7 +45,7 @@ fn regular() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -91,7 +91,7 @@ fn mapped() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -139,7 +139,7 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .set(ServerPlugin {
-                    tick_policy: TickPolicy::EveryFrame,
+                    tick_schedule: PostUpdate.intern(),
                     ..Default::default()
                 })
                 .disable::<ClientPlugin>()
@@ -195,7 +195,7 @@ fn local_resending() {
         TimePlugin,
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
-            tick_policy: TickPolicy::EveryFrame,
+            tick_schedule: PostUpdate.intern(),
             ..Default::default()
         }),
     ))
@@ -234,16 +234,9 @@ fn server_buffering() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::Manual, // To artificially delay replication after sending.
-                ..Default::default()
-            }),
-        ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
-        .finish();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .add_server_event::<TestEvent>(Channel::Ordered)
+            .finish();
     }
 
     server_app.connect_client(&mut client_app);
@@ -285,7 +278,7 @@ fn client_queue() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -336,7 +329,7 @@ fn client_queue_and_mapping() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -400,7 +393,7 @@ fn multiple_client_queues() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -463,7 +456,7 @@ fn independent() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -536,7 +529,7 @@ fn before_started_replication() {
             StatesPlugin,
             RepliconPlugins
                 .set(ServerPlugin {
-                    tick_policy: TickPolicy::EveryFrame,
+                    tick_schedule: PostUpdate.intern(),
                     ..Default::default()
                 })
                 .set(RepliconSharedPlugin {
@@ -580,7 +573,7 @@ fn independent_before_started_replication() {
             StatesPlugin,
             RepliconPlugins
                 .set(ServerPlugin {
-                    tick_policy: TickPolicy::EveryFrame,
+                    tick_schedule: PostUpdate.intern(),
                     ..Default::default()
                 })
                 .set(RepliconSharedPlugin {
@@ -629,7 +622,7 @@ fn different_ticks() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

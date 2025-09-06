@@ -1,7 +1,7 @@
 use core::time::Duration;
 use test_log::test;
 
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::{
         ServerUpdateTick,
@@ -31,7 +31,7 @@ fn small_component() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -79,7 +79,7 @@ fn package_size_component() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -133,7 +133,7 @@ fn many_components() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -190,7 +190,7 @@ fn once() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -238,7 +238,7 @@ fn filtered() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -298,7 +298,7 @@ fn related() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -345,7 +345,7 @@ fn command_fns() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -395,7 +395,7 @@ fn marker() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -456,7 +456,7 @@ fn marker_with_history() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -533,7 +533,7 @@ fn marker_with_history_consume() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -624,7 +624,7 @@ fn marker_with_history_old_update() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -702,7 +702,7 @@ fn many_entities() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -756,7 +756,7 @@ fn with_insertion() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -802,7 +802,7 @@ fn with_removal() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -848,7 +848,7 @@ fn with_despawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -898,7 +898,7 @@ fn buffering() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -957,7 +957,7 @@ fn old_ignored() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -1025,7 +1025,7 @@ fn acknowledgment() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 mutations_timeout: Duration::ZERO, // Will cause dropping updates after each frame.
                 ..Default::default()
             }),
@@ -1104,7 +1104,7 @@ fn confirm_history() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -1171,7 +1171,7 @@ fn after_disconnect() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))

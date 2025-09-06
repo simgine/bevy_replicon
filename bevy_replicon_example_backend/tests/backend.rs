@@ -1,6 +1,6 @@
 use std::{io, net::Ipv4Addr};
 
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ fn connect_disconnect() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
             RepliconExampleBackendPlugins,
@@ -59,7 +59,7 @@ fn disconnect_request() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
             RepliconExampleBackendPlugins,
@@ -112,7 +112,7 @@ fn server_stop() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
             RepliconExampleBackendPlugins,
@@ -162,7 +162,7 @@ fn replication() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
             RepliconExampleBackendPlugins,
@@ -190,7 +190,7 @@ fn server_event() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
             RepliconExampleBackendPlugins,
@@ -222,7 +222,7 @@ fn client_event() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
             RepliconExampleBackendPlugins,
