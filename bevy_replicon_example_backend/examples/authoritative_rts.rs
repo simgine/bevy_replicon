@@ -13,7 +13,8 @@
 //! The tick rate is 64 Hz (default in Bevy). You can lower it, but if you want
 //! to render the movement smoothly in listen-server and single-player
 //! modes, you need to apply transform interpolation between fixed updates.
-//! See [`bevy_transform_interpolation`](https://github.com/Jondolf/bevy_transform_interpolation)
+//! See the [interpolation and/or rollback](https://github.com/simgine/bevy_replicon?tab=readme-ov-file#interpolation-andor-rollback)
+//! section for available solutions.
 
 use std::{
     f32::consts::TAU,
