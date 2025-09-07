@@ -9,6 +9,11 @@
 //! In this example, clients don't predict or rollback. They simply wait for
 //! state updates from the server. It's a common strategy for RTS because the
 //! input delay won't be noticeable.
+//!
+//! The tick rate is 64 Hz (default in Bevy). You can lower it, but if you want
+//! to render the movement smoothly in listen-server and single-player
+//! modes, you need to apply transform interpolation between fixed updates.
+//! See [`bevy_transform_interpolation`](https://github.com/Jondolf/bevy_transform_interpolation)
 
 use std::{
     f32::consts::TAU,

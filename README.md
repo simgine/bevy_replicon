@@ -57,6 +57,7 @@ Depending on your game, you may need additional features. We provide an API that
 #### Interpolation and/or rollback
 
 - [`bevy_rewind`](https://github.com/NiseVoid/bevy_rewind) - server-authoritative rollback inspired by Rocket League.
+- [`bevy_transform_interpolation`](https://github.com/Jondolf/bevy_transform_interpolation) - render transforms smoothly for listen server or single player modes. Doesn't require special integration with Replicon.
 
 #### Visibility
 
