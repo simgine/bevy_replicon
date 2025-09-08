@@ -551,6 +551,11 @@ We don't have these features built-in, but we provide a low-level API to impleme
 Check the [corresponding section](https://github.com/simgine/bevy_replicon#interpolation-andor-rollback)
 in our README for existing implementations.
 
+If you run at a low tick rate, you may also need to smooth transforms in listen server or single player modes.
+This is different from client-side - it should happen between the previous and the current [`FixedMain`](bevy::app::FixedMain)
+runs. See the [interpolation and/or rollback](https://github.com/simgine/bevy_replicon?tab=readme-ov-file#interpolation-andor-rollback)
+section for available solutions.
+
 #### Client markers
 
 To apply interpolation or store value history for client-side prediction, you need to override how components are
