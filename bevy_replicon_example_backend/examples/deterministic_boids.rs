@@ -6,7 +6,8 @@
 //!
 //! While deterministic lockstep is very efficient in terms of bandwidth, it's not always possible
 //! to make your simulation deterministic. Floating point determinism across platforms is hard.
-//! Also clients need to know the full state, which may not be acceptable due to cheating.
+//! Also clients need to know the full state, which may not be acceptable if your game design
+//! uses restricted visibility (e.g. fog of war).
 //! Luckily, you can combine it with authoritative replication for things that can't be simulated
 //! deterministically or need to be hidden from clients.
 
