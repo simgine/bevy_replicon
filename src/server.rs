@@ -81,7 +81,7 @@ impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DespawnBuffer>()
             .init_resource::<RemovalBuffer>()
-            .init_resource::<RepliconServer>()
+            .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<EntityBuffer>()
             .init_resource::<BufferedServerEvents>()
@@ -92,12 +92,7 @@ impl Plugin for ServerPlugin {
             )
             .configure_sets(
                 PostUpdate,
-                (
-                    ServerSet::PrepareSend,
-                    ServerSet::Send,
-                    ServerSet::SendPackets,
-                )
-                    .chain(),
+                (ServerSet::Send, ServerSet::SendPackets).chain(),
             )
             .add_observer(handle_connects)
             .add_observer(handle_disconnects)
@@ -110,20 +105,18 @@ impl Plugin for ServerPlugin {
                 )
                     .chain()
                     .in_set(ServerSet::Receive)
-                    .run_if(server_running),
+                    .run_if(in_state(ServerState::Running)),
             )
+            .add_systems(OnExit(ServerState::Running), reset)
             .add_systems(
                 PostUpdate,
                 (
-                    (
-                        buffer_removals,
-                        send_replication.run_if(resource_changed::<ServerTick>),
-                    )
-                        .chain()
-                        .in_set(ServerSet::Send)
-                        .run_if(server_running),
-                    reset.run_if(server_just_stopped),
-                ),
+                    buffer_removals,
+                    send_replication.run_if(resource_changed::<ServerTick>),
+                )
+                    .chain()
+                    .in_set(ServerSet::Send)
+                    .run_if(in_state(ServerState::Running)),
             );
 
         debug!("using tick policy `{:?}`", self.tick_policy);
@@ -134,7 +127,7 @@ impl Plugin for ServerPlugin {
                     PostUpdate,
                     increment_tick
                         .before(send_replication)
-                        .run_if(server_running)
+                        .run_if(in_state(ServerState::Running))
                         .run_if(on_timer(tick_time)),
                 );
             }
@@ -143,7 +136,7 @@ impl Plugin for ServerPlugin {
                     PostUpdate,
                     increment_tick
                         .before(send_replication)
-                        .run_if(server_running),
+                        .run_if(in_state(ServerState::Running)),
                 );
             }
             TickPolicy::Manual => (),
@@ -178,9 +171,9 @@ impl Plugin for ServerPlugin {
 
     fn finish(&self, app: &mut App) {
         app.world_mut()
-            .resource_scope(|world, mut server: Mut<RepliconServer>| {
+            .resource_scope(|world, mut messages: Mut<ServerMessages>| {
                 let channels = world.resource::<RepliconChannels>();
-                server.setup_client_channels(channels.client_channels().len());
+                messages.setup_client_channels(channels.client_channels().len());
             });
     }
 }
@@ -201,10 +194,10 @@ fn handle_connects(
 
 fn handle_disconnects(
     trigger: Trigger<OnRemove, ConnectedClient>,
-    mut server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
 ) {
     debug!("client `{}` disconnected", trigger.target());
-    server.remove_client(trigger.target());
+    messages.remove_client(trigger.target());
 }
 
 fn check_protocol(
@@ -249,11 +242,11 @@ fn cleanup_acks(
 
 fn receive_acks(
     change_tick: SystemChangeTick,
-    mut server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
     mut clients: Query<&mut ClientTicks>,
     mut entity_buffer: ResMut<EntityBuffer>,
 ) {
-    for (client, mut message) in server.receive(ClientChannel::MutationAcks) {
+    for (client, mut message) in messages.receive(ClientChannel::MutationAcks) {
         while message.has_remaining() {
             match postcard_utils::from_buf(&mut message) {
                 Ok(mutate_index) => {
@@ -279,9 +272,9 @@ fn receive_acks(
 fn buffer_despawns(
     trigger: Trigger<OnRemove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
-    server: Res<RepliconServer>,
+    state: Res<State<ServerState>>,
 ) {
-    if server.is_running() {
+    if *state == ServerState::Running {
         despawn_buffer.push(trigger.target());
     }
 }
@@ -323,7 +316,7 @@ fn send_replication(
     mut removal_buffer: ResMut<RemovalBuffer>,
     mut entity_buffer: ResMut<EntityBuffer>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
-    mut server: ResMut<RepliconServer>,
+    mut messages: ResMut<ServerMessages>,
     track_mutate_messages: Res<TrackMutateMessages>,
     registry: Res<ReplicationRegistry>,
     type_registry: Res<AppTypeRegistry>,
@@ -356,7 +349,7 @@ fn send_replication(
 
     send_messages(
         &mut clients,
-        &mut server,
+        &mut messages,
         **server_tick,
         **track_mutate_messages,
         &mut serialized,
@@ -371,11 +364,13 @@ fn send_replication(
 
 fn reset(
     mut commands: Commands,
+    mut messages: ResMut<ServerMessages>,
     mut server_tick: ResMut<ServerTick>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
     mut buffered_events: ResMut<BufferedServerEvents>,
 ) {
+    messages.clear();
     *server_tick = Default::default();
     buffered_events.clear();
     related_entities.clear();
@@ -396,7 +391,7 @@ fn send_messages(
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
-    server: &mut RepliconServer,
+    messages: &mut ServerMessages,
     server_tick: RepliconTick,
     track_mutate_messages: bool,
     serialized: &mut SerializedData,
@@ -412,7 +407,7 @@ fn send_messages(
             let server_tick_range =
                 write_tick_cached(&mut server_tick_range, serialized, server_tick)?;
 
-            updates.send(server, client_entity, serialized, server_tick_range)?;
+            updates.send(messages, client_entity, serialized, server_tick_range)?;
         }
 
         if !mutations.is_empty() || track_mutate_messages {
@@ -420,7 +415,7 @@ fn send_messages(
                 write_tick_cached(&mut server_tick_range, serialized, server_tick)?;
 
             mutations.send(
-                server,
+                messages,
                 client_entity,
                 &mut ticks,
                 entity_buffer,
@@ -797,25 +792,24 @@ fn write_tick_cached(
 /// Set with replication and event systems related to server.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum ServerSet {
-    /// Systems that receive packets from the messaging backend.
+    /// Systems that receive packets from the messaging backend and update [`ServerState`].
     ///
     /// Used by the messaging backend.
     ///
     /// Runs in [`PreUpdate`].
     ReceivePackets,
-    /// Systems that receive data from [`RepliconServer`].
-    ///
-    /// Used by `bevy_replicon`.
+    /// Systems that read data from [`ServerMessages`].
     ///
     /// Runs in [`PreUpdate`].
     Receive,
-    /// Systems that prepare for sending data to [`RepliconServer`].
+    /// Systems that build the initial graph with all related entities registered via
+    /// [`SyncRelatedAppExt::sync_related_entities`].
     ///
-    /// Can be used by backends to add custom logic before sending data, such as transition to a stopped state.
-    PrepareSend,
-    /// Systems that send data to [`RepliconServer`].
+    /// The graph is kept in sync with observers.
     ///
-    /// Used by `bevy_replicon`.
+    /// Runs in [`OnEnter`] for [`ServerState::Running`].
+    ReadRelations,
+    /// Systems that write data to [`ServerMessages`].
     ///
     /// Runs in [`PostUpdate`] on server tick, see [`TickPolicy`].
     Send,

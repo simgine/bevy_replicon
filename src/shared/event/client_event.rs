@@ -24,7 +24,7 @@ pub trait ClientEventAppExt {
     ///
     /// After emitting `E` event on the client, [`FromClient<E>`] event will be emitted on the server.
     ///
-    /// If [`ServerEventPlugin`] is enabled and [`RepliconClient`] is inactive, the event will be drained
+    /// If [`ServerEventPlugin`] is enabled and the client state is [`ClientState::Disconnected`], the event will be drained
     /// right after sending and re-emitted locally as [`FromClient<E>`] event with [`FromClient::client_id`]
     /// equal to [`ClientId::Server`].
     ///
@@ -71,6 +71,7 @@ pub trait ClientEventAppExt {
     use bevy::{
         prelude::*,
         reflect::serde::{ReflectDeserializer, ReflectSerializer},
+        state::app::StatesPlugin,
     };
     use bevy_replicon::{
         bytes::Bytes,
@@ -82,7 +83,7 @@ pub trait ClientEventAppExt {
     use serde::{de::DeserializeSeed, Serialize};
 
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, RepliconPlugins));
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
     app.add_client_event_with(Channel::Ordered, serialize_reflect, deserialize_reflect);
 
     fn serialize_reflect(
@@ -228,9 +229,9 @@ impl ClientEvent {
         ctx: &mut ClientSendCtx,
         events: &Ptr,
         reader: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
     ) {
-        unsafe { (self.send)(self, ctx, events, reader, client) };
+        unsafe { (self.send)(self, ctx, events, reader, messages) };
     }
 
     /// Typed version of [`Self::send`].
@@ -244,7 +245,7 @@ impl ClientEvent {
         ctx: &mut ClientSendCtx,
         events: &Ptr,
         reader: PtrMut,
-        client: &mut RepliconClient,
+        messages: &mut ClientMessages,
     ) {
         let reader: &mut ClientEventReader<E> = unsafe { reader.deref_mut() };
         let events = unsafe { events.deref() };
@@ -259,7 +260,7 @@ impl ClientEvent {
             }
 
             debug!("sending event `{}`", any::type_name::<E>());
-            client.send(self.channel_id, message);
+            messages.send(self.channel_id, message);
         }
     }
 
@@ -273,9 +274,9 @@ impl ClientEvent {
         &self,
         ctx: &mut ServerReceiveCtx,
         client_events: PtrMut,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
     ) {
-        unsafe { (self.receive)(self, ctx, client_events, server) }
+        unsafe { (self.receive)(self, ctx, client_events, messages) }
     }
 
     /// Typed version of [`Self::receive`].
@@ -288,10 +289,10 @@ impl ClientEvent {
         &self,
         ctx: &mut ServerReceiveCtx,
         client_events: PtrMut,
-        server: &mut RepliconServer,
+        messages: &mut ServerMessages,
     ) {
         let client_events: &mut Events<FromClient<E>> = unsafe { client_events.deref_mut() };
-        for (client, mut message) in server.receive(self.channel_id) {
+        for (client, mut message) in messages.receive(self.channel_id) {
             match unsafe { self.deserialize::<E, I>(ctx, &mut message) } {
                 Ok(event) => {
                     debug!(
@@ -417,10 +418,10 @@ impl ClientEvent {
 }
 
 /// Signature of client event sending functions.
-type SendFn = unsafe fn(&ClientEvent, &mut ClientSendCtx, &Ptr, PtrMut, &mut RepliconClient);
+type SendFn = unsafe fn(&ClientEvent, &mut ClientSendCtx, &Ptr, PtrMut, &mut ClientMessages);
 
 /// Signature of client event receiving functions.
-type ReceiveFn = unsafe fn(&ClientEvent, &mut ServerReceiveCtx, PtrMut, &mut RepliconServer);
+type ReceiveFn = unsafe fn(&ClientEvent, &mut ServerReceiveCtx, PtrMut, &mut ServerMessages);
 
 /// Signature of client event resending functions.
 type ResendLocallyFn = unsafe fn(PtrMut, PtrMut);

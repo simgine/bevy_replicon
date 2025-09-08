@@ -63,11 +63,14 @@ fn main() {
         .add_observer(trigger_units_move)
         .add_observer(apply_units_move)
         .add_systems(Startup, setup)
-        .add_systems(FixedUpdate, move_units.run_if(server_or_singleplayer))
+        .add_systems(OnEnter(ClientState::Connected), trigger_team_request)
+        .add_systems(
+            FixedUpdate,
+            move_units.run_if(in_state(ClientState::Disconnected)),
+        )
         .add_systems(
             Update,
             (
-                trigger_team_request.run_if(client_just_connected),
                 draw_selection.run_if(|r: Res<Selection>| r.active),
                 draw_selected,
             ),

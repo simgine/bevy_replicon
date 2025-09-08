@@ -20,38 +20,37 @@ impl Plugin for RepliconExampleClientPlugin {
         app.add_systems(
             PreUpdate,
             (
+                (
+                    receive_packets.run_if(resource_exists::<ExampleClient>),
+                    // Run after since the resource might be removed after receiving packets.
+                    set_disconnected.run_if(resource_removed::<ExampleClient>),
+                )
+                    .chain(),
                 set_connected.run_if(resource_added::<ExampleClient>),
-                receive_packets.run_if(resource_exists::<ExampleClient>),
             )
-                .chain()
                 .in_set(ClientSet::ReceivePackets),
         )
         .add_systems(
             PostUpdate,
-            (
-                set_disconnected
-                    .in_set(ClientSet::PrepareSend)
-                    .run_if(resource_removed::<ExampleClient>),
-                send_packets
-                    .in_set(ClientSet::SendPackets)
-                    .run_if(resource_exists::<ExampleClient>),
-            ),
+            send_packets
+                .run_if(resource_exists::<ExampleClient>)
+                .in_set(ClientSet::SendPackets),
         );
     }
 }
 
-fn set_disconnected(mut replicon_client: ResMut<RepliconClient>) {
-    replicon_client.set_status(RepliconClientStatus::Disconnected);
+fn set_connected(mut state: ResMut<NextState<ClientState>>) {
+    state.set(ClientState::Connected);
 }
 
-fn set_connected(mut replicon_client: ResMut<RepliconClient>) {
-    replicon_client.set_status(RepliconClientStatus::Connected);
+fn set_disconnected(mut state: ResMut<NextState<ClientState>>) {
+    state.set(ClientState::Disconnected);
 }
 
 fn receive_packets(
     mut commands: Commands,
     mut client: ResMut<ExampleClient>,
-    mut replicon_client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
     config: Option<Res<ConditionerConfig>>,
 ) {
     let now = Instant::now();
@@ -78,16 +77,16 @@ fn receive_packets(
     }
 
     while let Some((channel_id, message)) = client.conditioner.pop(now) {
-        replicon_client.insert_received(channel_id, message);
+        messages.insert_received(channel_id, message);
     }
 }
 
 fn send_packets(
     mut commands: Commands,
     mut client: ResMut<ExampleClient>,
-    mut replicon_client: ResMut<RepliconClient>,
+    mut messages: ResMut<ClientMessages>,
 ) {
-    for (channel_id, message) in replicon_client.drain_sent() {
+    for (channel_id, message) in messages.drain_sent() {
         if let Err(e) = tcp::send_message(&mut client.stream, channel_id, &message) {
             error!("disconnecting due message write error: {e}");
             commands.remove_resource::<ExampleClient>();

@@ -26,7 +26,7 @@ See also [`ReplicationRegistry::register_rule_fns`].
 This example shows how to call registered functions on an entity:
 
 ```
-use bevy::prelude::*;
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     shared::{
         replication::registry::{
@@ -39,7 +39,7 @@ use bevy_replicon::{
 use serde::{Deserialize, Serialize};
 
 let mut app = App::new();
-app.add_plugins((MinimalPlugins, RepliconPlugins));
+app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 
 let tick = RepliconTick::default();
 

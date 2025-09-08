@@ -1,6 +1,5 @@
 pub mod backend;
 pub mod client_id;
-pub mod common_conditions;
 pub mod event;
 pub mod protocol;
 pub mod replication;
@@ -31,13 +30,14 @@ pub struct RepliconSharedPlugin {
     only with [`AuthMethod::ProtocolCheck`], but it could be any event.
 
     ```
-    use bevy::prelude::*;
+    use bevy::{prelude::*, state::app::StatesPlugin};
     use bevy_replicon::prelude::*;
     use serde::{Deserialize, Serialize};
 
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
+        StatesPlugin,
         RepliconPlugins.set(RepliconSharedPlugin {
             auth_method: AuthMethod::Custom,
         }),
@@ -46,7 +46,7 @@ pub struct RepliconSharedPlugin {
     .add_server_trigger::<ProtocolMismatch>(Channel::Unreliable)
     .make_trigger_independent::<ProtocolMismatch>() // Let client receive it without replication.
     .add_observer(start_game)
-    .add_systems(Update, send_info.run_if(client_just_connected));
+    .add_systems(OnEnter(ClientState::Connected), send_info);
 
     fn send_info(
         mut commands: Commands,
@@ -133,7 +133,9 @@ impl Plugin for RepliconSharedPlugin {
         app.register_type::<Replicated>()
             .register_type::<ConnectedClient>()
             .register_type::<NetworkIdMap>()
-            .register_type::<NetworkStats>()
+            .register_type::<ClientStats>()
+            .init_state::<ClientState>()
+            .init_state::<ServerState>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<NetworkIdMap>()
             .init_resource::<TrackMutateMessages>()

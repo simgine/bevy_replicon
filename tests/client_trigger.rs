@@ -1,4 +1,4 @@
-use bevy::{ecs::entity::MapEntities, prelude::*, time::TimePlugin};
+use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     prelude::*, shared::server_entity_map::ServerEntityMap, test_app::ServerTestAppExt,
 };
@@ -10,7 +10,7 @@ fn regular() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((MinimalPlugins, RepliconPlugins))
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .add_client_trigger::<TestEvent>(Channel::Ordered)
             .finish();
     }
@@ -35,6 +35,7 @@ fn with_target() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -79,6 +80,7 @@ fn mapped() {
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
                 tick_policy: TickPolicy::EveryFrame,
                 ..Default::default()
@@ -124,6 +126,7 @@ fn without_plugins() {
     server_app
         .add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .build()
                 .disable::<ClientPlugin>()
@@ -134,6 +137,7 @@ fn without_plugins() {
     client_app
         .add_plugins((
             MinimalPlugins,
+            StatesPlugin,
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
@@ -158,7 +162,7 @@ fn without_plugins() {
 #[test]
 fn local_resending() {
     let mut app = App::new();
-    app.add_plugins((TimePlugin, RepliconPlugins))
+    app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
         .add_client_trigger::<TestEvent>(Channel::Ordered)
         .finish();
     app.init_resource::<TriggerReader<TestEvent>>();

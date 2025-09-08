@@ -12,17 +12,19 @@ use bevy::{
 /// # Examples
 ///
 /// ```
-/// # use bevy::prelude::*;
-/// # use bevy_replicon::prelude::*;
+/// use bevy::{prelude::*, state::app::StatesPlugin};
+/// use bevy_replicon::prelude::*;
+///
 /// # let mut app = App::new();
 /// app.add_plugins((
 ///     MinimalPlugins,
+///     StatesPlugin,
 ///     RepliconPlugins.set(ServerPlugin {
 ///         visibility_policy: VisibilityPolicy::Whitelist, // Makes all entities invisible for clients by default.
 ///         ..Default::default()
 ///     }),
 /// ))
-/// .add_systems(Update, update_visibility.run_if(server_running));
+/// .add_systems(Update, update_visibility.run_if(in_state(ServerState::Running)));
 ///
 /// /// Disables the visibility of other players' entities that are further away than the visible distance.
 /// fn update_visibility(
