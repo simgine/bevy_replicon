@@ -246,7 +246,7 @@ pub trait AppRuleExt {
 
     Skip scale serialization.
 
-    Unlike with the example from [`Self::deserialize_as`], this
+    Unlike with the example from [`Self::replicate_as`], this
     will preserve the original scale value on deserialiation.
 
     ```

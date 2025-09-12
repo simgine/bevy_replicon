@@ -83,7 +83,7 @@ pub struct RuleFns<C> {
 impl<C: Component> RuleFns<C> {
     /// Creates a new instance.
     ///
-    /// For more details see [`AppRuleExt::replicate_with`].
+    /// For more details see [`AppRuleExt::replicate_with`](crate::prelude::AppRuleExt::replicate_with).
     pub fn new(serialize: SerializeFn<C>, deserialize: DeserializeFn<C>) -> Self {
         Self {
             serialize,
@@ -96,7 +96,7 @@ impl<C: Component> RuleFns<C> {
     /// Like [`Self::default`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
     ///
-    /// For more details see [`AppRuleExt::replicate_as`].
+    /// For more details see [`AppRuleExt::replicate_as`](crate::prelude::AppRuleExt::replicate_as).
     pub fn new_as<T>() -> Self
     where
         T: Serialize + DeserializeOwned,
