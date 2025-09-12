@@ -83,7 +83,7 @@ pub struct RuleFns<C> {
 impl<C: Component> RuleFns<C> {
     /// Creates a new instance.
     ///
-    /// See also [`Self::with_in_place`] and [`Self::with_consume`].
+    /// For more details see [`AppRuleExt::replicate_with`].
     pub fn new(serialize: SerializeFn<C>, deserialize: DeserializeFn<C>) -> Self {
         Self {
             serialize,
@@ -91,6 +91,18 @@ impl<C: Component> RuleFns<C> {
             deserialize_in_place: in_place_as_deserialize::<C>,
             consume: consume_as_deserialize,
         }
+    }
+
+    /// Like [`Self::default`], but converts the component into `T` before serialization
+    /// and back into `C` after deserialization.
+    ///
+    /// For more details see [`AppRuleExt::replicate_as`].
+    pub fn new_as<T>() -> Self
+    where
+        T: Serialize + DeserializeOwned,
+        C: Clone + Into<T> + From<T>,
+    {
+        Self::new(serialize_as, deserialize_as)
     }
 
     /// Replaces default [`in_place_as_deserialize`] with a custom function.
@@ -222,4 +234,26 @@ pub fn consume_as_deserialize<C: Component>(
     (deserialize)(ctx, message)?;
     ctx.ignore_mapping = false;
     Ok(())
+}
+
+/// Converts `C` into `T` and serializes it.
+pub fn serialize_as<C: Component + Clone + Into<T>, T: Serialize>(
+    _ctx: &SerializeCtx,
+    component: &C,
+    message: &mut Vec<u8>,
+) -> Result<()> {
+    let serializable = component.clone().into();
+    postcard_utils::to_extend_mut(&serializable, message)?;
+    Ok(())
+}
+
+/// Deserializes `T` and converts it into `C`.
+pub fn deserialize_as<C: Component + From<T>, T: DeserializeOwned>(
+    ctx: &mut WriteCtx,
+    message: &mut Bytes,
+) -> Result<C> {
+    let deserialized: T = postcard_utils::from_buf(message)?;
+    let mut component = deserialized.into();
+    C::map_entities(&mut component, ctx);
+    Ok(component)
 }
