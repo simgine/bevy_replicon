@@ -25,12 +25,7 @@ use bevy::{
     prelude::*,
     render::primitives::Aabb,
 };
-use bevy_replicon::{
-    bytes::Bytes,
-    postcard_utils,
-    prelude::*,
-    shared::replication::registry::ctx::{SerializeCtx, WriteCtx},
-};
+use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use clap::{Parser, ValueEnum};
 use pathfinding::prelude::*;
@@ -48,8 +43,7 @@ fn main() {
         .init_resource::<ClientTeams>()
         .replicate::<Unit>()
         .replicate::<Command>()
-        // Customize serialization to skip `scale` and avoid sending Z axis.
-        .replicate_with(RuleFns::new(serialize_transform, deserialize_transform))
+        .replicate_as::<Transform, Transform2DWithoutScale>()
         .add_client_trigger::<TeamRequest>(Channel::Unordered)
         .add_client_trigger::<UnitSpawn>(Channel::Unordered)
         .add_mapped_client_trigger::<UnitsMove>(Channel::Unordered)
@@ -746,20 +740,28 @@ enum Command {
 #[require(Gizmo)]
 struct Selected;
 
-/// Serializes [`Transform`] without [`Transform::scale`] and Z axis.
-fn serialize_transform(
-    _ctx: &SerializeCtx,
-    transform: &Transform,
-    message: &mut Vec<u8>,
-) -> Result<()> {
-    postcard_utils::to_extend_mut(&transform.translation.truncate(), message)?;
-    postcard_utils::to_extend_mut(&transform.rotation, message)?;
-    Ok(())
+/// Helper to send [`Transform`] without [`Transform::scale`] and Z axis.
+#[derive(Serialize, Deserialize, Clone, Copy)]
+struct Transform2DWithoutScale {
+    translation: Vec2,
+    rotation: Quat,
 }
 
-/// Deserializes [`Transform`] without [`Transform::scale`] and Z axis.
-fn deserialize_transform(_ctx: &mut WriteCtx, message: &mut Bytes) -> Result<Transform> {
-    let translation: Vec2 = postcard_utils::from_buf(message)?;
-    let rotation = postcard_utils::from_buf(message)?;
-    Ok(Transform::from_translation(translation.extend(0.0)).with_rotation(rotation))
+impl From<Transform> for Transform2DWithoutScale {
+    fn from(value: Transform) -> Self {
+        Self {
+            translation: value.translation.truncate(),
+            rotation: value.rotation,
+        }
+    }
+}
+
+impl From<Transform2DWithoutScale> for Transform {
+    fn from(value: Transform2DWithoutScale) -> Self {
+        Self {
+            translation: value.translation.extend(0.0),
+            rotation: value.rotation,
+            ..Default::default()
+        }
+    }
 }

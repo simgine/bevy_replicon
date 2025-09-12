@@ -174,7 +174,7 @@ In order to serialize Bevy components you need to enable the `serialize` feature
 
 If your component doesn't implement serde traits or you want to customize the serialization
 (for example, quantize, skip some fields or apply compression), you can use
-[`AppRuleExt::replicate_with`].
+[`AppRuleExt::replicate_as`] or [`AppRuleExt::replicate_with`].
 
 You can also create a rule for multiple components. Use [`AppRuleExt::replicate_bundle`],
 or pass a tuple of [`RuleFns`] to [`AppRuleExt::replicate_with`]. The components will only
