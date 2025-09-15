@@ -18,15 +18,15 @@ use crate::{
 pub(crate) struct SerializedData(Vec<u8>);
 
 impl SerializedData {
-    pub(crate) fn write_mappings(
+    pub(crate) fn write_signatures(
         &mut self,
-        mappings: impl Iterator<Item = (Entity, Entity)>,
+        mappings: impl Iterator<Item = (Entity, u64)>,
     ) -> Result<Range<usize>> {
         let start = self.len();
 
-        for (server_entity, client_entity) in mappings {
+        for (server_entity, hash) in mappings {
             self.write_entity(server_entity)?;
-            self.write_entity(client_entity)?;
+            self.extend(hash.to_le_bytes()); // Use fixint encoding because it's more efficient for hashes.
         }
 
         let end = self.len();

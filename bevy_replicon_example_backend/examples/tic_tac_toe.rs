@@ -27,23 +27,17 @@ fn main() {
                 }),
                 ..Default::default()
             }),
-            RepliconPlugins.set(RepliconSharedPlugin {
-                // Customize authorization because we want to exchange cell mappings first.
-                auth_method: AuthMethod::Custom,
-            }),
+            RepliconPlugins,
             RepliconExampleBackendPlugins,
         ))
         .init_state::<GameState>()
         .init_resource::<SymbolFont>()
         .init_resource::<TurnSymbol>()
         .replicate::<Symbol>()
-        .add_client_trigger::<ClientInfo>(Channel::Ordered)
         .add_client_trigger::<CellPick>(Channel::Ordered)
-        .add_server_trigger::<MakeLocal>(Channel::Ordered)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_observer(disconnect_by_client)
         .add_observer(init_client)
-        .add_observer(make_local)
         .add_observer(apply_pick)
         .add_observer(init_symbols)
         .add_observer(advance_turn)
@@ -109,6 +103,15 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             // Backend initialization
             let client = ExampleClient::new((ip, port))?;
             commands.insert_resource(client);
+
+            // Assign a signature based on `ClientPlayer` component presence.
+            // When the server spawns an entity with the same signature, it
+            // will be mapped to this entity.
+            commands.spawn((
+                LocalPlayer,
+                ClientPlayer,
+                Signature::of_single::<ClientPlayer>(),
+            ));
         }
     }
 
@@ -180,7 +183,11 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
                     },
                     Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<_>| {
                         for index in 0..GRID_SIZE * GRID_SIZE {
-                            parent.spawn(Cell { index }).observe(pick_cell);
+                            // Give each cell entity a signature to map them
+                            // automatically between server and client.
+                            parent
+                                .spawn((Cell { index }, Signature::of_single::<Cell>()))
+                                .observe(pick_cell);
                         }
                     }))
                 ),
@@ -300,86 +307,29 @@ fn init_symbols(
         ));
 }
 
-/// Sends cell and local player entities and starts the game.
+/// Starts the game after connection.
 ///
-/// Replicon maps entities when you replicate them from server automatically.
-/// But in this game we spawn cells beforehand. So we send a special event to
-/// server to receive replication to already existing entities.
-///
-/// Used only for client.
-fn client_start(
-    mut commands: Commands,
-    protocol: Res<ProtocolHash>,
-    cells: Query<(Entity, &Cell)>,
-) {
-    let mut cells: Vec<_> = cells.iter().collect();
-    cells.sort_by_key(|(_, cell)| cell.index);
-
-    commands.client_trigger(ClientInfo {
-        protocol: *protocol,
-        cells: cells.into_iter().map(|(entity, _)| entity).collect(),
-    });
+/// Used only for a client.
+fn client_start(mut commands: Commands) {
     commands.set_state(GameState::InGame);
 }
 
-/// Establishes mappings between spawned client and server entities and starts the game.
+/// Associates client with a symbol and starts the game.
 ///
 /// Used only for server.
 fn init_client(
-    trigger: Trigger<FromClient<ClientInfo>>,
+    trigger: Trigger<OnAdd, AuthorizedClient>,
     mut commands: Commands,
-    mut events: EventWriter<DisconnectRequest>,
-    protocol: Res<ProtocolHash>,
-    cells: Query<(Entity, &Cell)>,
     server_symbol: Single<&Symbol, With<LocalPlayer>>,
 ) {
-    let client = trigger
-        .client_id
-        .entity()
-        .expect("protocol hash sent only from clients");
-
-    // Since we using custom authorization,
-    // we need to verify the protocol manually.
-    if trigger.protocol != *protocol {
-        // Notify client about the problem. No delivery
-        // guarantee since we disconnect after sending.
-        commands.server_trigger(ToClients {
-            mode: SendMode::Direct(trigger.client_id),
-            event: ProtocolMismatch,
-        });
-        events.write(DisconnectRequest { client });
-    }
-
-    // Sort local square entities to match them with the received.
-    let mut cells: Vec<_> = cells.iter().collect();
-    cells.sort_by_key(|(_, cell)| cell.index);
-
-    // This map is a required component for `AuthorizedClient`.
-    // By default it's empty, but we can initialize it with the
-    // received entities.
-    let mut entity_map = ClientEntityMap::default();
-    for (&server, &client) in cells.iter().map(|(entity, _)| entity).zip(&trigger.cells) {
-        entity_map.insert(server, client);
-    }
-
     // Utilize client entity as a player for convenient lookups by `client`.
-    commands
-        .entity(client)
-        .insert((Player, server_symbol.next(), AuthorizedClient, entity_map));
-
-    commands.server_trigger_targets(
-        ToClients {
-            mode: SendMode::Direct(trigger.client_id),
-            event: MakeLocal,
-        },
-        client,
-    );
+    commands.entity(trigger.target()).insert((
+        ClientPlayer,
+        Signature::of_single::<ClientPlayer>(),
+        server_symbol.next(),
+    ));
 
     commands.set_state(GameState::InGame);
-}
-
-fn make_local(trigger: Trigger<MakeLocal>, mut commands: Commands) {
-    commands.entity(trigger.target()).insert(LocalPlayer);
 }
 
 /// Sets the game in disconnected state if client closes the connection.
@@ -564,7 +514,7 @@ enum GameState {
 #[derive(Resource, Default, Deref, DerefMut)]
 struct TurnSymbol(Symbol);
 
-/// A component that defines the symbol of a [`Player`], current [`TurnSymbol`] or a filled cell (see [`CellPick`]).
+/// The player's symobol, current [`TurnSymbol`] or a symbol of a filled cell (see [`CellPick`]).
 #[derive(Clone, Component, Copy, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
 enum Symbol {
     #[default]
@@ -611,7 +561,7 @@ struct BottomText;
 /// Cell location on the grid.
 ///
 /// We want to replicate all cells, so we just set [`Replicated`] as a required component.
-#[derive(Component)]
+#[derive(Component, Hash)]
 #[require(
     Button,
     Replicated,
@@ -627,19 +577,21 @@ struct Cell {
     index: usize,
 }
 
-/// Marker for a player entity.
-#[derive(Component, Default)]
-#[require(Replicated)]
-struct Player;
-
-/// Marks [`Player`] as locally controlled.
+/// Player that can be controlled from the current machine.
 ///
 /// Used to determine if player can place a symbol.
-///
 /// See also [`local_player_turn`].
 #[derive(Component)]
-#[require(Player)]
+#[require(Replicated)]
 struct LocalPlayer;
+
+/// Player that is also a client.
+///
+/// Used to spawn an entity with [`LocalPlayer`] on the client
+/// and automatically map it to the player entity on the server.
+#[derive(Component, Hash)]
+#[require(Replicated)]
+struct ClientPlayer;
 
 /// A trigger that indicates a symbol pick.
 ///
@@ -649,16 +601,3 @@ struct LocalPlayer;
 struct CellPick {
     index: usize,
 }
-
-/// A client trigger with protocol information and client's chess board entities.
-///
-/// See [`client_start`] for details.
-#[derive(Event, Serialize, Deserialize)]
-struct ClientInfo {
-    protocol: ProtocolHash,
-    cells: Vec<Entity>,
-}
-
-/// A trigger that instructs the client to mark a specific entity as [`LocalPlayer`].
-#[derive(Event, Serialize, Deserialize)]
-struct MakeLocal;

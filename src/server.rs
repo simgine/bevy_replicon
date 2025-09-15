@@ -1,4 +1,3 @@
-pub mod client_entity_map;
 pub mod client_visibility;
 pub mod event;
 pub mod related_entities;
@@ -38,6 +37,7 @@ use crate::{
                 rule_fns::UntypedRuleFns,
             },
             rules::{ReplicationRules, component::ComponentRule},
+            signature::{MappingsBuffer, SignatureMap},
             track_mutate_messages::TrackMutateMessages,
         },
     },
@@ -105,6 +105,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<RemovalBuffer>()
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
+            .init_resource::<MappingsBuffer>()
             .init_resource::<EntityBuffer>()
             .init_resource::<BufferedServerEvents>()
             .init_resource::<RelatedEntities>()
@@ -318,17 +319,20 @@ fn send_replication(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
+        Ref<AuthorizedClient>,
+        &mut MappingsBuffer,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    mut mappings_buffer: ResMut<MappingsBuffer>,
     mut related_entities: ResMut<RelatedEntities>,
     mut removal_buffer: ResMut<RemovalBuffer>,
     mut entity_buffer: ResMut<EntityBuffer>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     mut messages: ResMut<ServerMessages>,
+    signature_map: Res<SignatureMap>,
     track_mutate_messages: Res<TrackMutateMessages>,
     registry: Res<ReplicationRegistry>,
     type_registry: Res<AppTypeRegistry>,
@@ -343,7 +347,12 @@ fn send_replication(
         mutations.resize_related(related_entities.graphs_count());
     }
 
-    collect_mappings(&mut serialized, &mut clients)?;
+    collect_mappings(
+        &mut serialized,
+        &mut clients,
+        &mut mappings_buffer,
+        &signature_map,
+    )?;
     collect_despawns(&mut serialized, &mut clients, &mut despawn_buffer)?;
     collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
     collect_changes(
@@ -378,12 +387,14 @@ fn reset(
     mut commands: Commands,
     mut messages: ResMut<ServerMessages>,
     mut server_tick: ResMut<ServerTick>,
+    mut pending_signatures: ResMut<MappingsBuffer>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
     mut buffered_events: ResMut<BufferedServerEvents>,
 ) {
     messages.clear();
     *server_tick = Default::default();
+    pending_signatures.clear();
     buffered_events.clear();
     related_entities.clear();
     for entity in &clients {
@@ -397,7 +408,8 @@ fn send_messages(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
+        Ref<AuthorizedClient>,
+        &mut MappingsBuffer,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -455,23 +467,43 @@ fn collect_mappings(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
+        Ref<AuthorizedClient>,
+        &mut MappingsBuffer,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    mappings_buffer: &mut MappingsBuffer,
+    signature_map: &SignatureMap,
 ) -> Result<()> {
-    for (client_entity, mut message, _, _, mut entity_map, ..) in clients {
-        if entity_map.is_empty() {
+    for (client_entity, mut message, _, _, authorized, mut client_mappings, ..) in clients {
+        let mut len = client_mappings.len();
+        if authorized.is_added() {
+            // Write all global signatures for a newly connected client.
+            len += signature_map.len();
+        } else {
+            len += mappings_buffer.len();
+        }
+
+        if len == 0 {
             continue;
         }
 
-        trace!("writing mappings for client `{client_entity}`");
-        let len = entity_map.len();
-        let mappings = serialized.write_mappings(entity_map.0.drain(..))?;
+        trace!("writing {len} signatures for client `{client_entity}`");
+        let mappings = if authorized.is_added() {
+            let iter = client_mappings.drain(..).chain(signature_map.iter());
+            serialized.write_signatures(iter)?
+        } else {
+            let iter = client_mappings
+                .drain(..)
+                .chain(mappings_buffer.iter().copied());
+            serialized.write_signatures(iter)?
+        };
         message.set_mappings(mappings, len);
     }
+
+    mappings_buffer.clear();
 
     Ok(())
 }
@@ -484,7 +516,8 @@ fn collect_despawns(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
+        Ref<AuthorizedClient>,
+        &mut MappingsBuffer,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -528,7 +561,8 @@ fn collect_removals(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
+        Ref<AuthorizedClient>,
+        &mut MappingsBuffer,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -561,7 +595,8 @@ fn collect_changes(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
+        Ref<AuthorizedClient>,
+        &mut MappingsBuffer,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -867,7 +902,7 @@ struct DespawnBuffer(Vec<Entity>);
     ClientTicks,
     PriorityMap,
     EntityCache,
-    ClientEntityMap,
+    MappingsBuffer,
     Updates,
     Mutations
 )]

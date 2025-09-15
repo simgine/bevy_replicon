@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
 use event::remote_event_registry::RemoteEventRegistry;
+use replication::signature::SignatureMap;
 use replication::{
     command_markers::CommandMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
     track_mutate_messages::TrackMutateMessages,
@@ -142,6 +143,7 @@ impl Plugin for RepliconSharedPlugin {
             .init_resource::<RepliconChannels>()
             .init_resource::<ReplicationRegistry>()
             .init_resource::<ReplicationRules>()
+            .init_resource::<SignatureMap>()
             .init_resource::<CommandMarkers>()
             .init_resource::<RemoteEventRegistry>()
             .insert_resource(self.auth_method)

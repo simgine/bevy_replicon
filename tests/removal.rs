@@ -7,7 +7,7 @@ use bevy_replicon::{
         deferred_entity::DeferredEntity,
         registry::{command_fns, ctx::WriteCtx},
     },
-    test_app::{ServerTestAppExt, TestClientEntity},
+    test_app::ServerTestAppExt,
 };
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -166,16 +166,15 @@ fn marker() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn((Replicated, Original)).id();
-
-    let client_entity = client_app.world_mut().spawn(ReplaceMarker).id();
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    let server_entity = server_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((Replicated, Original, Signature::from(0)))
+        .id();
+
+    let client_entity = client_app
+        .world_mut()
+        .spawn((ReplaceMarker, Signature::from(0)))
+        .id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
