@@ -412,17 +412,13 @@ fn marker() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, OriginalComponent(false)))
+        .spawn((Replicated, OriginalComponent(false), Signature::from(0)))
         .id();
 
-    let client_entity = client_app.world_mut().spawn(ReplaceMarker).id();
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    let client_entity = client_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((ReplaceMarker, Signature::from(0)))
+        .id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -476,17 +472,13 @@ fn marker_with_history() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, BoolComponent(false)))
+        .spawn((Replicated, BoolComponent(false), Signature::from(0)))
         .id();
 
-    let client_entity = client_app.world_mut().spawn(HistoryMarker).id();
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    let client_entity = client_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((HistoryMarker, Signature::from(0)))
+        .id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -561,17 +553,13 @@ fn marker_with_history_consume() {
             Replicated,
             BoolComponent(false),
             MappedComponent(server_map_entity),
+            Signature::from(0),
         ))
         .id();
 
-    let client_entity = client_app.world_mut().spawn(HistoryMarker).id();
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    client_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((HistoryMarker, Signature::from(0)));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -644,17 +632,13 @@ fn marker_with_history_old_update() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, BoolComponent(false)))
+        .spawn((Replicated, BoolComponent(false), Signature::from(0)))
         .id();
 
-    let client_entity = client_app.world_mut().spawn(HistoryMarker).id();
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    let client_entity = client_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((HistoryMarker, Signature::from(0)))
+        .id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);

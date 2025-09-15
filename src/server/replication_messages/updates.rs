@@ -20,13 +20,11 @@ use crate::{
 /// Can be packed into a message using [`Self::send`].
 #[derive(Default, Component)]
 pub(crate) struct Updates {
-    /// Mappings for client's pre-spawned entities.
+    /// Mappings for new server entities and their hashes calculated from the [`Signature`] component.
     ///
-    /// Serialized as single continuous chunk of entity pairs.
+    /// Serialized as a single continuous chunk of entity–hash pairs.
     ///
     /// Mappings should be processed first, so all referenced entities after it will behave correctly.
-    ///
-    /// See also [`ClientEntityMap`](crate::server::client_entity_map::ClientEntityMap).
     mappings: Range<usize>,
 
     /// Number of pairs encoded in [`Self::mappings`].

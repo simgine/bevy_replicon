@@ -722,6 +722,7 @@ pub mod prelude {
                 command_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
+                signature::Signature,
             },
             replicon_tick::RepliconTick,
         },
@@ -735,8 +736,8 @@ pub mod prelude {
     #[cfg(feature = "server")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, VisibilityPolicy,
-        client_entity_map::ClientEntityMap, client_visibility::ClientVisibility,
-        event::ServerEventPlugin, related_entities::SyncRelatedAppExt,
+        client_visibility::ClientVisibility, event::ServerEventPlugin,
+        related_entities::SyncRelatedAppExt,
     };
 
     #[cfg(feature = "client_diagnostics")]
