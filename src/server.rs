@@ -14,6 +14,8 @@ use bevy::{
         archetype::Archetypes,
         component::{StorageType, Tick},
         entity::{Entities, EntityHashMap},
+        intern::Interned,
+        schedule::ScheduleLabel,
         system::SystemChangeTick,
     },
     prelude::*,
@@ -50,10 +52,30 @@ use server_tick::ServerTick;
 use server_world::ServerWorld;
 
 pub struct ServerPlugin {
-    /// Tick configuration.
+    /// Schedule in which [`ServerTick`] is incremented.
     ///
-    /// By default it's 30 ticks per second.
-    pub tick_policy: TickPolicy,
+    /// By default it's set to [`FixedPostUpdate`].
+    ///
+    /// # Examples
+    ///
+    /// Run every frame.
+    ///
+    /// ```
+    /// use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+    /// use bevy_replicon::prelude::*;
+    ///
+    /// # let mut app = App::new();
+    /// app.add_plugins((
+    ///     MinimalPlugins,
+    ///     StatesPlugin,
+    ///     RepliconPlugins.build().set(ServerPlugin {
+    ///         // `ScheduleLabel` needs to be imported to call `intern`.
+    ///         tick_schedule: PostUpdate.intern(),
+    ///         ..Default::default()
+    ///     }),
+    /// ));
+    /// ```
+    pub tick_schedule: Interned<dyn ScheduleLabel>,
 
     /// Visibility configuration.
     pub visibility_policy: VisibilityPolicy,
@@ -67,7 +89,7 @@ pub struct ServerPlugin {
 impl Default for ServerPlugin {
     fn default() -> Self {
         Self {
-            tick_policy: TickPolicy::MaxTickRate(30),
+            tick_schedule: FixedPostUpdate.intern(),
             visibility_policy: Default::default(),
             mutations_timeout: Duration::from_secs(10),
         }
@@ -92,7 +114,12 @@ impl Plugin for ServerPlugin {
             )
             .configure_sets(
                 PostUpdate,
-                (ServerSet::Send, ServerSet::SendPackets).chain(),
+                (
+                    ServerSet::IncrementTick,
+                    ServerSet::Send,
+                    ServerSet::SendPackets,
+                )
+                    .chain(),
             )
             .add_observer(handle_connects)
             .add_observer(handle_disconnects)
@@ -119,28 +146,13 @@ impl Plugin for ServerPlugin {
                     .run_if(in_state(ServerState::Running)),
             );
 
-        debug!("using tick policy `{:?}`", self.tick_policy);
-        match self.tick_policy {
-            TickPolicy::MaxTickRate(max_tick_rate) => {
-                let tick_time = Duration::from_millis(1000 / max_tick_rate as u64);
-                app.add_systems(
-                    PostUpdate,
-                    increment_tick
-                        .before(send_replication)
-                        .run_if(in_state(ServerState::Running))
-                        .run_if(on_timer(tick_time)),
-                );
-            }
-            TickPolicy::EveryFrame => {
-                app.add_systems(
-                    PostUpdate,
-                    increment_tick
-                        .before(send_replication)
-                        .run_if(in_state(ServerState::Running)),
-                );
-            }
-            TickPolicy::Manual => (),
-        }
+        debug!("using tick schedule `{:?}`", self.tick_schedule);
+        app.add_systems(
+            self.tick_schedule,
+            increment_tick
+                .in_set(ServerSet::IncrementTick)
+                .run_if(in_state(ServerState::Running)),
+        );
 
         debug!("using visibility policy `{:?}`", self.visibility_policy);
         match self.visibility_policy {
@@ -179,7 +191,7 @@ impl Plugin for ServerPlugin {
 }
 
 /// Increments current server tick which causes the server to replicate this frame.
-pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     server_tick.increment();
     trace!("incremented {server_tick:?}");
 }
@@ -809,34 +821,20 @@ pub enum ServerSet {
     ///
     /// Runs in [`OnEnter`] for [`ServerState::Running`].
     ReadRelations,
+    /// System that increments [`ServerTick`].
+    ///
+    /// Runs in [`ServerPlugin::tick_schedule`].
+    IncrementTick,
     /// Systems that write data to [`ServerMessages`].
     ///
-    /// Runs in [`PostUpdate`] on server tick, see [`TickPolicy`].
+    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
     Send,
     /// Systems that send packets to the messaging backend.
     ///
     /// Used by the messaging backend.
     ///
-    /// Runs in [`PostUpdate`] on server tick, see [`TickPolicy`].
+    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
     SendPackets,
-}
-
-/// Controls how often [`RepliconTick`] is incremented on the server.
-///
-/// When [`RepliconTick`] is mutated, the server's replication
-/// system will run. This means the tick policy controls how often server state is replicated.
-///
-/// Note that component mutations are replicated over the unreliable channel, so if a component mutate message is lost
-/// then component mutations won't be resent until the server's replication system runs again.
-#[derive(Debug, Copy, Clone)]
-pub enum TickPolicy {
-    /// The replicon tick is incremented at most max ticks per second. In practice the tick rate may be lower if the
-    /// app's update cycle duration is too long.
-    MaxTickRate(u16),
-    /// The replicon tick is incremented every frame.
-    EveryFrame,
-    /// The user should manually schedule [`increment_tick`] or increment [`RepliconTick`].
-    Manual,
 }
 
 /// Controls how visibility will be managed via [`ClientVisibility`].

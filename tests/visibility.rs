@@ -1,4 +1,4 @@
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     test_app::{ServerTestAppExt, TestClientEntity},
@@ -15,7 +15,7 @@ fn empty_blacklist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Blacklist,
                 ..Default::default()
             }),
@@ -47,7 +47,7 @@ fn blacklist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Blacklist,
                 ..Default::default()
             }),
@@ -104,7 +104,7 @@ fn blacklist_with_despawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Blacklist,
                 ..Default::default()
             }),
@@ -145,7 +145,7 @@ fn empty_whitelist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Whitelist,
                 ..Default::default()
             }),
@@ -179,7 +179,7 @@ fn whitelist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Whitelist,
                 ..Default::default()
             }),
@@ -239,7 +239,7 @@ fn whitelist_with_despawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Whitelist,
                 ..Default::default()
             }),

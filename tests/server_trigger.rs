@@ -1,4 +1,9 @@
-use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
+use bevy::{
+    ecs::{entity::MapEntities, schedule::ScheduleLabel},
+    prelude::*,
+    state::app::StatesPlugin,
+    time::TimePlugin,
+};
 use bevy_replicon::{
     client::ServerUpdateTick, prelude::*, shared::server_entity_map::ServerEntityMap,
     test_app::ServerTestAppExt,
@@ -15,7 +20,7 @@ fn regular() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -48,7 +53,7 @@ fn with_target() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -93,7 +98,7 @@ fn mapped() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
@@ -138,7 +143,7 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .set(ServerPlugin {
-                    tick_policy: TickPolicy::EveryFrame,
+                    tick_schedule: PostUpdate.intern(),
                     ..Default::default()
                 })
                 .disable::<ClientPlugin>()
@@ -181,7 +186,7 @@ fn local_resending() {
         TimePlugin,
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin {
-            tick_policy: TickPolicy::EveryFrame,
+            tick_schedule: PostUpdate.intern(),
             ..Default::default()
         }),
     ))
@@ -212,7 +217,7 @@ fn independent() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_policy: TickPolicy::EveryFrame,
+                tick_schedule: PostUpdate.intern(),
                 ..Default::default()
             }),
         ))
