@@ -39,6 +39,116 @@ pub trait AppRuleExt {
         self.replicate_once_filtered::<C, ()>()
     }
 
+    /// Like [`Self::replicate`], but converts the component into `T` before serialization
+    /// and back into `C` after deserialization.
+    ///
+    /// Useful for customizing how the component is sent over the network.
+    /// In some cases, this is more convenient than passing custom ser/de functions
+    /// with [`Self::replicate_with`], because you only need to implement
+    /// [`From<C>`] for `T` and [`From<T>`] for `C`.
+    ///
+    /// # Examples
+    ///
+    /// Quantize position:
+    ///
+    /// ```
+    /// # use bevy::state::app::StatesPlugin;
+    /// use bevy::{math::I16Vec2, prelude::*};
+    /// use bevy_replicon::prelude::*;
+    /// use serde::{Deserialize, Serialize};
+    ///
+    /// # let mut app = App::new();
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
+    /// app.replicate_as::<Position, QuantizedPosition>();
+    ///
+    /// #[derive(Component, Deref, Clone, Copy)]
+    /// struct Position(Vec2);
+    ///
+    /// /// Quantized representation of [`Position`] sent over the network.
+    /// #[derive(Deref, Serialize, Deserialize)]
+    /// struct QuantizedPosition(I16Vec2);
+    ///
+    /// /// Scale factor for quantizing.
+    /// ///
+    /// /// Each unit in world space is multiplied by this factor before rounding.
+    /// /// With this scale we keep two decimal places of precision (0.01 units).
+    /// /// The representable range is from [`i16::MIN`] to [`i16::MAX`] divided by this value,
+    /// /// which is `-327.68..=327.67` per axis. Values outside this range will overflow,
+    /// /// so world positions should stay within it.
+    /// const SCALE: f32 = 100.0;
+    ///
+    /// impl From<Position> for QuantizedPosition {
+    ///     fn from(position: Position) -> Self {
+    ///         Self((*position * SCALE).round().as_i16vec2())
+    ///     }
+    /// }
+    ///
+    /// impl From<QuantizedPosition> for Position {
+    ///     fn from(position: QuantizedPosition) -> Self {
+    ///         Position(position.as_vec2() / SCALE)
+    ///     }
+    /// }
+    ///
+    /// ```
+    ///
+    /// Ignore scale.
+    ///
+    /// This will overwrite the scale value with the default.
+    /// If you want to preserve it, use [`Self::replicate_with`] to provide
+    /// in-place deserialization.
+    ///
+    /// ```
+    /// # use bevy::state::app::StatesPlugin;
+    /// use bevy::prelude::*;
+    /// use bevy_replicon::prelude::*;
+    /// use serde::{Deserialize, Serialize};
+    ///
+    /// # let mut app = App::new();
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
+    /// app.replicate_as::<Transform, TransformWithoutScale>();
+    ///
+    /// #[derive(Serialize, Deserialize, Clone, Copy)]
+    /// struct TransformWithoutScale {
+    ///     translation: Vec3,
+    ///     rotation: Quat,
+    /// }
+    ///
+    /// impl From<Transform> for TransformWithoutScale {
+    ///     fn from(value: Transform) -> Self {
+    ///         Self {
+    ///             translation: value.translation,
+    ///             rotation: value.rotation,
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// impl From<TransformWithoutScale> for Transform {
+    ///     fn from(value: TransformWithoutScale) -> Self {
+    ///         Self {
+    ///             translation: value.translation,
+    ///             rotation: value.rotation,
+    ///             ..Default::default()
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    fn replicate_as<C, T>(&mut self) -> &mut Self
+    where
+        C: Component<Mutability: MutWrite<C>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_filtered_as::<C, T, ()>()
+    }
+
+    /// Like [`Self::replicate_as`], but uses [`ReplicationMode::Once`].
+    fn replicate_once_as<C, T>(&mut self) -> &mut Self
+    where
+        C: Component<Mutability: MutWrite<C>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_once_filtered_as::<C, T, ()>()
+    }
+
     /// Like [`Self::replicate`], but lets you specify archetype filters an entity must match to replicate.
     ///
     /// Supports [`With`], [`Without`], [`Or`], and tuples of them, similar to the second generic parameter of [`Query`].
@@ -82,6 +192,24 @@ pub trait AppRuleExt {
         self.replicate_with_filtered::<_, F>((RuleFns::<C>::default(), ReplicationMode::Once))
     }
 
+    /// Like [`Self::replicate_as`], but also adds filters like [`Self::replicate_filtered`].
+    fn replicate_filtered_as<C, T, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Component<Mutability: MutWrite<C>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_with_filtered::<_, F>(RuleFns::<C>::new_as::<T>())
+    }
+
+    /// Like [`Self::replicate_filtered_as`], but for [`Self::replicate_once`].
+    fn replicate_once_filtered_as<C, T, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Component<Mutability: MutWrite<C>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_with_filtered::<_, F>((RuleFns::<C>::new_as::<T>(), ReplicationMode::Once))
+    }
+
     /**
     Defines a customizable [`ReplicationRule`].
 
@@ -116,54 +244,57 @@ pub trait AppRuleExt {
 
     # Examples
 
-    Pass [`RuleFns`] to ser/de only specific field:
+    Skip scale serialization.
+
+    Unlike with the example from [`Self::replicate_as`], this
+    will preserve the original scale value on deserialiation.
 
     ```
     # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
     use bevy_replicon::{
         bytes::Bytes,
-        postcard_utils,
-        shared::replication::registry::{
-            ctx::{SerializeCtx, WriteCtx},
-            rule_fns::DeserializeFn,
-        },
         prelude::*,
+        shared::replication::registry::{ctx::WriteCtx, rule_fns::DeserializeFn},
     };
+    use serde::{Deserialize, Serialize};
 
     # let mut app = App::new();
     # app.add_plugins((StatesPlugin, RepliconPlugins));
-    // We override in-place as well to apply only translation when the component is already inserted.
     app.replicate_with(
-        RuleFns::new(serialize_translation, deserialize_translation)
-            .with_in_place(deserialize_transform_in_place),
+        RuleFns::<Transform>::new_as::<TransformWithoutScale>()
+            .with_in_place(deserialize_in_place_without_scale),
     );
 
-    /// Serializes only `translation` from [`Transform`].
-    fn serialize_translation(
-        _ctx: &SerializeCtx,
-        transform: &Transform,
-        message: &mut Vec<u8>,
-    ) -> Result<()> {
-        postcard_utils::to_extend_mut(&transform.translation, message)?;
-        Ok(())
+    #[derive(Serialize, Deserialize, Clone, Copy)]
+    struct TransformWithoutScale {
+        translation: Vec3,
+        rotation: Quat,
     }
 
-    /// Deserializes `translation` and creates [`Transform`] from it.
-    ///
-    /// Called by Replicon on component insertions.
-    fn deserialize_translation(
-        _ctx: &mut WriteCtx,
-        message: &mut Bytes,
-    ) -> Result<Transform> {
-        let translation: Vec3 = postcard_utils::from_buf(message)?;
-        Ok(Transform::from_translation(translation))
+    impl From<Transform> for TransformWithoutScale {
+        fn from(value: Transform) -> Self {
+            Self {
+                translation: value.translation,
+                rotation: value.rotation,
+            }
+        }
     }
 
-    /// Applies the assigned deserialization function and assigns only translation.
+    impl From<TransformWithoutScale> for Transform {
+        fn from(value: TransformWithoutScale) -> Self {
+            Self {
+                translation: value.translation,
+                rotation: value.rotation,
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Applies the assigned deserialization function and assigns only translation and rotation.
     ///
     /// Called by Replicon on component mutations.
-    fn deserialize_transform_in_place(
+    fn deserialize_in_place_without_scale(
         deserialize: DeserializeFn<Transform>,
         ctx: &mut WriteCtx,
         component: &mut Transform,
@@ -171,8 +302,10 @@ pub trait AppRuleExt {
     ) -> Result<()> {
         let transform = (deserialize)(ctx, message)?;
         component.translation = transform.translation;
+        component.rotation = transform.rotation;
         Ok(())
     }
+
     ```
 
     A rule with multiple components:
@@ -673,13 +806,15 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ReplicationRegistry>()
             .replicate::<A>()
-            .replicate_once::<B>();
+            .replicate_once::<B>()
+            .replicate_as::<A, C>()
+            .replicate_once_as::<B, D>();
 
         let rules = app
             .world_mut()
             .remove_resource::<ReplicationRules>()
             .unwrap();
-        let [rule_a, rule_b] = rules.0.try_into().unwrap();
+        let [rule_a, rule_b, rule_a_as_b, rule_b_as_d] = rules.0.try_into().unwrap();
         assert_eq!(rule_a.priority, 1);
         assert_eq!(rule_b.priority, 1);
 
@@ -694,6 +829,12 @@ mod tests {
 
         assert!(!rule_b.matches(a));
         assert!(rule_b.matches(b));
+
+        assert!(rule_a_as_b.matches(a));
+        assert!(!rule_a_as_b.matches(b));
+
+        assert!(!rule_b_as_d.matches(a));
+        assert!(rule_b_as_d.matches(b));
     }
 
     #[test]
@@ -911,15 +1052,39 @@ mod tests {
         assert!(!rule_ab_c.matches(cda));
     }
 
-    #[derive(Serialize, Deserialize, Component)]
+    #[derive(Component, Serialize, Deserialize, Clone, Copy)]
     struct A;
 
-    #[derive(Serialize, Deserialize, Component)]
+    #[derive(Component, Serialize, Deserialize, Clone, Copy)]
     struct B;
 
-    #[derive(Serialize, Deserialize, Component)]
+    #[derive(Component, Serialize, Deserialize)]
     struct C;
 
-    #[derive(Serialize, Deserialize, Component)]
+    impl From<C> for A {
+        fn from(_value: C) -> Self {
+            A
+        }
+    }
+
+    impl From<A> for C {
+        fn from(_value: A) -> Self {
+            C
+        }
+    }
+
+    #[derive(Component, Serialize, Deserialize)]
     struct D;
+
+    impl From<D> for B {
+        fn from(_value: D) -> Self {
+            B
+        }
+    }
+
+    impl From<B> for D {
+        fn from(_value: B) -> Self {
+            D
+        }
+    }
 }

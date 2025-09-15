@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `compact_entity` with functions for `serde` to pack `Entity` more efficienly.
 - `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` helpers that use `compact_entity`.
 - `AppRuleExt::replicate_bundle_with` to customize the priority of the bundle.
+- `AppRuleExt::replicate_as*` functions to convert the component into a different struct before serialization and after deserialiation.
 
 ### Changed
 
