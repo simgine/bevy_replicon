@@ -34,7 +34,7 @@ use crate::prelude::*;
 #[component(immutable, on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
     /// User-defined initial state for the hash.
-    bash_hash: Option<u64>,
+    base_hash: Option<u64>,
 
     /// Functions to calculate hash from components.
     fns: &'static [HashFn],
@@ -46,7 +46,7 @@ impl Signature {
     #[must_use]
     pub fn of_single<C: Component + Hash>() -> Self {
         Self {
-            bash_hash: None,
+            base_hash: None,
             fns: &[hash::<C>],
             client: None,
         }
@@ -55,7 +55,7 @@ impl Signature {
     #[must_use]
     pub fn of<S: SignatureComponents>() -> Self {
         Self {
-            bash_hash: None,
+            base_hash: None,
             fns: S::HASH_FNS,
             client: None,
         }
@@ -66,7 +66,7 @@ impl Signature {
         let mut hasher = FnvHasher::default();
         value.hash(&mut hasher);
 
-        self.bash_hash = Some(hasher.finish());
+        self.base_hash = Some(hasher.finish());
         self
     }
 
@@ -79,7 +79,7 @@ impl Signature {
     #[must_use]
     fn hash<'w>(&self, entity: impl Into<EntityRef<'w>>) -> u64 {
         let mut hasher = self
-            .bash_hash
+            .base_hash
             .map(|hash| FnvHasher::with_key(hash))
             .unwrap_or_default();
 
@@ -98,7 +98,7 @@ impl<T: Hash> From<T> for Signature {
         value.hash(&mut hasher);
 
         Self {
-            bash_hash: Some(hasher.finish()),
+            base_hash: Some(hasher.finish()),
             fns: &[],
             client: None,
         }
