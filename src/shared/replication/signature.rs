@@ -215,10 +215,7 @@ impl Signature {
 
     #[must_use]
     fn hash<'w>(&self, entity: impl Into<EntityRef<'w>>) -> u64 {
-        let mut hasher = self
-            .base_hash
-            .map(|hash| FnvHasher::with_key(hash))
-            .unwrap_or_default();
+        let mut hasher = self.base_hash.map(FnvHasher::with_key).unwrap_or_default();
 
         let entity = entity.into();
         for hash_fn in self.fns {
