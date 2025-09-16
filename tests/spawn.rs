@@ -310,7 +310,7 @@ fn client_signature() {
     let client_entity2 = client_app2.world_mut().spawn(Signature::from(0)).id();
     server_app
         .world_mut()
-        .spawn((Replicated, A, Signature::from(0).with_client(client1)));
+        .spawn((Replicated, A, Signature::from(0).for_client(client1)));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app1);

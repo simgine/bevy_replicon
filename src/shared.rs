@@ -25,10 +25,9 @@ pub struct RepliconSharedPlugin {
 
     # Examples
 
-    Custom authorization to send chess square entities. The board is deterministically spawned
-    on both client and server, and we wire their IDs to receive replication without sending the
-    entire board data through the network. We re-use [`ProtocolMismatch`] that is registered
-    only with [`AuthMethod::ProtocolCheck`], but it could be any event.
+    Custom authorization to set a player name before starting replication.
+    We re-use [`ProtocolMismatch`], which is registered only with
+    [`AuthMethod::ProtocolCheck`], but it could be any event.
 
     ```
     use bevy::{prelude::*, state::app::StatesPlugin};
@@ -45,24 +44,18 @@ pub struct RepliconSharedPlugin {
     ))
     .add_client_trigger::<ClientInfo>(Channel::Ordered)
     .add_server_trigger::<ProtocolMismatch>(Channel::Unreliable)
-    .make_trigger_independent::<ProtocolMismatch>() // Let client receive it without replication.
+    .make_trigger_independent::<ProtocolMismatch>() // Let the client receive it without replication.
     .add_observer(start_game)
     .add_systems(OnEnter(ClientState::Connected), send_info);
 
     fn send_info(
         mut commands: Commands,
         protocol: Res<ProtocolHash>,
-        squares: Query<(Entity, &Square)>,
     ) {
-        // Sort deterministically to enable matching them on the server.
-        let mut squares: Vec<_> = squares.iter().collect();
-        squares.sort_by(|(_, a), (_, b)| (a.x, a.y).cmp(&(b.x, b.y)));
-
-        let info = ClientInfo {
+        commands.client_trigger(ClientInfo {
             protocol: *protocol,
-            squares: squares.into_iter().map(|(entity, _)| entity).collect(),
-        };
-        commands.client_trigger(info);
+            player_name: "Shatur".to_string(), // Could be read from console or UI.
+        });
     }
 
     fn start_game(
@@ -70,18 +63,17 @@ pub struct RepliconSharedPlugin {
         mut commands: Commands,
         mut events: EventWriter<DisconnectRequest>,
         protocol: Res<ProtocolHash>,
-        squares: Query<(Entity, &Square)>,
     ) {
         let client = trigger
             .client_id
             .entity()
             .expect("protocol hash sent only from clients");
 
-        // Since we using custom authorization,
+        // Since we are using custom authorization,
         // we need to verify the protocol manually.
         if trigger.protocol != *protocol {
-            // Notify client about the problem. No delivery
-            // guarantee since we disconnect after sending.
+            // Notify the client about the problem. No delivery
+            // guarantee, since we disconnect after sending.
             commands.server_trigger(ToClients {
                 mode: SendMode::Direct(trigger.client_id),
                 event: ProtocolMismatch,
@@ -89,40 +81,17 @@ pub struct RepliconSharedPlugin {
             events.write(DisconnectRequest { client });
         }
 
-        // Sort local square entities to match them with the received.
-        let mut squares: Vec<_> = squares.iter().collect();
-        squares.sort_by(|(_, a), (_, b)| (a.x, a.y).cmp(&(b.x, b.y)));
+        // Validate player name, run the necessary game logic...
 
-        // This map is a required component for `AuthorizedClient`.
-        // By default it's empty, but we can initialize it with the
-        // received entities.
-        let mut entity_map = ClientEntityMap::default();
-        for (&server_entity, &client_entity) in squares
-            .iter()
-            .map(|(entity, _)| entity)
-            .zip(&trigger.squares)
-        {
-            entity_map.insert(server_entity, client_entity);
-        }
-
-        // Manually mark client as authorized and insert mappings.
-        commands.entity(client).insert((AuthorizedClient, entity_map));
-
-        // Run other commands to start the game...
+        // Manually mark the client as authorized.
+        commands.entity(client).insert(AuthorizedClient);
     }
 
-    /// A client trigger with protocol information and client's chess board entities.
+    /// A client trigger for custom authorization.
     #[derive(Event, Serialize, Deserialize)]
     struct ClientInfo {
         protocol: ProtocolHash,
-        squares: Vec<Entity>,
-    }
-
-    /// A chessboard square.
-    #[derive(Component, Serialize, Deserialize)]
-    struct Square {
-        x: u8,
-        y: u8,
+        player_name: String,
     }
     ```
     **/

@@ -9,28 +9,151 @@ use bevy::{
     prelude::*,
 };
 use fnv::FnvHasher;
-use log::error;
+use log::{debug, error};
 
 use crate::prelude::*;
 
-/// Describes how to calculate a deterministic hash that identifies the entity.
+/**
+Describes how to calculate a deterministic hash that identifies an entity.
+
+When the client receives replication, it maps server entities to its own entities
+using [`ServerEntityMap`](crate::shared::server_entity_map::ServerEntityMap).
+If there is no mapping, it spawns a new entity and creates a new mapping to it.
+
+To re-use a previously spawned entity on the client, insert this component on both
+server and client. On insertion it will calculate a hash and on replication client
+will try to match. If the hash matches, the replication will continue to previously
+spawned entity.
+
+The hash can be calculated from components on the entity, a user-defined struct, or both.
+The user needs to use something that is unique for each entity, but identical for the
+same entity on both client and server.
+
+Signatures can also be relevant only to a specific client. In this case, the signature
+will be sent only to that client.
+
+# Examples
+
+Chess board deterministically spawned on both client and server without sending
+the entire board data through the network:
+
+```
+# use bevy::state::app::StatesPlugin;
+use bevy::{color::palettes::css::{BLACK, WHITE}, prelude::*};
+use bevy_replicon::prelude::*;
+use serde::{Deserialize, Serialize};
+
+# let mut app = App::new();
+# app.add_plugins((StatesPlugin, RepliconPlugins));
+app.replicate::<Square>()
+    .add_systems(Startup, spawn_chessboard);
+
+// Spawn chessboard as usual, no network-related code.
+fn spawn_chessboard(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    const SQUARES_PER_SIDE: u8 = 8;
+    const SQUARE_SIZE: f32 = 64.0;
+
+    let square = meshes.add(Rectangle::new(SQUARE_SIZE, SQUARE_SIZE));
+    let black = materials.add(Color::from(BLACK));
+    let white = materials.add(Color::from(WHITE));
+
+    let board_size = SQUARE_SIZE * SQUARES_PER_SIDE as f32;
+    let origin = -board_size / 2.0 + SQUARE_SIZE / 2.0;
+
+    for file in 0..SQUARES_PER_SIDE {
+        for rank in 0..SQUARES_PER_SIDE {
+            let x = origin + (file as f32) * SQUARE_SIZE;
+            let y = origin + (rank as f32) * SQUARE_SIZE;
+
+            let is_light = (file + rank) % 2 == 0;
+            let material = if is_light {
+                white.clone()
+            } else {
+                black.clone()
+            };
+
+            commands.spawn((
+                MeshMaterial2d(material.clone()),
+                Mesh2d(square.clone()),
+                Transform::from_xyz(x, y, 0.0),
+                Square { file, rank },
+            ));
+        }
+    }
+}
+
+/// Square location on the chessboard.
 ///
-/// When client receives replication it maps server entities to its own entities
-/// using [`ServerEntityMap`](crate::shared::server_entity_map::ServerEntityMap).
-/// If there is no mapping, it spawns a new entity and creates a new mapping to it.
+/// We want to replicate all squares, so we set [`Replicated`] as a required component.
+/// We also want entities with this component to be automatically mapped between
+/// client and server, so we require the [`Signature`] component, which generates a hash
+/// based on [`Square`]. Each entity will be spawned with a different value, making the hash
+/// unique. Since spawning on the server is identical, the server will generate the same hashes
+/// for the same squares, and the client will match them to the corresponding local squares.
+#[derive(Component, Serialize, Deserialize, Hash)]
+#[require(
+    Replicated,
+    Signature::of::<Square>(),
+)]
+struct Square {
+    /// Column, a..h.
+    file: u8,
+    /// Row, 1..8.
+    rank: u8,
+}
+```
+
+Predicting a bullet on the client.
+
+```
+# use bevy::state::app::StatesPlugin;
+use bevy::{input::common_conditions::*, prelude::*};
+use bevy_replicon::prelude::*;
+use serde::{Deserialize, Serialize};
+
+# let mut app = App::new();
+# app.add_plugins((StatesPlugin, RepliconPlugins));
+app.replicate::<Bullet>()
+    .add_client_trigger::<SpawnBullet>(Channel::Ordered)
+    .add_observer(confirm_bullet)
+    .add_systems(
+        FixedUpdate,
+        shoot_bullet
+            .run_if(input_just_pressed(MouseButton::Left))
+            .run_if(in_state(ClientState::Connected)),
+    );
+
+/// System that shoots a bullet and spawns it on the client.
+fn shoot_bullet(mut commands: Commands) {
+    commands.spawn((Bullet, Signature::of::<Bullet>()));
+    commands.trigger(SpawnBullet);
+}
+
+/// Validation to check if client is not cheating or the simulation is correct.
 ///
-/// However, sometimes it's needed to spawn something on the client first without
-/// waiting for replication from the server. Without this component the client will
-/// end up with 2 entities: locally spawned and replicated from the server.
-///
-/// This component inserted on both client and server allows to match client-spawned
-/// entities with replicated from the server by comparing their hashes.
-///
-/// This also useful to synrhconizing scenes. Both client and server could load a level
-/// independently and then match level entities to synchronize certain things, such as
-/// opened doors.
-///
-///
+/// Depending on the type of game you may want to correct the client or disconnect it.
+/// In this example we just always confirm the spawn.
+fn confirm_bullet(
+    trigger: Trigger<FromClient<SpawnBullet>>,
+    mut commands: Commands,
+) {
+    if let ClientId::Client(client) = trigger.client_id {
+        // You can insert more components, they will be replicated to the client's entity.
+        commands.spawn((Bullet, Signature::of::<Bullet>().for_client(client)));
+    }
+}
+
+#[derive(Event, Serialize, Deserialize)]
+struct SpawnBullet;
+
+#[derive(Component, Serialize, Deserialize, Hash)]
+struct Bullet;
+```
+*/
 #[derive(Component)]
 #[component(immutable, on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
@@ -40,21 +163,23 @@ pub struct Signature {
     /// Functions to calculate hash from components.
     fns: &'static [HashFn],
 
+    /// Relevant client.
     client: Option<Entity>,
 }
 
 impl Signature {
+    /// Creates a new instance that hashes the specified component and its type name.
     #[must_use]
-    pub fn of_single<C: Component + Hash>() -> Self {
+    pub fn of<C: Component + Hash>() -> Self {
         Self {
             base_hash: None,
             fns: &[hash::<C>],
             client: None,
         }
     }
-
+    /// Creates a new instance that hashes the specified set of components and their type names.
     #[must_use]
-    pub fn of<S: SignatureComponents>() -> Self {
+    pub fn of_many<S: SignatureComponents>() -> Self {
         Self {
             base_hash: None,
             fns: S::HASH_FNS,
@@ -62,6 +187,14 @@ impl Signature {
         }
     }
 
+    /// Sets the base hash by hashing the given value.
+    ///
+    /// The resulting hash will be used as the initial state before
+    /// component data is hashed. This allows entities with
+    /// identical components to be distinguished.
+    ///
+    /// You can also use [`Self::from`] to create a signature
+    /// that doesn't hash any components.
     #[must_use]
     pub fn with_base<T: Hash>(mut self, value: T) -> Self {
         let mut hasher = FnvHasher::default();
@@ -71,8 +204,11 @@ impl Signature {
         self
     }
 
+    /// Associates the signature with a specific client.
+    ///
+    /// Such a signature will be sent only to that client.
     #[must_use]
-    pub fn with_client(mut self, client: Entity) -> Self {
+    pub fn for_client(mut self, client: Entity) -> Self {
         self.client = Some(client);
         self
     }
@@ -94,6 +230,11 @@ impl Signature {
 }
 
 impl<T: Hash> From<T> for Signature {
+    /// Creates a new instance with only the base hash,
+    /// that won't additionally hash any components.
+    ///
+    /// It's usually better to use components because their names
+    /// are also hashed.
     fn from(value: T) -> Self {
         let mut hasher = FnvHasher::default();
         value.hash(&mut hasher);
@@ -113,11 +254,16 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
 
     if let Some(client) = signature.client {
         if let Some(mut pending) = world.get_mut::<MappingsBuffer>(client) {
+            debug!(
+                "calculated hash 0x{hash:016x} for `{}` for client `{client}`",
+                ctx.entity
+            );
             pending.push((ctx.entity, hash));
         } else {
-            error!("trying to add a signature for a non-authorized client `{client}`");
+            error!("ignoring hash from a signature for a non-authorized client `{client}`");
         }
     } else {
+        debug!("calculated hash 0x{hash:016x} for `{}`", ctx.entity);
         if *world.resource::<State<ServerState>>() == ServerState::Running {
             let mut pending = world.resource_mut::<MappingsBuffer>();
             pending.push((ctx.entity, hash));
@@ -136,15 +282,18 @@ fn unregister_hash(mut world: DeferredWorld, ctx: HookContext) {
 /// Server entities and their associated hashes from the [`Signature`] component,
 /// calculated during this tick.
 ///
-/// When used as a component on a client entity, it is specific to that client.
-/// When used as a resource, it is global to all clients.
+/// When used as a component on a client entity, it stores new mappings specific to that client.
+/// When used as a resource, it stores new mappings relevant to all clients.
 #[derive(Resource, Component, Deref, DerefMut, Debug, Default)]
 pub(crate) struct MappingsBuffer(pub(super) Vec<(Entity, u64)>);
 
 /// Stores hashes calculated from the [`Signature`] component and maps them
 /// to their entities in both directions.
 ///
-/// Contains hashes only for global signatures.
+/// On the client it's used to map received hashes from server to client's entities.
+///
+/// On the server it's used to send hashes to newly connected clients. It
+/// doesn't contain hashes specific to a client.
 ///
 /// Automatically updated via hooks.
 #[derive(Resource, Default)]
@@ -229,7 +378,7 @@ mod tests {
         let entity3 = world.spawn(C(false)).id();
         let entity4 = world.spawn(A).id();
 
-        let signature = Signature::of_single::<C>();
+        let signature = Signature::of::<C>();
         let hash1 = signature.hash(world.entity(entity1));
         let hash2 = signature.hash(world.entity(entity2));
         let hash3 = signature.hash(world.entity(entity3));
@@ -248,7 +397,7 @@ mod tests {
         let entity3 = world.spawn((A, C(false))).id();
         let entity4 = world.spawn(A).id();
 
-        let signature = Signature::of::<(A, C)>();
+        let signature = Signature::of_many::<(A, C)>();
         let hash1 = signature.hash(world.entity(entity1));
         let hash2 = signature.hash(world.entity(entity2));
         let hash3 = signature.hash(world.entity(entity3));
@@ -267,8 +416,8 @@ mod tests {
         let entity1 = world.spawn((A, B)).id();
         let entity2 = world.spawn((A, B)).id();
 
-        let signature = Signature::of::<(A, B)>();
-        let signature_42 = Signature::of::<(A, B)>().with_base(42);
+        let signature = Signature::of_many::<(A, B)>();
+        let signature_42 = Signature::of_many::<(A, B)>().with_base(42);
 
         let hash1 = signature.hash(world.entity(entity1));
         let hash2 = signature.hash(world.entity(entity2));
@@ -286,8 +435,8 @@ mod tests {
 
         let entity = world.spawn((A, B)).id();
 
-        let signature_a = Signature::of_single::<A>();
-        let signature_b = Signature::of_single::<B>();
+        let signature_a = Signature::of::<A>();
+        let signature_b = Signature::of::<B>();
 
         let hash_a = signature_a.hash(world.entity(entity));
         let hash_b = signature_b.hash(world.entity(entity));
