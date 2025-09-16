@@ -104,14 +104,7 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let client = ExampleClient::new((ip, port))?;
             commands.insert_resource(client);
 
-            // Assign a signature based on `ClientPlayer` component presence.
-            // When the server spawns an entity with the same signature, it
-            // will be mapped to this entity.
-            commands.spawn((
-                LocalPlayer,
-                ClientPlayer,
-                Signature::of_single::<ClientPlayer>(),
-            ));
+            commands.spawn((LocalPlayer, ClientPlayer));
         }
     }
 
@@ -183,11 +176,7 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
                     },
                     Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<_>| {
                         for index in 0..GRID_SIZE * GRID_SIZE {
-                            // Give each cell entity a signature to map them
-                            // automatically between server and client.
-                            parent
-                                .spawn((Cell { index }, Signature::of_single::<Cell>()))
-                                .observe(pick_cell);
+                            parent.spawn(Cell { index }).observe(pick_cell);
                         }
                     }))
                 ),
@@ -560,12 +549,15 @@ struct BottomText;
 
 /// Cell location on the grid.
 ///
-/// We want to replicate all cells, so we just set [`Replicated`] as a required component.
+/// We want to replicate all cells, so we set [`Replicated`] as a required component.
+/// We also want entities with this component to be automatically mapped between
+/// client and server, so we also require the [`Signature`] component.
 #[derive(Component, Hash)]
 #[require(
     Button,
     Replicated,
     BackgroundColor(BACKGROUND_COLOR),
+    Signature::of_single::<Cell>(),
     Node {
         width: Val::Px(BUTTON_SIZE),
         height: Val::Px(BUTTON_SIZE),
@@ -588,9 +580,10 @@ struct LocalPlayer;
 /// Player that is also a client.
 ///
 /// Used to spawn an entity with [`LocalPlayer`] on the client
-/// and automatically map it to the player entity on the server.
+/// and automatically map it to the player entity on the server
+/// with the [`Signature`] component.
 #[derive(Component, Hash)]
-#[require(Replicated)]
+#[require(Replicated, Signature::of_single::<ClientPlayer>())]
 struct ClientPlayer;
 
 /// A trigger that indicates a symbol pick.
