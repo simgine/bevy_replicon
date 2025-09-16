@@ -191,7 +191,7 @@ fn before_connection() {
 }
 
 #[test]
-fn global_signature() {
+fn signature() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -249,7 +249,7 @@ fn global_signature() {
 }
 
 #[test]
-fn global_signature_before_connection() {
+fn signature_before_connection() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -284,7 +284,7 @@ fn global_signature_before_connection() {
 }
 
 #[test]
-fn client_signature() {
+fn signature_for_client() {
     let mut server_app = App::new();
     let mut client_app1 = App::new();
     let mut client_app2 = App::new();
