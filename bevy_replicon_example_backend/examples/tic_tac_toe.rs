@@ -314,7 +314,7 @@ fn init_client(
     // Utilize client entity as a player for convenient lookups by `client`.
     commands.entity(trigger.target()).insert((
         ClientPlayer,
-        Signature::of_single::<ClientPlayer>(),
+        Signature::of::<ClientPlayer>(),
         server_symbol.next(),
     ));
 
@@ -557,7 +557,7 @@ struct BottomText;
     Button,
     Replicated,
     BackgroundColor(BACKGROUND_COLOR),
-    Signature::of_single::<Cell>(),
+    Signature::of::<Cell>(),
     Node {
         width: Val::Px(BUTTON_SIZE),
         height: Val::Px(BUTTON_SIZE),
@@ -583,7 +583,7 @@ struct LocalPlayer;
 /// and automatically map it to the player entity on the server
 /// with the [`Signature`] component.
 #[derive(Component, Hash)]
-#[require(Replicated, Signature::of_single::<ClientPlayer>())]
+#[require(Replicated, Signature::of::<ClientPlayer>())]
 struct ClientPlayer;
 
 /// A trigger that indicates a symbol pick.
