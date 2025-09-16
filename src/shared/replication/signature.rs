@@ -9,6 +9,7 @@ use bevy::{
     prelude::*,
 };
 use fnv::FnvHasher;
+use log::error;
 
 use crate::prelude::*;
 
