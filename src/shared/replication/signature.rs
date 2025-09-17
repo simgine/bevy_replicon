@@ -179,7 +179,7 @@ impl Signature {
     }
     /// Creates a new instance that hashes the specified set of components and their type names.
     #[must_use]
-    pub fn of_many<S: SignatureComponents>() -> Self {
+    pub fn of_n<S: SignatureComponents>() -> Self {
         Self {
             base_hash: None,
             fns: S::HASH_FNS,
@@ -394,7 +394,7 @@ mod tests {
         let entity3 = world.spawn((A, C(false))).id();
         let entity4 = world.spawn(A).id();
 
-        let signature = Signature::of_many::<(A, C)>();
+        let signature = Signature::of_n::<(A, C)>();
         let hash1 = signature.hash(world.entity(entity1));
         let hash2 = signature.hash(world.entity(entity2));
         let hash3 = signature.hash(world.entity(entity3));
@@ -413,8 +413,8 @@ mod tests {
         let entity1 = world.spawn((A, B)).id();
         let entity2 = world.spawn((A, B)).id();
 
-        let signature = Signature::of_many::<(A, B)>();
-        let signature_42 = Signature::of_many::<(A, B)>().with_base(42);
+        let signature = Signature::of_n::<(A, B)>();
+        let signature_42 = Signature::of_n::<(A, B)>().with_base(42);
 
         let hash1 = signature.hash(world.entity(entity1));
         let hash2 = signature.hash(world.entity(entity2));
