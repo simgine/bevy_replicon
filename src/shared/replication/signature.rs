@@ -154,7 +154,7 @@ struct SpawnBullet;
 struct Bullet;
 ```
 */
-#[derive(Component)]
+#[derive(Component, Debug, Clone, Copy)]
 #[component(immutable, on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
     /// User-defined initial state for the hash.
