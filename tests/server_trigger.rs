@@ -1,9 +1,4 @@
-use bevy::{
-    ecs::{entity::MapEntities, schedule::ScheduleLabel},
-    prelude::*,
-    state::app::StatesPlugin,
-    time::TimePlugin,
-};
+use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     client::ServerUpdateTick, prelude::*, shared::server_entity_map::ServerEntityMap,
     test_app::ServerTestAppExt,
@@ -19,10 +14,7 @@ fn regular() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_trigger::<TestEvent>(Channel::Ordered)
         .finish();
@@ -52,10 +44,7 @@ fn with_target() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_trigger::<TestEvent>(Channel::Ordered)
         .finish();
@@ -97,10 +86,7 @@ fn mapped() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_mapped_server_trigger::<EntityEvent>(Channel::Ordered)
         .finish();
@@ -142,10 +128,7 @@ fn without_plugins() {
             StatesPlugin,
             RepliconPlugins
                 .build()
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                })
+                .set(ServerPlugin::new(PostUpdate))
                 .disable::<ClientPlugin>()
                 .disable::<ClientEventPlugin>(),
         ))
@@ -185,10 +168,7 @@ fn local_resending() {
     app.add_plugins((
         TimePlugin,
         StatesPlugin,
-        RepliconPlugins.set(ServerPlugin {
-            tick_schedule: PostUpdate.intern(),
-            ..Default::default()
-        }),
+        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .add_server_trigger::<TestEvent>(Channel::Ordered)
     .finish();
@@ -216,10 +196,7 @@ fn independent() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_trigger::<TestEvent>(Channel::Ordered)
         .add_server_trigger::<IndependentEvent>(Channel::Ordered)

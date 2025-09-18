@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::{entity::MapEntities, event::Events, schedule::ScheduleLabel},
+    ecs::{entity::MapEntities, event::Events},
     prelude::*,
     state::app::StatesPlugin,
     time::TimePlugin,
@@ -20,10 +20,7 @@ fn channels() {
     app.add_plugins((
         MinimalPlugins,
         StatesPlugin,
-        RepliconPlugins.set(ServerPlugin {
-            tick_schedule: PostUpdate.intern(),
-            ..Default::default()
-        }),
+        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .add_event::<NonRemoteEvent>()
     .add_client_event::<TestEvent>(Channel::Ordered)
@@ -66,10 +63,7 @@ fn mapped() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_mapped_client_event::<EntityEvent>(Channel::Ordered)
         .finish();

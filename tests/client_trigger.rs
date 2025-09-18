@@ -1,9 +1,4 @@
-use bevy::{
-    ecs::{entity::MapEntities, schedule::ScheduleLabel},
-    prelude::*,
-    state::app::StatesPlugin,
-    time::TimePlugin,
-};
+use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     prelude::*, shared::server_entity_map::ServerEntityMap, test_app::ServerTestAppExt,
 };
@@ -41,10 +36,7 @@ fn with_target() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_client_trigger::<TestEvent>(Channel::Ordered)
         .finish();
@@ -86,10 +78,7 @@ fn mapped() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_mapped_client_trigger::<EntityEvent>(Channel::Ordered)
         .finish();

@@ -1,6 +1,6 @@
 use test_log::test;
 
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     test_app::{ServerTestAppExt, TestClientEntity},
@@ -15,10 +15,7 @@ fn regular() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
@@ -75,10 +72,7 @@ fn with_miss() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
