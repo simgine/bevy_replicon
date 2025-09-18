@@ -55,6 +55,8 @@ pub struct ServerPlugin {
     ///
     /// By default it's set to [`FixedPostUpdate`].
     ///
+    /// You can also use [`Self::new`].
+    ///
     /// # Examples
     ///
     /// Run every frame.
@@ -85,13 +87,20 @@ pub struct ServerPlugin {
     pub mutations_timeout: Duration,
 }
 
-impl Default for ServerPlugin {
-    fn default() -> Self {
+impl ServerPlugin {
+    /// Creates a plugin with the given [`Self::tick_schedule`].
+    pub fn new(tick_schedule: impl ScheduleLabel) -> Self {
         Self {
-            tick_schedule: FixedPostUpdate.intern(),
+            tick_schedule: tick_schedule.intern(),
             visibility_policy: Default::default(),
             mutations_timeout: Duration::from_secs(10),
         }
+    }
+}
+
+impl Default for ServerPlugin {
+    fn default() -> Self {
+        Self::new(FixedPostUpdate)
     }
 }
 

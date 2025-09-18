@@ -1,7 +1,7 @@
 use core::time::Duration;
 use test_log::test;
 
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::{
         ServerUpdateTick,
@@ -30,10 +30,7 @@ fn small_component() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
@@ -78,10 +75,7 @@ fn package_size_component() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<VecComponent>()
         .finish();
@@ -132,10 +126,7 @@ fn many_components() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .replicate::<VecComponent>()
@@ -189,10 +180,7 @@ fn once() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate_once::<BoolComponent>()
         .finish();
@@ -237,10 +225,7 @@ fn filtered() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate_filtered::<BoolComponent, Without<TestComponent>>()
         .finish();
@@ -297,10 +282,7 @@ fn related() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .sync_related_entities::<ChildOf>()
         .replicate::<BoolComponent>()
@@ -344,10 +326,7 @@ fn command_fns() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<OriginalComponent>()
         .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>)
@@ -394,10 +373,7 @@ fn marker() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker::<ReplaceMarker>()
         .replicate::<OriginalComponent>()
@@ -451,10 +427,7 @@ fn marker_with_history() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker_with::<HistoryMarker>(MarkerConfig {
             need_history: true,
@@ -524,10 +497,7 @@ fn marker_with_history_consume() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker_with::<HistoryMarker>(MarkerConfig {
             need_history: true,
@@ -611,10 +581,7 @@ fn marker_with_history_old_update() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker_with::<HistoryMarker>(MarkerConfig {
             need_history: true,
@@ -685,10 +652,7 @@ fn many_entities() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
@@ -739,10 +703,7 @@ fn with_insertion() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .replicate::<TestComponent>()
@@ -785,10 +746,7 @@ fn with_removal() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .replicate::<TestComponent>()
@@ -831,10 +789,7 @@ fn with_despawn() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
@@ -881,10 +836,7 @@ fn buffering() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
@@ -940,10 +892,7 @@ fn old_ignored() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<MappedComponent>()
         .finish();
@@ -1009,9 +958,8 @@ fn acknowledgment() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 mutations_timeout: Duration::ZERO, // Will cause dropping updates after each frame.
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<BoolComponent>()
@@ -1087,10 +1035,7 @@ fn confirm_history() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
@@ -1154,10 +1099,7 @@ fn after_disconnect() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
         .finish();
