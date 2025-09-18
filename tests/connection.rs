@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     server::server_tick::ServerTick,
@@ -43,10 +43,7 @@ fn server_start_stop() {
                 .set(RepliconSharedPlugin {
                     auth_method: AuthMethod::Custom,
                 })
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                }),
+                .set(ServerPlugin::new(PostUpdate)),
         ))
         .finish();
     }

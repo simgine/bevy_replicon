@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::{entity::MapEntities, event::Events, schedule::ScheduleLabel},
+    ecs::{entity::MapEntities, event::Events},
     prelude::*,
     state::app::StatesPlugin,
     time::TimePlugin,
@@ -22,10 +22,7 @@ fn channels() {
     app.add_plugins((
         MinimalPlugins,
         StatesPlugin,
-        RepliconPlugins.set(ServerPlugin {
-            tick_schedule: PostUpdate.intern(),
-            ..Default::default()
-        }),
+        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .add_event::<NonRemoteEvent>()
     .add_server_event::<TestEvent>(Channel::Ordered)
@@ -44,10 +41,7 @@ fn regular() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();
@@ -90,10 +84,7 @@ fn mapped() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_mapped_server_event::<EntityEvent>(Channel::Ordered)
         .finish();
@@ -138,10 +129,7 @@ fn without_plugins() {
             StatesPlugin,
             RepliconPlugins
                 .build()
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                })
+                .set(ServerPlugin::new(PostUpdate))
                 .disable::<ClientPlugin>()
                 .disable::<ClientEventPlugin>(),
         ))
@@ -194,10 +182,7 @@ fn local_resending() {
     app.add_plugins((
         TimePlugin,
         StatesPlugin,
-        RepliconPlugins.set(ServerPlugin {
-            tick_schedule: PostUpdate.intern(),
-            ..Default::default()
-        }),
+        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .add_server_event::<TestEvent>(Channel::Ordered)
     .finish();
@@ -277,10 +262,7 @@ fn client_queue() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();
@@ -328,10 +310,7 @@ fn client_queue_and_mapping() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_mapped_server_event::<EntityEvent>(Channel::Ordered)
         .finish();
@@ -392,10 +371,7 @@ fn multiple_client_queues() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
         .add_server_event::<EntityEvent>(Channel::Ordered) // Use as a regular event with a different serialization size.
@@ -455,10 +431,7 @@ fn independent() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
         .add_server_event::<IndependentEvent>(Channel::Ordered)
@@ -528,10 +501,7 @@ fn before_started_replication() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                })
+                .set(ServerPlugin::new(PostUpdate))
                 .set(RepliconSharedPlugin {
                     auth_method: AuthMethod::Custom,
                 }),
@@ -572,10 +542,7 @@ fn independent_before_started_replication() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                })
+                .set(ServerPlugin::new(PostUpdate))
                 .set(RepliconSharedPlugin {
                     auth_method: AuthMethod::Custom,
                 }),
@@ -621,10 +588,7 @@ fn different_ticks() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();

@@ -1,4 +1,4 @@
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
     test_app::{ServerTestAppExt, TestClientEntity},
@@ -15,9 +15,8 @@ fn empty_blacklist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Blacklist,
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<TestComponent>()
@@ -47,9 +46,8 @@ fn blacklist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Blacklist,
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<TestComponent>()
@@ -104,9 +102,8 @@ fn blacklist_with_despawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Blacklist,
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<TestComponent>()
@@ -145,9 +142,8 @@ fn empty_whitelist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Whitelist,
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<TestComponent>()
@@ -179,9 +175,8 @@ fn whitelist() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Whitelist,
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<TestComponent>()
@@ -239,9 +234,8 @@ fn whitelist_with_despawn() {
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
                 visibility_policy: VisibilityPolicy::Whitelist,
-                ..Default::default()
+                ..ServerPlugin::new(PostUpdate)
             }),
         ))
         .replicate::<TestComponent>()
@@ -279,10 +273,7 @@ fn signature() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<TestComponent>()
         .finish();

@@ -1,6 +1,6 @@
 use std::{io, net::Ipv4Addr};
 
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use serde::{Deserialize, Serialize};
@@ -14,10 +14,7 @@ fn connect_disconnect() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
         .finish();
@@ -58,10 +55,7 @@ fn disconnect_request() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
@@ -111,10 +105,7 @@ fn server_stop() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
@@ -161,10 +152,7 @@ fn replication() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
         .finish();
@@ -189,10 +177,7 @@ fn server_event() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
         .add_server_event::<TestEvent>(Channel::Ordered)
@@ -221,10 +206,7 @@ fn client_event() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
         .add_client_event::<TestEvent>(Channel::Ordered)
