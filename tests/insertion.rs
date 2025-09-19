@@ -1,8 +1,4 @@
-use bevy::{
-    ecs::{schedule::ScheduleLabel, system::SystemState},
-    prelude::*,
-    state::app::StatesPlugin,
-};
+use bevy::{ecs::system::SystemState, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,
@@ -28,10 +24,7 @@ fn table_storage() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<Table>()
         .finish();
@@ -67,10 +60,7 @@ fn sparse_set_storage() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<SparseSet>()
         .finish();
@@ -106,10 +96,7 @@ fn immutable() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<Immutable>()
         .finish();
@@ -158,10 +145,7 @@ fn mapped_existing_entity() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<MappedComponent>()
         .finish();
@@ -209,10 +193,7 @@ fn mapped_new_entity() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<MappedComponent>()
         .finish();
@@ -256,10 +237,7 @@ fn multiple_components() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
         .replicate::<B>()
@@ -303,10 +281,7 @@ fn command_fns() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<Original>()
         .set_command_fns(replace, command_fns::default_remove::<Replaced>)
@@ -345,10 +320,7 @@ fn marker() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker::<ReplaceMarker>()
         .replicate::<Original>()
@@ -395,10 +367,7 @@ fn group() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate_bundle::<(A, B)>()
         .finish();
@@ -434,10 +403,7 @@ fn not_replicated() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .finish();
     }
@@ -469,10 +435,7 @@ fn after_removal() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
         .finish();
@@ -523,10 +486,7 @@ fn before_started_replication() {
                 .set(RepliconSharedPlugin {
                     auth_method: AuthMethod::Custom,
                 })
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                }),
+                .set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
         .finish();
@@ -574,10 +534,7 @@ fn after_started_replication() {
                 .set(RepliconSharedPlugin {
                     auth_method: AuthMethod::Custom,
                 })
-                .set(ServerPlugin {
-                    tick_schedule: PostUpdate.intern(),
-                    ..Default::default()
-                }),
+                .set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
         .finish();
@@ -615,10 +572,7 @@ fn confirm_history() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                tick_schedule: PostUpdate.intern(),
-                ..Default::default()
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
         .finish();
