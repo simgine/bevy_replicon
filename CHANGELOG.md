@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `PriorityMap` component for authorized clients to control how often mutations are sent.
+- `Signature` component to match entities between client and server using hashes.
 - `*_filtered` methods for `AppRuleExt` that allow using `With`, `Without` and `Or` filters to define replication rules.
 - `ClientSet::PrepareSend` and `ServerSet::PrepareSend` system sets. Backends should use these sets to add `PostUpdate` logic that needs to run before sending data on clients and servers.
 - `compact_entity` with functions for `serde` to pack `Entity` more efficienly.
@@ -46,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Removed
 
+- `ClientEntityMap`. Use the newly added `Signature` component instead.
 - `VisibilityPolicy::All`. Use `VisibilityPolicy::Blacklist` instead, which is the default now. There are not performance difference when the list is empty.
 - `entity_serde::serialize_entity` and `entity_serde::deserialize_entity`. Use `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` respectively; just swap the argument order.
 - `SERVER`. Use `ClientId::Server` instead.

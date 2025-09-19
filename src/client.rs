@@ -22,6 +22,7 @@ use crate::{
                 ReplicationRegistry,
                 ctx::{DespawnCtx, RemoveCtx, WriteCtx},
             },
+            signature::SignatureMap,
             track_mutate_messages::TrackMutateMessages,
             update_message_flags::UpdateMessageFlags,
         },
@@ -129,40 +130,45 @@ pub(super) fn receive_replication(
     world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
             world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
-                world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
-                    world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
-                        world.resource_scope(
-                            |world, mut replicated_events: Mut<Events<EntityReplicated>>| {
-                                let type_registry = world.resource::<AppTypeRegistry>().clone();
-                                let mut stats = world.remove_resource::<ClientReplicationStats>();
-                                let mut mutate_ticks = world.remove_resource::<ServerMutateTicks>();
-                                let mut params = ReceiveParams {
-                                    changes: &mut changes,
-                                    entity_markers: &mut entity_markers,
-                                    entity_map: &mut entity_map,
-                                    replicated_events: &mut replicated_events,
-                                    mutate_ticks: mutate_ticks.as_mut(),
-                                    stats: stats.as_mut(),
-                                    command_markers: &command_markers,
-                                    registry: &registry,
-                                    type_registry: &type_registry,
-                                };
+                world.resource_scope(|world, signature_map: Mut<SignatureMap>| {
+                    world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
+                        world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
+                            world.resource_scope(
+                                |world, mut replicated_events: Mut<Events<EntityReplicated>>| {
+                                    let type_registry = world.resource::<AppTypeRegistry>().clone();
+                                    let mut stats =
+                                        world.remove_resource::<ClientReplicationStats>();
+                                    let mut mutate_ticks =
+                                        world.remove_resource::<ServerMutateTicks>();
+                                    let mut params = ReceiveParams {
+                                        changes: &mut changes,
+                                        entity_markers: &mut entity_markers,
+                                        entity_map: &mut entity_map,
+                                        replicated_events: &mut replicated_events,
+                                        mutate_ticks: mutate_ticks.as_mut(),
+                                        stats: stats.as_mut(),
+                                        signature_map: &signature_map,
+                                        command_markers: &command_markers,
+                                        registry: &registry,
+                                        type_registry: &type_registry,
+                                    };
 
-                                apply_replication(
-                                    world,
-                                    &mut params,
-                                    &mut messages,
-                                    &mut buffered_mutations,
-                                );
+                                    apply_replication(
+                                        world,
+                                        &mut params,
+                                        &mut messages,
+                                        &mut buffered_mutations,
+                                    );
 
-                                if let Some(stats) = stats {
-                                    world.insert_resource(stats);
-                                }
-                                if let Some(mutate_ticks) = mutate_ticks {
-                                    world.insert_resource(mutate_ticks);
-                                }
-                            },
-                        )
+                                    if let Some(stats) = stats {
+                                        world.insert_resource(stats);
+                                    }
+                                    if let Some(mutate_ticks) = mutate_ticks {
+                                        world.insert_resource(mutate_ticks);
+                                    }
+                                },
+                            )
+                        })
                     })
                 })
             })
@@ -393,25 +399,26 @@ fn apply_mutate_messages(
     });
 }
 
-/// Deserializes and applies server mapping from client's pre-spawned entities.
+/// Deserializes and applies the mapping from a server entity to a client
+/// entity by comparing hashes calculated from the [`Signature`] component.
 fn apply_entity_mapping(
     world: &mut World,
     params: &mut ReceiveParams,
     message: &mut Bytes,
 ) -> Result<()> {
     let server_entity = postcard_utils::entity_from_buf(message)?;
-    let client_entity = postcard_utils::entity_from_buf(message)?;
+    let hash = u64::from_le_bytes(postcard_utils::from_buf(message)?); // Hash uses fixint encoding.
 
-    if let Ok(mut entity) = world.get_entity_mut(client_entity) {
-        debug!("applying mapping from {server_entity:?} to {client_entity:?}");
-        entity.insert(Replicated);
-        params.entity_map.insert(server_entity, client_entity);
-    } else {
-        // Entity could be despawned on client already.
+    let Some(client_entity) = params.signature_map.get(hash) else {
         debug!(
-            "received mapping from {server_entity:?} to {client_entity:?}, but the entity doesn't exists"
+            "skipping unknown hash 0x{hash:016x} for `{server_entity}` (client entity may have been despawned already)"
         );
-    }
+        return Ok(());
+    };
+
+    debug!("mapping `{server_entity}` to `{client_entity}` using hash 0x{hash:016x}");
+    params.entity_map.insert(server_entity, client_entity);
+    world.entity_mut(client_entity).insert(Replicated);
 
     Ok(())
 }
@@ -746,6 +753,7 @@ struct ReceiveParams<'a> {
     replicated_events: &'a mut Events<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
+    signature_map: &'a SignatureMap,
     command_markers: &'a CommandMarkers,
     registry: &'a ReplicationRegistry,
     type_registry: &'a AppTypeRegistry,

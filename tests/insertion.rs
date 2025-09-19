@@ -358,16 +358,15 @@ fn marker() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn(Replicated).id();
-    let client_entity = client_app.world_mut().spawn(ReplaceMarker).id();
-    assert_ne!(server_entity, client_entity);
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    let server_entity = server_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    let client_entity = client_app
+        .world_mut()
+        .spawn((ReplaceMarker, Signature::from(0)))
+        .id();
+    assert_ne!(server_entity, client_entity);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
