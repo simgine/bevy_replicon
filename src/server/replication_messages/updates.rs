@@ -20,7 +20,7 @@ use crate::{
 /// Can be packed into a message using [`Self::send`].
 #[derive(Default, Component)]
 pub(crate) struct Updates {
-    /// Mappings for new server entities and their hashes calculated from the [`Signature`] component.
+    /// Mappings for newly visible server entities and their hashes calculated from the [`Signature`] component.
     ///
     /// Serialized as a single continuous chunk of entity–hash pairs.
     ///
