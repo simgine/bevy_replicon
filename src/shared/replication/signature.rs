@@ -360,7 +360,7 @@ macro_rules! impl_signature_components {
     };
 }
 
-variadics_please::all_tuples!(impl_signature_components, 0, 15, C);
+variadics_please::all_tuples!(impl_signature_components, 0, 6, C);
 
 #[cfg(test)]
 mod tests {
