@@ -11,8 +11,6 @@ use bevy::{
 use fnv::FnvHasher;
 use log::{debug, error};
 
-use crate::prelude::*;
-
 /**
 Describes how to calculate a deterministic hash that identifies an entity.
 
@@ -155,7 +153,7 @@ struct Bullet;
 ```
 */
 #[derive(Component, Debug, Clone, Copy)]
-#[component(immutable, on_add = register_hash, on_remove = unregister_hash)]
+#[component(on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
     /// User-defined initial state for the hash.
     base_hash: Option<u64>,
@@ -165,6 +163,11 @@ pub struct Signature {
 
     /// Relevant client.
     client: Option<Entity>,
+
+    /// Resulting hash.
+    ///
+    /// Calculated when added to an entity.
+    hash: u64,
 }
 
 impl Signature {
@@ -175,6 +178,7 @@ impl Signature {
             base_hash: None,
             fns: &[hash::<C>],
             client: None,
+            hash: 0,
         }
     }
     /// Creates a new instance that hashes the specified set of components and their type names.
@@ -184,6 +188,7 @@ impl Signature {
             base_hash: None,
             fns: S::HASH_FNS,
             client: None,
+            hash: 0,
         }
     }
 
@@ -213,8 +218,15 @@ impl Signature {
         self
     }
 
-    #[must_use]
-    fn hash<'w>(&self, entity: impl Into<EntityRef<'w>>) -> u64 {
+    pub(crate) fn client(&self) -> Option<Entity> {
+        self.client
+    }
+
+    pub(crate) fn hash(&self) -> u64 {
+        self.hash
+    }
+
+    fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
         let mut hasher = self.base_hash.map(FnvHasher::with_key).unwrap_or_default();
 
         let entity = entity.into();
@@ -240,35 +252,23 @@ impl<T: Hash> From<T> for Signature {
             base_hash: Some(hasher.finish()),
             fns: &[],
             client: None,
+            hash: 0,
         }
     }
 }
 
 fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
-    let entity = world.entity(ctx.entity);
+    let mut entity = world.entity_mut(ctx.entity);
     let signature = entity.get::<Signature>().unwrap();
-    let hash = signature.hash(entity);
+    let hash = signature.eval(&entity);
 
-    if let Some(client) = signature.client {
-        if let Some(mut pending) = world.get_mut::<MappingsBuffer>(client) {
-            debug!(
-                "calculated hash 0x{hash:016x} for `{}` for client `{client}`",
-                ctx.entity
-            );
-            pending.push((ctx.entity, hash));
-        } else {
-            error!("ignoring hash from a signature for a non-authorized client `{client}`");
-        }
-    } else {
-        debug!("calculated hash 0x{hash:016x} for `{}`", ctx.entity);
-        if *world.resource::<State<ServerState>>() == ServerState::Running {
-            let mut pending = world.resource_mut::<MappingsBuffer>();
-            pending.push((ctx.entity, hash));
-        }
+    // Re-borrow due to borrow-checker.
+    let mut signature = entity.get_mut::<Signature>().unwrap();
+    signature.hash = hash;
 
-        let mut map = world.resource_mut::<SignatureMap>();
-        map.insert(ctx.entity, hash);
-    }
+    let entity = entity.id();
+    let mut map = world.resource_mut::<SignatureMap>();
+    map.insert(entity, hash);
 }
 
 fn unregister_hash(mut world: DeferredWorld, ctx: HookContext) {
@@ -276,38 +276,20 @@ fn unregister_hash(mut world: DeferredWorld, ctx: HookContext) {
     map.remove(ctx.entity);
 }
 
-/// Server entities and their associated hashes from the [`Signature`] component,
-/// calculated during this tick.
-///
-/// When used as a component on a client entity, it stores new mappings specific to that client.
-/// When used as a resource, it stores new mappings relevant to all clients.
-#[derive(Resource, Component, Deref, DerefMut, Debug, Default)]
-pub(crate) struct MappingsBuffer(pub(super) Vec<(Entity, u64)>);
-
 /// Stores hashes calculated from the [`Signature`] component and maps them
 /// to their entities in both directions.
 ///
-/// On the client it's used to map received hashes from server to client's entities.
-///
-/// On the server it's used to send hashes to newly connected clients. It
-/// doesn't contain hashes specific to a client.
+/// Used to detect hash collisions and on the client it's used to map received
+/// hashes from server to client's entities.
 ///
 /// Automatically updated via hooks.
 #[derive(Resource, Default)]
 pub(crate) struct SignatureMap {
     to_hashes: EntityHashMap<u64>,
-    to_entities: HashMap<u64, Entity, NoOpHash>, // Skips hashing because the key is already a hash.
+    to_entities: HashMap<u64, Entity, NoOpHash>, // Skip hashing because the key is already a hash.
 }
 
 impl SignatureMap {
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (Entity, u64)> {
-        self.to_hashes.iter().map(|(&e, &h)| (e, h))
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        self.to_hashes.len()
-    }
-
     pub(crate) fn get(&self, hash: u64) -> Option<Entity> {
         self.to_entities.get(&hash).copied()
     }
@@ -315,10 +297,11 @@ impl SignatureMap {
     fn insert(&mut self, entity: Entity, hash: u64) {
         match self.to_entities.try_insert(hash, entity) {
             Ok(_) => {
+                debug!("inserting hash 0x{hash:016x} for `{entity}`");
                 self.to_hashes.insert(entity, hash);
             }
             Err(e) => error!(
-                "hash for `{entity}` marches `{}` and will be ignored",
+                "hash 0x{hash:016x} for `{entity}` already corresponds to `{}` and will be ignored",
                 e.value
             ),
         }
@@ -326,6 +309,7 @@ impl SignatureMap {
 
     fn remove(&mut self, entity: Entity) {
         if let Some(hash) = self.to_hashes.remove(&entity) {
+            debug!("removing hash 0x{hash:016x} for `{entity}`");
             self.to_entities.remove(&hash);
         }
     }
@@ -376,10 +360,10 @@ mod tests {
         let entity4 = world.spawn(A).id();
 
         let signature = Signature::of::<C>();
-        let hash1 = signature.hash(world.entity(entity1));
-        let hash2 = signature.hash(world.entity(entity2));
-        let hash3 = signature.hash(world.entity(entity3));
-        let hash4 = signature.hash(world.entity(entity4));
+        let hash1 = signature.eval(world.entity(entity1));
+        let hash2 = signature.eval(world.entity(entity2));
+        let hash3 = signature.eval(world.entity(entity3));
+        let hash4 = signature.eval(world.entity(entity4));
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
         assert_ne!(hash3, hash4);
@@ -395,10 +379,10 @@ mod tests {
         let entity4 = world.spawn(A).id();
 
         let signature = Signature::of_n::<(A, C)>();
-        let hash1 = signature.hash(world.entity(entity1));
-        let hash2 = signature.hash(world.entity(entity2));
-        let hash3 = signature.hash(world.entity(entity3));
-        let hash4 = signature.hash(world.entity(entity4));
+        let hash1 = signature.eval(world.entity(entity1));
+        let hash2 = signature.eval(world.entity(entity2));
+        let hash3 = signature.eval(world.entity(entity3));
+        let hash4 = signature.eval(world.entity(entity4));
 
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
@@ -416,10 +400,10 @@ mod tests {
         let signature = Signature::of_n::<(A, B)>();
         let signature_42 = Signature::of_n::<(A, B)>().with_base(42);
 
-        let hash1 = signature.hash(world.entity(entity1));
-        let hash2 = signature.hash(world.entity(entity2));
-        let hash1_42 = signature_42.hash(world.entity(entity1));
-        let hash2_42 = signature_42.hash(world.entity(entity2));
+        let hash1 = signature.eval(world.entity(entity1));
+        let hash2 = signature.eval(world.entity(entity2));
+        let hash1_42 = signature_42.eval(world.entity(entity1));
+        let hash2_42 = signature_42.eval(world.entity(entity2));
 
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash1_42);
@@ -435,8 +419,8 @@ mod tests {
         let signature_a = Signature::of::<A>();
         let signature_b = Signature::of::<B>();
 
-        let hash_a = signature_a.hash(world.entity(entity));
-        let hash_b = signature_b.hash(world.entity(entity));
+        let hash_a = signature_a.eval(world.entity(entity));
+        let hash_b = signature_b.eval(world.entity(entity));
 
         assert_ne!(hash_a, hash_b);
     }

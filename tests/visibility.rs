@@ -271,5 +271,69 @@ fn whitelist_with_despawn() {
     assert!(!visibility.is_visible(server_entity));
 }
 
+#[test]
+fn signature() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin {
+                tick_schedule: PostUpdate.intern(),
+                ..Default::default()
+            }),
+        ))
+        .replicate::<TestComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, TestComponent, Signature::from(0)))
+        .id();
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    let mut visibility = server_app
+        .world_mut()
+        .get_mut::<ClientVisibility>(client)
+        .unwrap();
+    visibility.set_visibility(server_entity, false);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert!(
+        client_app
+            .world()
+            .get::<TestComponent>(client_entity)
+            .is_none(),
+    );
+
+    // Reverse visibility back.
+    let mut visibility = server_app
+        .world_mut()
+        .get_mut::<ClientVisibility>(client)
+        .unwrap();
+    visibility.set_visibility(server_entity, true);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(
+        client_app
+            .world()
+            .get::<TestComponent>(client_entity)
+            .is_some(),
+    );
+}
+
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
