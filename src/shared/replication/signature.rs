@@ -11,147 +11,23 @@ use bevy::{
 use fnv::FnvHasher;
 use log::{debug, error};
 
-/**
-Describes how to calculate a deterministic hash that identifies an entity.
-
-When the client receives replication, it maps server entities to its own entities
-using [`ServerEntityMap`](crate::shared::server_entity_map::ServerEntityMap).
-If there is no mapping, it spawns a new entity and creates a new mapping to it.
-
-To re-use a previously spawned entity on the client, insert this component on both
-server and client. On insertion it will calculate a hash and on replication client
-will try to match. If the hash matches, the replication will continue to previously
-spawned entity.
-
-The hash can be calculated from components on the entity, a user-defined struct, or both.
-The user needs to use something that is unique for each entity, but identical for the
-same entity on both client and server.
-
-Signatures can also be relevant only to a specific client. In this case, the signature
-will be sent only to that client.
-
-# Examples
-
-Chess board deterministically spawned on both client and server without sending
-the entire board data through the network:
-
-```
-# use bevy::state::app::StatesPlugin;
-use bevy::{color::palettes::css::{BLACK, WHITE}, prelude::*};
-use bevy_replicon::prelude::*;
-use serde::{Deserialize, Serialize};
-
-# let mut app = App::new();
-# app.add_plugins((StatesPlugin, RepliconPlugins));
-app.replicate::<Square>()
-    .add_systems(Startup, spawn_chessboard);
-
-// Spawn chessboard as usual, no network-related code.
-fn spawn_chessboard(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    const SQUARES_PER_SIDE: u8 = 8;
-    const SQUARE_SIZE: f32 = 64.0;
-
-    let square = meshes.add(Rectangle::new(SQUARE_SIZE, SQUARE_SIZE));
-    let black = materials.add(Color::from(BLACK));
-    let white = materials.add(Color::from(WHITE));
-
-    let board_size = SQUARE_SIZE * SQUARES_PER_SIDE as f32;
-    let origin = -board_size / 2.0 + SQUARE_SIZE / 2.0;
-
-    for file in 0..SQUARES_PER_SIDE {
-        for rank in 0..SQUARES_PER_SIDE {
-            let x = origin + (file as f32) * SQUARE_SIZE;
-            let y = origin + (rank as f32) * SQUARE_SIZE;
-
-            let is_light = (file + rank) % 2 == 0;
-            let material = if is_light {
-                white.clone()
-            } else {
-                black.clone()
-            };
-
-            commands.spawn((
-                MeshMaterial2d(material.clone()),
-                Mesh2d(square.clone()),
-                Transform::from_xyz(x, y, 0.0),
-                Square { file, rank },
-            ));
-        }
-    }
-}
-
-/// Square location on the chessboard.
+/// Describes how to calculate a deterministic hash that identifies an entity.
 ///
-/// We want to replicate all squares, so we set [`Replicated`] as a required component.
-/// We also want entities with this component to be automatically mapped between
-/// client and server, so we require the [`Signature`] component, which generates a hash
-/// based on [`Square`]. Each entity will be spawned with a different value, making the hash
-/// unique. Since spawning on the server is identical, the server will generate the same hashes
-/// for the same squares, and the client will match them to the corresponding local squares.
-#[derive(Component, Serialize, Deserialize, Hash)]
-#[require(
-    Replicated,
-    Signature::of::<Square>(),
-)]
-struct Square {
-    /// Column, a..h.
-    file: u8,
-    /// Row, 1..8.
-    rank: u8,
-}
-```
-
-Predicting a bullet on the client.
-
-```
-# use bevy::state::app::StatesPlugin;
-use bevy::{input::common_conditions::*, prelude::*};
-use bevy_replicon::prelude::*;
-use serde::{Deserialize, Serialize};
-
-# let mut app = App::new();
-# app.add_plugins((StatesPlugin, RepliconPlugins));
-app.replicate::<Bullet>()
-    .add_client_trigger::<SpawnBullet>(Channel::Ordered)
-    .add_observer(confirm_bullet)
-    .add_systems(
-        FixedUpdate,
-        shoot_bullet
-            .run_if(input_just_pressed(MouseButton::Left))
-            .run_if(in_state(ClientState::Connected)),
-    );
-
-/// System that shoots a bullet and spawns it on the client.
-fn shoot_bullet(mut commands: Commands) {
-    commands.spawn((Bullet, Signature::of::<Bullet>()));
-    commands.trigger(SpawnBullet);
-}
-
-/// Validation to check if client is not cheating or the simulation is correct.
+/// When the client receives replication, it maps server entities to its own entities
+/// using [`ServerEntityMap`](crate::shared::server_entity_map::ServerEntityMap).
+/// If there is no mapping, it spawns a new entity and creates a new mapping to it.
 ///
-/// Depending on the type of game you may want to correct the client or disconnect it.
-/// In this example we just always confirm the spawn.
-fn confirm_bullet(
-    trigger: Trigger<FromClient<SpawnBullet>>,
-    mut commands: Commands,
-) {
-    if let ClientId::Client(client) = trigger.client_id {
-        // You can insert more components, they will be replicated to the client's entity.
-        commands.spawn((Bullet, Signature::of::<Bullet>().for_client(client)));
-    }
-}
-
-#[derive(Event, Serialize, Deserialize)]
-struct SpawnBullet;
-
-#[derive(Component, Serialize, Deserialize, Hash)]
-struct Bullet;
-```
-*/
+/// To re-use a previously spawned entity on the client, insert this component on both
+/// server and client. On insertion it will calculate a hash and on replication client
+/// will try to match. If the hash matches, the replication will continue to previously
+/// spawned entity.
+///
+/// The hash can be calculated from components on the entity, a user-defined struct, or both.
+/// The user needs to use something that is unique for each entity, but identical for the
+/// same entity on both client and server.
+///
+/// Signatures can also be relevant only to a specific client. In this case, the signature
+/// will be sent only to that client.
 #[derive(Component, Debug, Clone, Copy)]
 #[component(on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
@@ -171,7 +47,87 @@ pub struct Signature {
 }
 
 impl Signature {
-    /// Creates a new instance that hashes the specified component and its type name.
+    /**
+    Creates a new instance that hashes the specified component and its type name.
+
+    Pairs well with the required components but can also be inserted during a
+    regular entity spawn.
+
+    # Examples
+
+    Chess board deterministically spawned on both client and server without sending
+    the entire board data through the network:
+
+    ```
+    # use bevy::state::app::StatesPlugin;
+    use bevy::{color::palettes::css::{BLACK, WHITE}, prelude::*};
+    use bevy_replicon::prelude::*;
+    use serde::{Deserialize, Serialize};
+
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
+    app.replicate::<Square>()
+        .add_systems(Startup, spawn_chessboard);
+
+    // Spawn chessboard as usual, no network-related code.
+    fn spawn_chessboard(
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut materials: ResMut<Assets<ColorMaterial>>,
+    ) {
+        const SQUARES_PER_SIDE: u8 = 8;
+        const SQUARE_SIZE: f32 = 64.0;
+
+        let square = meshes.add(Rectangle::new(SQUARE_SIZE, SQUARE_SIZE));
+        let black = materials.add(Color::from(BLACK));
+        let white = materials.add(Color::from(WHITE));
+
+        let board_size = SQUARE_SIZE * SQUARES_PER_SIDE as f32;
+        let origin = -board_size / 2.0 + SQUARE_SIZE / 2.0;
+
+        for file in 0..SQUARES_PER_SIDE {
+            for rank in 0..SQUARES_PER_SIDE {
+                let x = origin + (file as f32) * SQUARE_SIZE;
+                let y = origin + (rank as f32) * SQUARE_SIZE;
+
+                let is_light = (file + rank) % 2 == 0;
+                let material = if is_light {
+                    white.clone()
+                } else {
+                    black.clone()
+                };
+
+                commands.spawn((
+                    MeshMaterial2d(material.clone()),
+                    Mesh2d(square.clone()),
+                    Transform::from_xyz(x, y, 0.0),
+                    Square { file, rank },
+                ));
+            }
+        }
+    }
+
+    /// Square location on the chessboard.
+    ///
+    /// We want to replicate all squares, so we set [`Replicated`] as a required component.
+    /// We also want entities with this component to be automatically mapped between
+    /// client and server, so we require the [`Signature`] component, which generates a hash
+    /// based on [`Square`]. Each entity will be spawned with a different value, making the hash
+    /// unique. Since spawning on the server is identical, the server will generate the same hashes
+    /// for the same squares, and the client will match them to the corresponding local squares.
+    #[derive(Component, Serialize, Deserialize, Hash)]
+    #[require(
+        Replicated,
+        Signature::of::<Square>(),
+    )]
+    struct Square {
+        /// Column, a..h.
+        file: u8,
+        /// Row, 1..8.
+        rank: u8,
+    }
+    ```
+    */
     #[must_use]
     pub fn of<C: Component + Hash>() -> Self {
         Self {
@@ -181,7 +137,90 @@ impl Signature {
             hash: 0,
         }
     }
-    /// Creates a new instance that hashes the specified set of components and their type names.
+
+    /**
+    Creates a new instance that hashes the specified set of components and their type names.
+
+    # Examples
+
+    Predicting a projectile on the client.
+
+    ```
+    # use bevy::state::app::StatesPlugin;
+    use bevy::{input::common_conditions::*, prelude::*};
+    use bevy_replicon::prelude::*;
+    use serde::{Deserialize, Serialize};
+
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
+    app.add_client_trigger::<SpawnFireball>(Channel::Ordered)
+        .add_observer(confirm_projectile)
+        .add_systems(
+            FixedUpdate,
+            shoot_projectile
+                .run_if(input_just_pressed(MouseButton::Left))
+                .run_if(in_state(ClientState::Connected)),
+        );
+
+    /// System that shoots a fireball and spawns it on the client.
+    fn shoot_projectile(
+        mut commands: Commands,
+        instigator: Single<Entity, With<Player>>,
+    ) {
+        commands.spawn((
+            Projectile {
+                instigator: *instigator,
+            },
+            Fireball,
+            Signature::of_n::<(Projectile, Fireball)>(),
+        ));
+        commands.trigger(SpawnFireball);
+    }
+
+    /// Validation to check if client is not cheating or the simulation is correct.
+    ///
+    /// Depending on the type of game you may want to correct the client or disconnect it.
+    /// In this example we just always confirm the spawn.
+    fn confirm_projectile(
+        trigger: Trigger<FromClient<SpawnFireball>>,
+        mut commands: Commands,
+        clients: Query<&Controls>,
+    ) {
+        if let ClientId::Client(client) = trigger.client_id {
+            let instigator = **clients.get(client).unwrap();
+
+            // You can insert more components, they will be replicated to the client's entity.
+            commands.spawn((
+                Projectile {
+                    instigator,
+                },
+                Fireball,
+                Signature::of_n::<(Projectile, Fireball)>().for_client(client),
+            ));
+        }
+    }
+
+    /// Trigger to ask server to spawn a projectile.
+    #[derive(Event, Serialize, Deserialize)]
+    struct SpawnFireball;
+
+    /// Marker for player entity.
+    #[derive(Component)]
+    struct Player;
+
+    /// Holds the player entity controlled by the client.
+    #[derive(Component, Deref)]
+    struct Controls(Entity);
+
+    #[derive(Component, Hash)]
+    struct Projectile {
+        instigator: Entity,
+    }
+
+    #[derive(Component, Hash)]
+    struct Fireball;
+    ```
+    */
     #[must_use]
     pub fn of_n<S: SignatureComponents>() -> Self {
         Self {
