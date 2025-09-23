@@ -129,8 +129,8 @@ pub(super) fn receive_replication(
 ) {
     world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
-            world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
-                world.resource_scope(|world, signature_map: Mut<SignatureMap>| {
+            world.resource_scope(|world, mut signature_map: Mut<SignatureMap>| {
+                world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
                     world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
                         world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
                             world.resource_scope(
@@ -144,10 +144,10 @@ pub(super) fn receive_replication(
                                         changes: &mut changes,
                                         entity_markers: &mut entity_markers,
                                         entity_map: &mut entity_map,
+                                        signature_map: &mut signature_map,
                                         replicated_events: &mut replicated_events,
                                         mutate_ticks: mutate_ticks.as_mut(),
                                         stats: stats.as_mut(),
-                                        signature_map: &signature_map,
                                         command_markers: &command_markers,
                                         registry: &registry,
                                         type_registry: &type_registry,
@@ -441,6 +441,7 @@ fn apply_despawn(
         .and_then(|entity| world.get_entity_mut(entity).ok())
     {
         trace!("applying despawn for `{}`", client_entity.id());
+        params.signature_map.remove(client_entity.id()); // // Requires manual removal since the map is removed from the world and inaccessible to triggers.
         let ctx = DespawnCtx { message_tick };
         (params.registry.despawn)(&ctx, client_entity);
     }
@@ -750,10 +751,10 @@ struct ReceiveParams<'a> {
     changes: &'a mut DeferredChanges,
     entity_markers: &'a mut EntityMarkers,
     entity_map: &'a mut ServerEntityMap,
+    signature_map: &'a mut SignatureMap,
     replicated_events: &'a mut Events<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
-    signature_map: &'a SignatureMap,
     command_markers: &'a CommandMarkers,
     registry: &'a ReplicationRegistry,
     type_registry: &'a AppTypeRegistry,

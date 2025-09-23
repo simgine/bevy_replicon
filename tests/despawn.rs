@@ -124,6 +124,47 @@ fn after_spawn() {
 }
 
 #[test]
+fn signature() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin {
+                tick_schedule: PostUpdate.intern(),
+                ..Default::default()
+            }),
+        ))
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    let client_entity = client_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    server_app.world_mut().despawn(server_entity);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(client_app.world().get_entity(client_entity).is_err());
+}
+
+#[test]
 fn hidden() {
     let mut server_app = App::new();
     let mut client_app = App::new();

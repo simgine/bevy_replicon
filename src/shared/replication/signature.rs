@@ -305,14 +305,17 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
     let mut signature = entity.get_mut::<Signature>().unwrap();
     signature.hash = hash;
 
-    let entity = entity.id();
-    let mut map = world.resource_mut::<SignatureMap>();
-    map.insert(entity, hash);
+    world
+        .resource_mut::<SignatureMap>()
+        .insert(ctx.entity, hash);
 }
 
 fn unregister_hash(mut world: DeferredWorld, ctx: HookContext) {
-    let mut map = world.resource_mut::<SignatureMap>();
-    map.remove(ctx.entity);
+    // The map will be unavailable during replication because the
+    // resource will be temporarily removed from the world.
+    if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
+        map.remove(ctx.entity);
+    }
 }
 
 /// Stores hashes calculated from the [`Signature`] component and maps them
@@ -346,7 +349,7 @@ impl SignatureMap {
         }
     }
 
-    fn remove(&mut self, entity: Entity) {
+    pub(crate) fn remove(&mut self, entity: Entity) {
         if let Some(hash) = self.to_hashes.remove(&entity) {
             debug!("removing hash 0x{hash:016x} for `{entity}`");
             self.to_entities.remove(&hash);
