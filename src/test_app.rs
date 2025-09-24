@@ -94,7 +94,7 @@ impl ServerTestAppExt for App {
             .id();
 
         assert_eq!(
-            *client_app.world_mut().resource::<State<ClientState>>(),
+            *client_app.world().resource::<State<ClientState>>(),
             ClientState::Disconnected,
             "client can't be connected multiple times"
         );
