@@ -10,7 +10,7 @@ use bevy::{
 };
 use deterministic_hash::DeterministicHasher;
 use log::{debug, error};
-use rapidhash::fast::RapidHasher;
+use xxhash_rust::xxh3::Xxh3Default;
 
 /// Describes how to calculate a deterministic hash that identifies an entity.
 ///
@@ -240,7 +240,7 @@ impl Signature {
     /// that doesn't hash any components.
     #[must_use]
     pub fn with_salt<T: Hash>(mut self, value: T) -> Self {
-        let mut hasher = DeterministicHasher::new(RapidHasher::default());
+        let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         value.hash(&mut hasher);
 
         self.salt = Some(hasher.finish());
@@ -265,7 +265,7 @@ impl Signature {
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
-        let mut hasher = DeterministicHasher::new(RapidHasher::default());
+        let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         if let Some(salt) = self.salt {
             salt.hash(&mut hasher);
         }
@@ -286,7 +286,7 @@ impl<T: Hash> From<T> for Signature {
     /// It's usually better to use components because their names
     /// are also hashed and set the salt additionally via [`Self::with_salt`].
     fn from(value: T) -> Self {
-        let mut hasher = DeterministicHasher::new(RapidHasher::default());
+        let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         value.hash(&mut hasher);
 
         Self {
@@ -364,9 +364,9 @@ pub trait SignatureComponents {
     const HASH_FNS: &'static [HashFn];
 }
 
-type HashFn = fn(&EntityRef, &mut DeterministicHasher<RapidHasher>);
+type HashFn = fn(&EntityRef, &mut DeterministicHasher<Xxh3Default>);
 
-fn hash<C: Component + Hash>(entity: &EntityRef, hasher: &mut DeterministicHasher<RapidHasher>) {
+fn hash<C: Component + Hash>(entity: &EntityRef, hasher: &mut DeterministicHasher<Xxh3Default>) {
     let type_name = any::type_name::<C>();
     type_name.hash(hasher);
     if let Some(component) = entity.get::<C>() {
@@ -410,7 +410,7 @@ mod tests {
         let hash3 = signature.eval(world.entity(entity3));
         let hash4 = signature.eval(world.entity(entity4));
 
-        assert_eq!(hash1, 6868343236293623176);
+        assert_eq!(hash1, 8868928108740117422);
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
         assert_ne!(hash3, hash4);
@@ -431,7 +431,7 @@ mod tests {
         let hash3 = signature.eval(world.entity(entity3));
         let hash4 = signature.eval(world.entity(entity4));
 
-        assert_eq!(hash1, 3656665263372609653);
+        assert_eq!(hash1, 15617178438747089367);
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
         assert_ne!(hash3, hash4);
@@ -453,10 +453,10 @@ mod tests {
         let hash1_42 = signature_42.eval(world.entity(entity1));
         let hash2_42 = signature_42.eval(world.entity(entity2));
 
-        assert_eq!(hash1, 4448015903319939478);
+        assert_eq!(hash1, 11681676351098321858);
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash1_42);
-        assert_eq!(hash1_42, 17651648085999488466);
+        assert_eq!(hash1_42, 3735346266121839838);
         assert_eq!(hash1_42, hash2_42);
     }
 

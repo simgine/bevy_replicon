@@ -7,8 +7,8 @@ use core::{
 use bevy::prelude::*;
 use deterministic_hash::DeterministicHasher;
 use log::debug;
-use rapidhash::fast::RapidHasher;
 use serde::{Deserialize, Serialize};
+use xxhash_rust::xxh3::Xxh3Default;
 
 /// Hashes all protocol registrations to calculate [`ProtocolHash`].
 ///
@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Only available during the [`Plugin::build`] stage. Computes [`ProtocolHash`] resource.
 #[derive(Resource, Default)]
-pub struct ProtocolHasher(DeterministicHasher<RapidHasher<'static>>);
+pub struct ProtocolHasher(DeterministicHasher<Xxh3Default>);
 
 impl ProtocolHasher {
     /// Adds custom data to the protocol hash calculation.
@@ -228,7 +228,7 @@ mod tests {
             hasher.add_custom(0usize);
         }
 
-        const EXPECTED: ProtocolHash = ProtocolHash(6664863511551067936);
+        const EXPECTED: ProtocolHash = ProtocolHash(10617357519866006183);
         assert_eq!(hasher1.finish(), EXPECTED);
         assert_eq!(hasher2.finish(), EXPECTED);
     }
