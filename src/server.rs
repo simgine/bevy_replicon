@@ -765,12 +765,12 @@ fn should_send_mapping(
     ticks: &ClientTicks,
 ) -> bool {
     let visibility_state = visibility.state(entity);
-    if visibility_state != Visibility::Visible {
+    if visibility_state == Visibility::Hidden {
         return false;
     }
 
-    signature.is_added()
-        || visibility_state == Visibility::Gained
+    visibility_state == Visibility::Gained
+        || signature.is_added()
         || ticks.mutation_tick(entity).is_none()
 }
 
