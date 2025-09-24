@@ -115,7 +115,7 @@ impl DeferredInsertions {
 
         // If items would otherwise not be aligned, add alignment.
         let align = layout.align();
-        let extra_offset = if self.data.len() % align != 0 {
+        let extra_offset = if !self.data.len().is_multiple_of(align) {
             align - (self.data.len() % align)
         } else {
             0
