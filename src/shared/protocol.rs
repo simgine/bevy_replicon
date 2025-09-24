@@ -5,8 +5,9 @@ use core::{
 };
 
 use bevy::prelude::*;
-use fnv::FnvHasher;
+use deterministic_hash::DeterministicHasher;
 use log::debug;
+use rapidhash::fast::RapidHasher;
 use serde::{Deserialize, Serialize};
 
 /// Hashes all protocol registrations to calculate [`ProtocolHash`].
@@ -21,7 +22,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Only available during the [`Plugin::build`] stage. Computes [`ProtocolHash`] resource.
 #[derive(Resource, Default)]
-pub struct ProtocolHasher(FnvHasher);
+pub struct ProtocolHasher(DeterministicHasher<RapidHasher<'static>>);
 
 impl ProtocolHasher {
     /// Adds custom data to the protocol hash calculation.
@@ -224,24 +225,12 @@ mod tests {
             hasher.add_server_trigger::<StructC>();
             hasher.add_client_event::<StructB>();
             hasher.add_client_trigger::<StructC>();
-            hasher.add_custom(0);
+            hasher.add_custom(0usize);
         }
 
-        assert_eq!(hasher1.finish(), hasher2.finish());
-    }
-
-    #[test]
-    fn determinism() {
-        let mut hasher = ProtocolHasher::default();
-
-        hasher.replicate::<StructA>(1);
-        hasher.add_server_event::<StructB>();
-        hasher.add_server_trigger::<StructC>();
-        hasher.add_client_event::<StructB>();
-        hasher.add_client_trigger::<StructC>();
-        hasher.add_custom(0);
-
-        assert_eq!(hasher.finish(), ProtocolHash(11462723744753766090));
+        const EXPECTED: ProtocolHash = ProtocolHash(6664863511551067936);
+        assert_eq!(hasher1.finish(), EXPECTED);
+        assert_eq!(hasher2.finish(), EXPECTED);
     }
 
     struct StructA;
