@@ -479,7 +479,7 @@ pub trait AppRuleExt {
             ctx::{SerializeCtx, WriteCtx},
             rule_fns::RuleFns,
         },
-        postcard::{self, Deserializer, Serializer},
+        postcard,
         prelude::*,
     };
     use serde::{de::DeserializeSeed, Serialize};
@@ -493,7 +493,7 @@ pub trait AppRuleExt {
         component: &ReflectedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut serializer = Serializer {
+        let mut serializer = postcard::Serializer {
             output: ExtendMutFlavor::new(message),
         };
         let registry = ctx.type_registry.read();
@@ -505,7 +505,7 @@ pub trait AppRuleExt {
         ctx: &mut WriteCtx,
         message: &mut Bytes,
     ) -> Result<ReflectedComponent> {
-        let mut deserializer = Deserializer::from_flavor(BufFlavor::new(message));
+        let mut deserializer = postcard::Deserializer::from_flavor(BufFlavor::new(message));
         let registry = ctx.type_registry.read();
         let reflect = ReflectDeserializer::new(&registry).deserialize(&mut deserializer)?;
         Ok(ReflectedComponent(reflect))
