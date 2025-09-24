@@ -181,8 +181,11 @@ fn before_connection() {
     // Spawn an entity before client connected.
     server_app.world_mut().spawn((Replicated, A));
 
+    server_app.update();
+
     server_app.connect_client(&mut client_app);
 
+    server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
