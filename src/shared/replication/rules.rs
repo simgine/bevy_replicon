@@ -514,6 +514,155 @@ pub trait AppRuleExt {
     #[derive(Component)]
     struct ReflectedComponent(Box<dyn PartialReflect>);
     ```
+
+    Component with regular fields and [`Box<dyn PartialReflect>`]. Requires writing manual serde
+    implementations. See [serde book](https://serde.rs/custom-serialization.html) for more details.
+
+    ```
+    use std::{
+        any,
+        fmt::{self, Formatter},
+    };
+
+    # use bevy::state::app::StatesPlugin;
+    use bevy::{
+        prelude::*,
+        reflect::{
+            TypeRegistry,
+            serde::{ReflectDeserializer, ReflectSerializer},
+        },
+    };
+    use bevy_replicon::{
+        bytes::Bytes,
+        postcard,
+        postcard_utils::{BufFlavor, ExtendMutFlavor},
+        prelude::*,
+        shared::replication::registry::{
+            ctx::{SerializeCtx, WriteCtx},
+            rule_fns::RuleFns,
+        },
+    };
+    use serde::{
+        Deserialize, Serialize,
+        de::{self, DeserializeSeed, MapAccess, Visitor},
+        ser::SerializeStruct,
+    };
+
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
+    app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
+
+    fn serialize_reflect(
+        ctx: &SerializeCtx,
+        component: &WithReflectComponent,
+        message: &mut Vec<u8>,
+    ) -> Result<()> {
+        let mut serializer = postcard::Serializer {
+            output: ExtendMutFlavor::new(message),
+        };
+        let reflect_serializer = WithReflectSerializer {
+            component,
+            registry: &ctx.type_registry.read(),
+        };
+        reflect_serializer.serialize(&mut serializer)?;
+        Ok(())
+    }
+
+    fn deserialize_reflect(
+        ctx: &mut WriteCtx,
+        message: &mut Bytes,
+    ) -> Result<WithReflectComponent> {
+        let mut deserializer = postcard::Deserializer::from_flavor(BufFlavor::new(message));
+        let reflect_deserializer = WithReflectDeserializer {
+            registry: &ctx.type_registry.read(),
+        };
+        let component = reflect_deserializer.deserialize(&mut deserializer)?;
+        Ok(component)
+    }
+
+    #[derive(Component)]
+    struct WithReflectComponent {
+        regular: String,
+        reflect: Box<dyn PartialReflect>,
+    }
+    #[derive(Deserialize)]
+    #[serde(field_identifier, rename_all = "lowercase")]
+    enum WithReflectField {
+        Regular,
+        Reflect,
+    }
+
+    struct WithReflectSerializer<'a> {
+        component: &'a WithReflectComponent,
+        registry: &'a TypeRegistry,
+    }
+
+    impl serde::Serialize for WithReflectSerializer<'_> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let mut state =
+                serializer.serialize_struct(any::type_name::<WithReflectComponent>(), 3)?;
+            state.serialize_field("regular", &self.component.regular)?;
+            state.serialize_field(
+                "reflect",
+                &ReflectSerializer::new(&*self.component.reflect, self.registry),
+            )?;
+
+            state.end()
+        }
+    }
+
+    struct WithReflectDeserializer<'a> {
+        registry: &'a TypeRegistry,
+    }
+
+    impl<'de> DeserializeSeed<'de> for WithReflectDeserializer<'_> {
+        type Value = WithReflectComponent;
+
+        fn deserialize<D: serde::Deserializer<'de>>(
+            self,
+            deserializer: D,
+        ) -> Result<Self::Value, D::Error> {
+            deserializer.deserialize_struct(
+                any::type_name::<WithReflectComponent>(),
+                &["regular", "reflect"],
+                self,
+            )
+        }
+    }
+
+    impl<'de> Visitor<'de> for WithReflectDeserializer<'_> {
+        type Value = WithReflectComponent;
+
+        fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+            formatter.write_str(any::type_name::<Self::Value>())
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut regular = None;
+            let mut reflect = None;
+            while let Some(key) = map.next_key()? {
+                match key {
+                    WithReflectField::Regular => {
+                        if regular.is_some() {
+                            return Err(de::Error::duplicate_field("regular"));
+                        }
+                        regular = Some(map.next_value()?);
+                    }
+                    WithReflectField::Reflect => {
+                        if reflect.is_some() {
+                            return Err(de::Error::duplicate_field("reflect"));
+                        }
+                        reflect =
+                            Some(map.next_value_seed(ReflectDeserializer::new(self.registry))?);
+                    }
+                }
+            }
+            let regular = regular.ok_or_else(|| de::Error::missing_field("regular"))?;
+            let reflect = reflect.ok_or_else(|| de::Error::missing_field("reflect"))?;
+            Ok(WithReflectComponent { regular, reflect })
+        }
+    }
+    ```
     **/
     fn replicate_with<R: IntoComponentRules>(&mut self, component_rules: R) -> &mut Self {
         self.replicate_with_filtered::<_, ()>(component_rules)
