@@ -110,6 +110,8 @@ pub trait ClientEventAppExt {
     #[derive(Event)]
     struct ReflectEvent(Box<dyn PartialReflect>);
     ```
+
+    See also [`AppRuleExt::replicate_with`] for more examples with custom ser/de.
     */
     fn add_client_event_with<E: Event>(
         &mut self,
