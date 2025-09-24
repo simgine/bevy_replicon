@@ -275,6 +275,8 @@ fn signature_before_connection() {
         .world_mut()
         .spawn((Replicated, A, Signature::from(0)));
 
+    server_app.update();
+
     server_app.connect_client(&mut client_app);
 
     server_app.update();

@@ -465,13 +465,11 @@ fn collect_mappings(
         let mut mapping_range = None;
 
         if let Some(client_entity) = signature.client() {
-            let Ok((_, mut message, .., visibility)) = clients.get_mut(client_entity) else {
+            let Ok((_, mut message, .., ticks, _, visibility)) = clients.get_mut(client_entity)
+            else {
                 continue;
             };
-            let visibility_state = visibility.state(entity);
-            if visibility_state == Visibility::Visible && signature.is_added()
-                || visibility_state == Visibility::Gained
-            {
+            if should_send_mapping(entity, &signature, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
                 );
@@ -480,11 +478,8 @@ fn collect_mappings(
                 message.add_mapping(mapping_range);
             }
         } else {
-            for (client_entity, mut message, .., visibility) in &mut *clients {
-                let visibility_state = visibility.state(entity);
-                if visibility_state == Visibility::Visible && signature.is_added()
-                    || visibility_state == Visibility::Gained
-                {
+            for (client_entity, mut message, .., ticks, _, visibility) in &mut *clients {
+                if should_send_mapping(entity, &signature, &visibility, &ticks) {
                     trace!(
                         "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
                     );
@@ -761,6 +756,22 @@ fn collect_changes(
     }
 
     Ok(())
+}
+
+fn should_send_mapping(
+    entity: Entity,
+    signature: &Ref<Signature>,
+    visibility: &ClientVisibility,
+    ticks: &ClientTicks,
+) -> bool {
+    let visibility_state = visibility.state(entity);
+    if visibility_state != Visibility::Visible {
+        return false;
+    }
+
+    signature.is_added()
+        || visibility_state == Visibility::Gained
+        || ticks.mutation_tick(entity).is_none()
 }
 
 /// Writes a mapping or re-uses previously written range if exists.
