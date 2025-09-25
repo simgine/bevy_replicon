@@ -34,7 +34,7 @@ use bevy::prelude::*;
 /// <div class="warning">
 ///
 /// Should only be changed from the messaging backend when the client changes its state
-/// in [`ClientSet::ReceivePackets`](crate::client::ClientSet::ReceivePackets).
+/// in [`ClientSystems::ReceivePackets`](crate::client::ClientSystems::ReceivePackets).
 ///
 /// </div>
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

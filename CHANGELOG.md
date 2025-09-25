@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PriorityMap` component for authorized clients to control how often mutations are sent.
 - `Signature` component to match entities between client and server using hashes.
 - `*_filtered` methods for `AppRuleExt` that allow using `With`, `Without` and `Or` filters to define replication rules.
-- `ClientSet::PrepareSend` and `ServerSet::PrepareSend` system sets. Backends should use these sets to add `PostUpdate` logic that needs to run before sending data on clients and servers.
+- `ClientSystems::PrepareSend` and `ServerSet::PrepareSend` system sets. Backends should use these sets to add `PostUpdate` logic that needs to run before sending data on clients and servers.
 - `compact_entity` with functions for `serde` to pack `Entity` more efficienly.
 - `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` helpers that use `compact_entity`.
 - `AppRuleExt::replicate_bundle_with` to customize the priority of the bundle.
@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
 - Rename `SendRate` into `ReplicationMode`. The `EveryTick` variant was also renated into `OnChange`.
+- Rename `ClientSet` into `ClientSystems`.
 - Rename `ComponentRule::send_rate` into `ComponentRule::mode`.
 - Rename `replicon_channels` module into `channels`.
 - Rename `replication_rules` module into `rules`.

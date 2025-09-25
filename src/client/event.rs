@@ -138,16 +138,16 @@ impl Plugin for ClientEventPlugin {
                 )
                     .chain()
                     .after(super::receive_replication)
-                    .in_set(ClientSet::Receive),
+                    .in_set(ClientSystems::Receive),
             )
             .add_systems(
                 OnEnter(ClientState::Connected),
                 (
-                    reset_fn.in_set(ClientSet::ResetEvents),
+                    reset_fn.in_set(ClientSystems::ResetEvents),
                     (enter_receive_fn, enter_trigger_fn)
                         .chain()
                         .after(super::receive_replication)
-                        .in_set(ClientSet::Receive),
+                        .in_set(ClientSystems::Receive),
                 ),
             )
             .add_systems(
@@ -157,7 +157,7 @@ impl Plugin for ClientEventPlugin {
                     resend_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .in_set(ClientSet::Send),
+                    .in_set(ClientSystems::Send),
             );
     }
 }

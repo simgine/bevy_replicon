@@ -49,38 +49,38 @@ impl Plugin for ClientPlugin {
             .configure_sets(
                 PreUpdate,
                 (
-                    ClientSet::ReceivePackets,
-                    ClientSet::Receive,
-                    ClientSet::Diagnostics,
+                    ClientSystems::ReceivePackets,
+                    ClientSystems::Receive,
+                    ClientSystems::Diagnostics,
                 )
                     .chain(),
             )
             .configure_sets(
                 OnEnter(ClientState::Connected),
                 (
-                    ClientSet::ResetEvents,
-                    ClientSet::Receive,
-                    ClientSet::Diagnostics,
+                    ClientSystems::ResetEvents,
+                    ClientSystems::Receive,
+                    ClientSystems::Diagnostics,
                 )
                     .chain(),
             )
             .configure_sets(
                 PostUpdate,
-                (ClientSet::Send, ClientSet::SendPackets).chain(),
+                (ClientSystems::Send, ClientSystems::SendPackets).chain(),
             )
             .add_systems(
                 PreUpdate,
                 receive_replication
-                    .in_set(ClientSet::Receive)
+                    .in_set(ClientSystems::Receive)
                     .run_if(in_state(ClientState::Connected)),
             )
             .add_systems(
                 OnEnter(ClientState::Connected),
-                receive_replication.in_set(ClientSet::Receive),
+                receive_replication.in_set(ClientSystems::Receive),
             )
             .add_systems(
                 OnExit(ClientState::Connected),
-                reset.in_set(ClientSet::Reset),
+                reset.in_set(ClientSystems::Reset),
             );
 
         let auth_method = *app.world().resource::<AuthMethod>();
@@ -88,7 +88,7 @@ impl Plugin for ClientPlugin {
         if auth_method == AuthMethod::ProtocolCheck {
             app.add_observer(log_protocol_error).add_systems(
                 OnEnter(ClientState::Connected),
-                send_protocol_hash.in_set(ClientSet::SendHash),
+                send_protocol_hash.in_set(ClientSystems::SendHash),
             );
         }
     }
@@ -762,7 +762,7 @@ struct ReceiveParams<'a> {
 
 /// Set with replication and event systems related to client.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
-pub enum ClientSet {
+pub enum ClientSystems {
     /// Systems that receive packets from the messaging backend and update [`ClientState`].
     ///
     /// Used by messaging backend implementations.
@@ -793,7 +793,7 @@ pub enum ClientSet {
     SendPackets,
     /// Systems that reset queued server events.
     ///
-    /// This is a separate set from [`ClientSet::Reset`] to avoid sending events that were sent before the connection.
+    /// This is a separate set from [`ClientSystems::Reset`] to avoid sending events that were sent before the connection.
     ///
     /// Runs in [`OnEnter`] for [`ClientState::Connected`].
     ResetEvents,
@@ -802,6 +802,10 @@ pub enum ClientSet {
     /// Runs in [`OnExit`] for [`ClientState::Connected`].
     Reset,
 }
+
+#[doc(hidden)]
+#[deprecated = "Use `ClientSystems` instead"]
+pub type ClientSet = ClientSystems;
 
 /// Last received tick for update messages from the server.
 ///
