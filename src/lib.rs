@@ -114,7 +114,7 @@ For implementation details see [`ServerChannel`](shared::backend::channels::Serv
 ### Tick rate
 
 By default, updates are not sent every frame in order to save bandwidth. Replication runs
-in [`ServerSet::Send`] whenever the [`ServerTick`](server::server_tick::ServerTick) resource
+in [`ServerSystems::Send`] whenever the [`ServerTick`](server::server_tick::ServerTick) resource
 changes and if the state is [`ServerState::Running`].
 
 By default, the tick is incremented in [`FixedPostUpdate`] each time [`FixedMain`](bevy::app::FixedMain)
@@ -304,7 +304,7 @@ app.add_client_event::<ExampleEvent>(Channel::Ordered)
     .add_systems(
         PreUpdate,
         receive_events
-            .after(ServerSet::Receive)
+            .after(ServerSystems::Receive)
             .run_if(in_state(ServerState::Running)),
     )
     .add_systems(
@@ -387,7 +387,7 @@ app.add_server_event::<ExampleEvent>(Channel::Ordered)
     )
     .add_systems(
         PostUpdate,
-        send_events.before(ServerSet::Send).run_if(in_state(ServerState::Running)),
+        send_events.before(ServerSystems::Send).run_if(in_state(ServerState::Running)),
     );
 
 fn send_events(mut events: EventWriter<ToClients<ExampleEvent>>) {
@@ -504,8 +504,8 @@ For server events we drain [`ToClients<E>`] and, if the [`ClientId::Server`] is 
 re-emit it as `E` locally. This emulates event receiving for both server and singleplayer without actually
 transmitting data over the network.
 
-We also provide [`ClientSystems`] and [`ServerSet`] to schedule your system at specific time in the frame.
-For example, you can run your systems right after receive using [`ClientSystems::Receive`] or [`ServerSet::Receive`].
+We also provide [`ClientSystems`] and [`ServerSystems`] to schedule your system at specific time in the frame.
+For example, you can run your systems right after receive using [`ClientSystems::Receive`] or [`ServerSystems::Receive`].
 
 ## Organizing your game code
 
@@ -740,7 +740,7 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, VisibilityPolicy,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, VisibilityPolicy,
         client_visibility::ClientVisibility, event::ServerEventPlugin,
         related_entities::SyncRelatedAppExt,
     };
@@ -754,6 +754,13 @@ pub mod prelude {
     )]
     #[cfg(feature = "client")]
     pub use super::client::ClientSet;
+
+    #[expect(
+        deprecated,
+        reason = "Exporting deprecated alias to simplify migration"
+    )]
+    #[cfg(feature = "server")]
+    pub use super::server::ServerSet;
 
     #[expect(
         deprecated,

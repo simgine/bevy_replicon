@@ -118,14 +118,14 @@ impl Plugin for ServerPlugin {
             .init_resource::<RelatedEntities>()
             .configure_sets(
                 PreUpdate,
-                (ServerSet::ReceivePackets, ServerSet::Receive).chain(),
+                (ServerSystems::ReceivePackets, ServerSystems::Receive).chain(),
             )
             .configure_sets(
                 PostUpdate,
                 (
-                    ServerSet::IncrementTick,
-                    ServerSet::Send,
-                    ServerSet::SendPackets,
+                    ServerSystems::IncrementTick,
+                    ServerSystems::Send,
+                    ServerSystems::SendPackets,
                 )
                     .chain(),
             )
@@ -139,7 +139,7 @@ impl Plugin for ServerPlugin {
                     cleanup_acks(self.mutations_timeout).run_if(on_timer(self.mutations_timeout)),
                 )
                     .chain()
-                    .in_set(ServerSet::Receive)
+                    .in_set(ServerSystems::Receive)
                     .run_if(in_state(ServerState::Running)),
             )
             .add_systems(OnExit(ServerState::Running), reset)
@@ -150,7 +150,7 @@ impl Plugin for ServerPlugin {
                     send_replication.run_if(resource_changed::<ServerTick>),
                 )
                     .chain()
-                    .in_set(ServerSet::Send)
+                    .in_set(ServerSystems::Send)
                     .run_if(in_state(ServerState::Running)),
             );
 
@@ -158,7 +158,7 @@ impl Plugin for ServerPlugin {
         app.add_systems(
             self.tick_schedule,
             increment_tick
-                .in_set(ServerSet::IncrementTick)
+                .in_set(ServerSystems::IncrementTick)
                 .run_if(in_state(ServerState::Running)),
         );
 
@@ -860,7 +860,7 @@ fn write_tick_cached(
 
 /// Set with replication and event systems related to server.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
-pub enum ServerSet {
+pub enum ServerSystems {
     /// Systems that receive packets from the messaging backend and update [`ServerState`].
     ///
     /// Used by the messaging backend.
@@ -893,6 +893,10 @@ pub enum ServerSet {
     /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
     SendPackets,
 }
+
+#[doc(hidden)]
+#[deprecated = "Use `ServerSystems` instead"]
+pub type ServerSet = ServerSystems;
 
 /// Controls how visibility will be managed via [`ClientVisibility`].
 #[derive(Default, Debug, Clone, Copy)]

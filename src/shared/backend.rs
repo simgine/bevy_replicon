@@ -57,7 +57,7 @@ pub type RepliconClientStatus = ClientState;
 /// <div class="warning">
 ///
 /// Should only be changed from the messaging backend when the server changes its state
-/// in [`ServerSet::ReceivePackets`](crate::server::ServerSet::ReceivePackets).
+/// in [`ServerSystems::ReceivePackets`](crate::server::ServerSystems::ReceivePackets).
 ///
 /// </div>
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

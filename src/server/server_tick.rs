@@ -9,7 +9,7 @@ use crate::prelude::*;
 /// available to the client in the custom deserialization, despawn, and component
 /// removal functions.
 ///
-/// The server sends replication data in [`ServerSet::Send`] when the state is
+/// The server sends replication data in [`ServerSystems::Send`] when the state is
 /// [`ServerState::Running`] any time this resource changes. You can configure
 /// when the tick is incremented via [`ServerPlugin::tick_schedule`].
 ///
