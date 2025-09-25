@@ -6,9 +6,9 @@ use log::trace;
 ///
 /// The messaging backend is responsible for updating this resource:
 /// - Received messages should be forwarded to Replicon via [`Self::insert_received`] in
-///   [`ClientSet::ReceivePackets`](crate::prelude::ClientSet::ReceivePackets).
+///   [`ClientSystems::ReceivePackets`](crate::prelude::ClientSystems::ReceivePackets).
 /// - Replicon messages needs to be forwarded to the backend via [`Self::drain_sent`] in
-///   [`ClientSet::SendPackets`](crate::prelude::ClientSet::SendPackets).
+///   [`ClientSystems::SendPackets`](crate::prelude::ClientSystems::SendPackets).
 ///
 /// Inserted as resource by [`ClientPlugin`](crate::prelude::ClientPlugin).
 #[derive(Resource, Default)]

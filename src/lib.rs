@@ -309,7 +309,7 @@ app.add_client_event::<ExampleEvent>(Channel::Ordered)
     )
     .add_systems(
         PostUpdate,
-        send_events.before(ClientSet::Send).run_if(in_state(ClientState::Connected)),
+        send_events.before(ClientSystems::Send).run_if(in_state(ClientState::Connected)),
     );
 
 fn send_events(mut events: EventWriter<ExampleEvent>) {
@@ -382,7 +382,7 @@ app.add_server_event::<ExampleEvent>(Channel::Ordered)
     .add_systems(
         PreUpdate,
         receive_events
-            .after(ClientSet::Receive)
+            .after(ClientSystems::Receive)
             .run_if(in_state(ClientState::Connected)),
     )
     .add_systems(
@@ -504,8 +504,8 @@ For server events we drain [`ToClients<E>`] and, if the [`ClientId::Server`] is 
 re-emit it as `E` locally. This emulates event receiving for both server and singleplayer without actually
 transmitting data over the network.
 
-We also provide [`ClientSet`] and [`ServerSet`] to schedule your system at specific time in the frame.
-For example, you can run your systems right after receive using [`ClientSet::Receive`] or [`ServerSet::Receive`].
+We also provide [`ClientSystems`] and [`ServerSet`] to schedule your system at specific time in the frame.
+For example, you can run your systems right after receive using [`ClientSystems::Receive`] or [`ServerSet::Receive`].
 
 ## Organizing your game code
 
@@ -735,7 +735,7 @@ pub mod prelude {
 
     #[cfg(feature = "client")]
     pub use super::client::{
-        ClientPlugin, ClientReplicationStats, ClientSet, event::ClientEventPlugin,
+        ClientPlugin, ClientReplicationStats, ClientSystems, event::ClientEventPlugin,
     };
 
     #[cfg(feature = "server")]
@@ -747,6 +747,13 @@ pub mod prelude {
 
     #[cfg(feature = "client_diagnostics")]
     pub use super::client::diagnostics::ClientDiagnosticsPlugin;
+
+    #[expect(
+        deprecated,
+        reason = "Exporting deprecated alias to simplify migration"
+    )]
+    #[cfg(feature = "client")]
+    pub use super::client::ClientSet;
 
     #[expect(
         deprecated,

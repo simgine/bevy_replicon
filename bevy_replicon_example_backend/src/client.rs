@@ -28,13 +28,13 @@ impl Plugin for RepliconExampleClientPlugin {
                     .chain(),
                 set_connected.run_if(resource_added::<ExampleClient>),
             )
-                .in_set(ClientSet::ReceivePackets),
+                .in_set(ClientSystems::ReceivePackets),
         )
         .add_systems(
             PostUpdate,
             send_packets
                 .run_if(resource_exists::<ExampleClient>)
-                .in_set(ClientSet::SendPackets),
+                .in_set(ClientSystems::SendPackets),
         );
     }
 }
