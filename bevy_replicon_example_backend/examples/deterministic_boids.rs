@@ -107,18 +107,16 @@ fn spawn_boids(commands: &mut Commands) {
         };
 
         let bias = rng.f32_range(BIAS_INCREMENT..=MAX_BIAS);
+        let velocity = Dir2::NORTH_WEST * rng.f32_range(MIN_SPEED..=MAX_SPEED);
 
-        let velocity_x = rng.f32_range(MIN_SPEED..=MAX_SPEED);
-        let velocity_y = rng.f32_range(MIN_SPEED..=MAX_SPEED);
-
-        let x = rng.f32_range(-0.200..=200.0);
-        let y = rng.f32_range(-0.200..=200.0);
+        let x = rng.f32_range(-0.250..=250.0);
+        let y = rng.f32_range(-0.250..=250.0);
         let angle = rng.f32_range(0.0..TAU);
 
         commands.spawn((
             Boid { color, group },
             Bias(bias),
-            Velocity(Vec2::new(velocity_x, velocity_y)),
+            Velocity(velocity),
             Transform {
                 translation: Vec3::new(x, y, 0.0),
                 rotation: Quat::from_rotation_z(angle),
