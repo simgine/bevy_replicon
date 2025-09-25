@@ -60,7 +60,7 @@ impl SyncRelatedAppExt for App {
     {
         self.add_systems(
             OnEnter(ServerState::Running),
-            read_relations::<C>.in_set(ServerSet::ReadRelations),
+            read_relations::<C>.in_set(ServerSystems::ReadRelations),
         )
         .add_observer(add_relation::<C>)
         .add_observer(remove_relation::<C>)

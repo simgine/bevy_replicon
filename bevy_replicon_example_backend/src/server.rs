@@ -28,13 +28,13 @@ impl Plugin for RepliconExampleServerPlugin {
                     .chain(),
                 set_running.run_if(resource_added::<ExampleServer>),
             )
-                .in_set(ServerSet::ReceivePackets),
+                .in_set(ServerSystems::ReceivePackets),
         )
         .add_systems(
             PostUpdate,
             send_packets
                 .run_if(resource_exists::<ExampleServer>)
-                .in_set(ServerSet::SendPackets),
+                .in_set(ServerSystems::SendPackets),
         );
     }
 }

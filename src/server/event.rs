@@ -97,7 +97,7 @@ impl Plugin for ServerEventPlugin {
                     trigger_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .in_set(ServerSet::Receive),
+                    .in_set(ServerSystems::Receive),
             )
             .add_systems(
                 PostUpdate,
@@ -110,7 +110,7 @@ impl Plugin for ServerEventPlugin {
                 )
                     .chain()
                     .after(super::send_replication)
-                    .in_set(ServerSet::Send),
+                    .in_set(ServerSystems::Send),
             );
     }
 }
