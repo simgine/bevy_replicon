@@ -48,6 +48,10 @@ pub enum ClientState {
     Connected,
 }
 
+#[doc(hidden)]
+#[deprecated = "Use `ClientState` instead"]
+pub type RepliconClientStatus = ClientState;
+
 /// Connection state of the server.
 ///
 /// <div class="warning">
@@ -64,6 +68,10 @@ pub enum ServerState {
     /// Accepting and handling client connections.
     Running,
 }
+
+#[doc(hidden)]
+#[deprecated = "Use `ServerState` instead"]
+pub type RepliconServerStatus = ServerState;
 
 /// An event for the messaging backend to queue a disconnection
 /// for a specific client on the server.
@@ -101,6 +109,10 @@ pub struct ClientStats {
     /// Bytes received per second for the connection.
     pub received_bps: f64,
 }
+
+#[doc(hidden)]
+#[deprecated = "Use `ClientStats` instead"]
+pub type NetworkStats = ClientStats;
 
 #[cfg(test)]
 mod tests {

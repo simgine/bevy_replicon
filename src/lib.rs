@@ -747,6 +747,18 @@ pub mod prelude {
 
     #[cfg(feature = "client_diagnostics")]
     pub use super::client::diagnostics::ClientDiagnosticsPlugin;
+
+    #[expect(
+        deprecated,
+        reason = "Exporting deprecated aliases to simplify migration"
+    )]
+    pub use super::shared::{
+        backend::{
+            NetworkStats, RepliconClientStatus, RepliconServerStatus,
+            client_messages::RepliconClient, server_messages::RepliconServer,
+        },
+        replication::rules::component::SendRate,
+    };
 }
 
 pub use bytes;
