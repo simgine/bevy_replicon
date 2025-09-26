@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PriorityMap` component for authorized clients to control how often mutations are sent.
 - `Signature` component to match entities between client and server using hashes.
 - `*_filtered` methods for `AppRuleExt` that allow using `With`, `Without` and `Or` filters to define replication rules.
-- `ClientSystems::PrepareSend` and `ServerSystems::PrepareSend` system sets. Backends should use these sets to add `PostUpdate` logic that needs to run before sending data on clients and servers.
 - `compact_entity` with functions for `serde` to pack `Entity` more efficienly.
 - `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` helpers that use `compact_entity`.
 - `AppRuleExt::replicate_bundle_with` to customize the priority of the bundle.
@@ -21,12 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Rename `RepliconClientStatus` to `ClientState` and `RepliconServerStatus` to `ServerState`. They are now regular Bevy states. As result, we now require `StatesPlugin` to be added. It's present by default in `DefaultPlugins`, but with `MinimalPlugins` you have to add it manually.
-- Replace `ServerPlugin::tick_policy` with `ServerPlugin::tick_schedule`, which specifies the schedule where the tick increments. By default, it's `FixedPostUpdate`.
-- Make custom entity ser/de compatible with `serde` attributes.
+- Replace `ServerPlugin::tick_policy` with `ServerPlugin::tick_schedule`, which specifies the schedule where the tick increments. By default, it's `FixedPostUpdate`. You can control how often it runs with `Time<Fixed>` resource. If you want to mimic `TickPolicy::EveryFrame`, set the schedule to `PostUpdate`.
 - All contexts now store `AppTypeRegistry` instead of `TypeRegistry`. To get `TypeRegistry`, call `AppTypeRegistry::read`.
 - All events now use `ClientId` wrapper instead of `Entity`.
 - `AppTypeRegistry` now available on replication for observers.
-- Make `postcard_utils` a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
+- `postcard_utils` now a top-level module. Instead of `bevy_replicon::shared::postcard_utils`, it's now just `bevy_replicon::postcard_utils`.
 - Rename `FromClient::client_entity` into `FromClient::client_id`.
 - Rename `DisconnectRequest::client_entity` into `DisconnectRequest::client`.
 - Rename `SendRate` into `ReplicationMode`. The `EveryTick` variant was also renated into `OnChange`.
@@ -54,8 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VisibilityPolicy::All`. Use `VisibilityPolicy::Blacklist` instead, which is the default now. There are not performance difference when the list is empty.
 - `entity_serde::serialize_entity` and `entity_serde::deserialize_entity`. Use `postcard_utils::entity_to_extend_mut` and `postcard_utils::entity_from_buf` respectively; just swap the argument order.
 - `SERVER`. Use `ClientId::Server` instead.
-- `ReplicationMode::Periodic`. Use `PriorityMap` instead.
-- `TickPolicy`. You now can set the schedule directly or configure how often it runs by inserting `Time::<Fixed>`.
+- `SendRate::Periodic`. Use `PriorityMap` instead.
+- `TickPolicy`. Set the schedule directly to `ServerPlugin::tick_schedule`.
 - All provided run conditions. Just use `in_state` or `OnEnter`/`OnExit` with `ServerState` and `ClientState` instead. `server_or_singleplayer` is just `in_state(ClientState::Disconnected)`.
 
 ## [0.34.4] - 2025-07-29
