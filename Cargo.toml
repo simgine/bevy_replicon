@@ -43,7 +43,8 @@ bitflags = { version = "2.6", features = ["serde"] }
 postcard = { version = "1.1", default-features = false, features = [
   "experimental-derive",
 ] }
-fnv = { version = "1.0", default-features = false }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+deterministic-hash = "1.0.2"
 
 [target.'cfg(not(all(target_has_atomic = "8", target_has_atomic = "16", target_has_atomic = "32", target_has_atomic = "64", target_has_atomic = "ptr")))'.dependencies]
 bytes = { version = "1.10", default-features = false, features = [

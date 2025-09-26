@@ -8,8 +8,9 @@ use bevy::{
     platform::{collections::HashMap, hash::NoOpHash},
     prelude::*,
 };
-use fnv::FnvHasher;
+use deterministic_hash::DeterministicHasher;
 use log::{debug, error};
+use xxhash_rust::xxh3::Xxh3Default;
 
 /// Describes how to calculate a deterministic hash that identifies an entity.
 ///
@@ -31,8 +32,8 @@ use log::{debug, error};
 #[derive(Component, Debug, Clone, Copy)]
 #[component(on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
-    /// User-defined initial state for the hash.
-    base_hash: Option<u64>,
+    /// User-defined value added to the hash.
+    salt: Option<u64>,
 
     /// Functions to calculate hash from components.
     fns: &'static [HashFn],
@@ -131,7 +132,7 @@ impl Signature {
     #[must_use]
     pub fn of<C: Component + Hash>() -> Self {
         Self {
-            base_hash: None,
+            salt: None,
             fns: &[hash::<C>],
             client: None,
             hash: 0,
@@ -224,27 +225,25 @@ impl Signature {
     #[must_use]
     pub fn of_n<S: SignatureComponents>() -> Self {
         Self {
-            base_hash: None,
+            salt: None,
             fns: S::HASH_FNS,
             client: None,
             hash: 0,
         }
     }
 
-    /// Sets the base hash by hashing the given value.
+    /// Sets the user-defined salt from the hash of the given value.
     ///
-    /// The resulting hash will be used as the initial state before
-    /// component data is hashed. This allows entities with
-    /// identical components to be distinguished.
+    /// This allows entities with identical components to be distinguished.
     ///
     /// You can also use [`Self::from`] to create a signature
     /// that doesn't hash any components.
     #[must_use]
-    pub fn with_base<T: Hash>(mut self, value: T) -> Self {
-        let mut hasher = FnvHasher::default();
+    pub fn with_salt<T: Hash>(mut self, value: T) -> Self {
+        let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         value.hash(&mut hasher);
 
-        self.base_hash = Some(hasher.finish());
+        self.salt = Some(hasher.finish());
         self
     }
 
@@ -266,7 +265,10 @@ impl Signature {
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
-        let mut hasher = self.base_hash.map(FnvHasher::with_key).unwrap_or_default();
+        let mut hasher = DeterministicHasher::<Xxh3Default>::default();
+        if let Some(salt) = self.salt {
+            salt.hash(&mut hasher);
+        }
 
         let entity = entity.into();
         for hash_fn in self.fns {
@@ -278,17 +280,17 @@ impl Signature {
 }
 
 impl<T: Hash> From<T> for Signature {
-    /// Creates a new instance with only the base hash,
-    /// that won't additionally hash any components.
+    /// Creates a new instance that won't hash any components
+    /// with the salt from the hash of the given value.
     ///
     /// It's usually better to use components because their names
-    /// are also hashed.
+    /// are also hashed and set the salt additionally via [`Self::with_salt`].
     fn from(value: T) -> Self {
-        let mut hasher = FnvHasher::default();
+        let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         value.hash(&mut hasher);
 
         Self {
-            base_hash: Some(hasher.finish()),
+            salt: Some(hasher.finish()),
             fns: &[],
             client: None,
             hash: 0,
@@ -362,9 +364,9 @@ pub trait SignatureComponents {
     const HASH_FNS: &'static [HashFn];
 }
 
-type HashFn = fn(&EntityRef, &mut FnvHasher);
+type HashFn = fn(&EntityRef, &mut DeterministicHasher<Xxh3Default>);
 
-fn hash<C: Component + Hash>(entity: &EntityRef, hasher: &mut FnvHasher) {
+fn hash<C: Component + Hash>(entity: &EntityRef, hasher: &mut DeterministicHasher<Xxh3Default>) {
     let type_name = any::type_name::<C>();
     type_name.hash(hasher);
     if let Some(component) = entity.get::<C>() {
@@ -407,6 +409,8 @@ mod tests {
         let hash2 = signature.eval(world.entity(entity2));
         let hash3 = signature.eval(world.entity(entity3));
         let hash4 = signature.eval(world.entity(entity4));
+
+        assert_eq!(hash1, 8868928108740117422);
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
         assert_ne!(hash3, hash4);
@@ -427,6 +431,7 @@ mod tests {
         let hash3 = signature.eval(world.entity(entity3));
         let hash4 = signature.eval(world.entity(entity4));
 
+        assert_eq!(hash1, 15617178438747089367);
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
         assert_ne!(hash3, hash4);
@@ -434,22 +439,24 @@ mod tests {
     }
 
     #[test]
-    fn different_initial_state() {
+    fn different_salt() {
         let mut world = World::new();
 
         let entity1 = world.spawn((A, B)).id();
         let entity2 = world.spawn((A, B)).id();
 
         let signature = Signature::of_n::<(A, B)>();
-        let signature_42 = Signature::of_n::<(A, B)>().with_base(42);
+        let signature_42 = Signature::of_n::<(A, B)>().with_salt(42usize);
 
         let hash1 = signature.eval(world.entity(entity1));
         let hash2 = signature.eval(world.entity(entity2));
         let hash1_42 = signature_42.eval(world.entity(entity1));
         let hash2_42 = signature_42.eval(world.entity(entity2));
 
+        assert_eq!(hash1, 11681676351098321858);
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash1_42);
+        assert_eq!(hash1_42, 3735346266121839838);
         assert_eq!(hash1_42, hash2_42);
     }
 

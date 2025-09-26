@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hide `BufferedMutations` from public API.
 - Hide `server::increment_tick` from public API.
 - `ExampleClient::new` now accepts `impl Into<SocketAddr>`. This makes it easier for backend developers to port examples since they usually specify IP address.
+- Switch from the FNV hasher to [xxh3](https://docs.rs/xxhash-rust). It's faster and produces high-quality hashes. The hasher is now also wrapped in [deterministic-hash](https://docs.rs/deterministic-hash), which ensures consistent endianness and handles `usize` portably.
 
 ## Removed
 
