@@ -1,4 +1,3 @@
-pub mod client_entity_map;
 pub mod client_visibility;
 pub mod event;
 pub mod related_entities;
@@ -318,12 +317,12 @@ fn send_replication(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    entities: Query<(Entity, Ref<Signature>)>,
     mut related_entities: ResMut<RelatedEntities>,
     mut removal_buffer: ResMut<RemovalBuffer>,
     mut entity_buffer: ResMut<EntityBuffer>,
@@ -343,7 +342,7 @@ fn send_replication(
         mutations.resize_related(related_entities.graphs_count());
     }
 
-    collect_mappings(&mut serialized, &mut clients)?;
+    collect_mappings(&mut serialized, &mut clients, &entities)?;
     collect_despawns(&mut serialized, &mut clients, &mut despawn_buffer)?;
     collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
     collect_changes(
@@ -397,7 +396,6 @@ fn send_messages(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -455,22 +453,42 @@ fn collect_mappings(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    entities: &Query<(Entity, Ref<Signature>)>,
 ) -> Result<()> {
-    for (client_entity, mut message, _, _, mut entity_map, ..) in clients {
-        if entity_map.is_empty() {
-            continue;
-        }
+    for (entity, signature) in entities {
+        let hash = signature.hash();
+        let mut mapping_range = None;
 
-        trace!("writing mappings for client `{client_entity}`");
-        let len = entity_map.len();
-        let mappings = serialized.write_mappings(entity_map.0.drain(..))?;
-        message.set_mappings(mappings, len);
+        if let Some(client_entity) = signature.client() {
+            let Ok((_, mut message, .., ticks, _, visibility)) = clients.get_mut(client_entity)
+            else {
+                continue;
+            };
+            if should_send_mapping(entity, &signature, &visibility, &ticks) {
+                trace!(
+                    "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
+                );
+                let mapping_range =
+                    write_mapping_cached(&mut mapping_range, serialized, entity, hash)?;
+                message.add_mapping(mapping_range);
+            }
+        } else {
+            for (client_entity, mut message, .., ticks, _, visibility) in &mut *clients {
+                if should_send_mapping(entity, &signature, &visibility, &ticks) {
+                    trace!(
+                        "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
+                    );
+                    let mapping_range =
+                        write_mapping_cached(&mut mapping_range, serialized, entity, hash)?;
+                    message.add_mapping(mapping_range);
+                }
+            }
+        }
     }
 
     Ok(())
@@ -484,7 +502,6 @@ fn collect_despawns(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -528,7 +545,6 @@ fn collect_removals(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -561,7 +577,6 @@ fn collect_changes(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut ClientEntityMap,
         &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
@@ -743,6 +758,39 @@ fn collect_changes(
     Ok(())
 }
 
+fn should_send_mapping(
+    entity: Entity,
+    signature: &Ref<Signature>,
+    visibility: &ClientVisibility,
+    ticks: &ClientTicks,
+) -> bool {
+    let visibility_state = visibility.state(entity);
+    if visibility_state == Visibility::Hidden {
+        return false;
+    }
+
+    visibility_state == Visibility::Gained
+        || signature.is_added()
+        || ticks.mutation_tick(entity).is_none()
+}
+
+/// Writes a mapping or re-uses previously written range if exists.
+fn write_mapping_cached(
+    mapping_range: &mut Option<Range<usize>>,
+    serialized: &mut SerializedData,
+    entity: Entity,
+    hash: u64,
+) -> Result<Range<usize>> {
+    if let Some(range) = mapping_range.clone() {
+        return Ok(range);
+    }
+
+    let range = serialized.write_mapping(entity, hash)?;
+    *mapping_range = Some(range.clone());
+
+    Ok(range)
+}
+
 /// Writes an entity or re-uses previously written range if exists.
 fn write_entity_cached(
     entity_range: &mut Option<Range<usize>>,
@@ -863,14 +911,7 @@ struct DespawnBuffer(Vec<Entity>);
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
 #[derive(Component, Default)]
-#[require(
-    ClientTicks,
-    PriorityMap,
-    EntityCache,
-    ClientEntityMap,
-    Updates,
-    Mutations
-)]
+#[require(ClientTicks, PriorityMap, EntityCache, Updates, Mutations)]
 pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for an authorized client.

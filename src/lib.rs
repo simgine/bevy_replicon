@@ -561,13 +561,6 @@ more details.
 In addition, [`ClientVisibility`] can be used to further reduce bandwidth by hiding entities
 that are irrelevant to a given client.
 
-### Spawning the client on an entity first
-
-If you want the server to replicate an entity into a client entity that was already spawned, see [`ClientEntityMap`].
-
-This can be useful for certain types of games. For example, spawning bullets on the client immediately without
-waiting for replication.
-
 ### Interpolation and/or client-side prediction
 
 Due to network round-trip time and [tick rate](#tick-rate), you may notice that the state isn't updated
@@ -598,6 +591,18 @@ How much to predict also depends on the game. Common approaches are:
 We don't have these features built-in, but we provide a low-level API to implement these abstractions on top.
 Check the [corresponding section](https://github.com/simgine/bevy_replicon#interpolation-andor-rollback)
 in our README for existing implementations.
+
+### Predicting spawns
+
+Sometimes it's necessary to spawn an entity on the client before receiving replication from the server.
+A common example is projectiles. By default, the client will end up with two entities: one locally spawned
+and one replicated from the server.
+
+We provide the [`Signature`] component, which allows replicated entities to be matched with entities
+previously spawned on the client.
+
+This is also useful for synchronizing scenes. Both the client and the server can load a level independently
+and then match level entities to synchronize certain things, such as opened doors.
 
 #### Client markers
 
@@ -722,6 +727,7 @@ pub mod prelude {
                 command_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
+                signature::Signature,
             },
             replicon_tick::RepliconTick,
         },
@@ -735,8 +741,8 @@ pub mod prelude {
     #[cfg(feature = "server")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSet, VisibilityPolicy,
-        client_entity_map::ClientEntityMap, client_visibility::ClientVisibility,
-        event::ServerEventPlugin, related_entities::SyncRelatedAppExt,
+        client_visibility::ClientVisibility, event::ServerEventPlugin,
+        related_entities::SyncRelatedAppExt,
     };
 
     #[cfg(feature = "client_diagnostics")]

@@ -20,16 +20,16 @@ use crate::{
 /// Can be packed into a message using [`Self::send`].
 #[derive(Default, Component)]
 pub(crate) struct Updates {
-    /// Mappings for client's pre-spawned entities.
+    /// Entity mappings for newly visible server entities and their hashes calculated from the [`Signature`] component.
     ///
-    /// Serialized as single continuous chunk of entity pairs.
+    /// Since clients may see different entities, it's serialized as multiple chunks of mappings.
     ///
     /// Mappings should be processed first, so all referenced entities after it will behave correctly.
-    ///
-    /// See also [`ClientEntityMap`](crate::server::client_entity_map::ClientEntityMap).
-    mappings: Range<usize>,
+    mappings: Vec<Range<usize>>,
 
-    /// Number of pairs encoded in [`Self::mappings`].
+    /// Number of entity mappings.
+    ///
+    /// May not be equal to the length of [`Self::mappings`] since adjacent ranges are merged together.
     mappings_len: usize,
 
     /// Despawns that happened in this tick.
@@ -69,9 +69,16 @@ pub(crate) struct Updates {
 }
 
 impl Updates {
-    pub(crate) fn set_mappings(&mut self, mappings: Range<usize>, len: usize) {
-        self.mappings = mappings;
-        self.mappings_len = len;
+    pub(crate) fn add_mapping(&mut self, mappings: Range<usize>) {
+        self.mappings_len += 1;
+        if let Some(last) = self.mappings.last_mut() {
+            // Append to previous range if possible.
+            if last.end == mappings.start {
+                last.end = mappings.end;
+                return;
+            }
+        }
+        self.mappings.push(mappings);
     }
 
     pub(crate) fn add_despawn(&mut self, entity: Range<usize>) {
@@ -197,7 +204,7 @@ impl Updates {
                     if flag != last_flag {
                         message_size += serialized_size(&self.mappings_len)?;
                     }
-                    message_size += self.mappings.len();
+                    message_size += self.mappings.iter().map(Range::len).sum::<usize>();
                 }
                 UpdateMessageFlags::DESPAWNS => {
                     if flag != last_flag {
@@ -236,7 +243,9 @@ impl Updates {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.mappings_len, &mut message)?;
                     }
-                    message.extend_from_slice(&serialized[self.mappings.clone()]);
+                    for range in &self.mappings {
+                        message.extend_from_slice(&serialized[range.clone()]);
+                    }
                 }
                 UpdateMessageFlags::DESPAWNS => {
                     if flag != last_flag {

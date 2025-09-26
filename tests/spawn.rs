@@ -194,7 +194,7 @@ fn before_connection() {
 }
 
 #[test]
-fn pre_spawn() {
+fn signature() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -212,15 +212,11 @@ fn pre_spawn() {
 
     server_app.connect_client(&mut client_app);
 
-    let client_entity = client_app.world_mut().spawn_empty().id();
-    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    let mut entity_map = server_app
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
+    let server_entity = server_app
         .world_mut()
-        .get_mut::<ClientEntityMap>(client)
-        .unwrap();
-    entity_map.insert(server_entity, client_entity);
+        .spawn((Replicated, A, Signature::from(0)))
+        .id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -261,7 +257,7 @@ fn pre_spawn() {
 }
 
 #[test]
-fn after_despawn() {
+fn signature_before_connection() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -277,21 +273,59 @@ fn after_despawn() {
         .finish();
     }
 
-    server_app.connect_client(&mut client_app);
-
-    // Remove and insert `Replicated` to trigger despawn and spawn for client at the same time.
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
     server_app
         .world_mut()
-        .spawn((Replicated, A))
-        .remove::<Replicated>()
-        .insert(Replicated);
+        .spawn((Replicated, A, Signature::from(0)));
+
+    server_app.update();
+
+    server_app.connect_client(&mut client_app);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert!(client_app.world().get::<A>(client_entity).is_some());
+}
+
+#[test]
+fn signature_for_client() {
+    let mut server_app = App::new();
+    let mut client_app1 = App::new();
+    let mut client_app2 = App::new();
+    for app in [&mut server_app, &mut client_app1, &mut client_app2] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin {
+                tick_schedule: PostUpdate.intern(),
+                ..Default::default()
+            }),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app1);
+    server_app.connect_client(&mut client_app2);
+
+    let client1 = **client_app1.world().resource::<TestClientEntity>();
+
+    let client_entity1 = client_app1.world_mut().spawn(Signature::from(0)).id();
+    let client_entity2 = client_app2.world_mut().spawn(Signature::from(0)).id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, Signature::from(0).for_client(client1)));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app1);
+    client_app1.update();
+    server_app.exchange_with_client(&mut client_app2);
+    client_app2.update();
+
+    assert!(client_app1.world().get::<A>(client_entity1).is_some());
+    assert!(client_app2.world().get::<A>(client_entity2).is_none());
 }
 
 #[derive(Component, Deserialize, Serialize)]
