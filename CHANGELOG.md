@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2025-09-26
+
 ### Added
 
 - `PriorityMap` component for authorized clients to control how often mutations are sent.
@@ -905,7 +907,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.34.4...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/simgine/bevy_replicon/compare/v0.34.4...v0.35.0
 [0.34.4]: https://github.com/simgine/bevy_replicon/compare/v0.34.3...v0.34.4
 [0.34.3]: https://github.com/simgine/bevy_replicon/compare/v0.34.1...v0.34.3
 [0.34.1]: https://github.com/simgine/bevy_replicon/compare/v0.34.0...v0.34.1
