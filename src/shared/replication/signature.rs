@@ -357,6 +357,7 @@ impl SignatureMap {
     }
 }
 
+/// Tuple-impls are limited to at most 6 components.
 pub trait SignatureComponents {
     const HASH_FNS: &'static [HashFn];
 }
