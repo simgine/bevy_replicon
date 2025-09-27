@@ -46,10 +46,6 @@ pub enum ReplicationMode {
     Once,
 }
 
-#[doc(hidden)]
-#[deprecated = "Use `ReplicationMode` instead"]
-pub type SendRate = ReplicationMode;
-
 /// Parameters that can be turned into a component replication rule.
 ///
 /// Used for [`IntoComponentRules`] to accept either [`RuleFns`] or a tuple combining

@@ -894,10 +894,6 @@ pub enum ServerSystems {
     SendPackets,
 }
 
-#[doc(hidden)]
-#[deprecated = "Use `ServerSystems` instead"]
-pub type ServerSet = ServerSystems;
-
 /// Controls how visibility will be managed via [`ClientVisibility`].
 #[derive(Default, Debug, Clone, Copy)]
 pub enum VisibilityPolicy {
