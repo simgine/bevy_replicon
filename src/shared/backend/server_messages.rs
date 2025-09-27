@@ -135,7 +135,3 @@ impl ServerMessages {
         self.sent_messages.clear();
     }
 }
-
-#[doc(hidden)]
-#[deprecated = "Use `ServerMessages` instead"]
-pub type RepliconServer = ServerMessages;

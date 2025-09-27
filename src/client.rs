@@ -803,10 +803,6 @@ pub enum ClientSystems {
     Reset,
 }
 
-#[doc(hidden)]
-#[deprecated = "Use `ClientSystems` instead"]
-pub type ClientSet = ClientSystems;
-
 /// Last received tick for update messages from the server.
 ///
 /// In other words, the last [`RepliconTick`] with a removal, insertion, spawn or despawn.
