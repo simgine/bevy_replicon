@@ -120,7 +120,3 @@ impl ClientMessages {
         channel_messages.push(message.into());
     }
 }
-
-#[doc(hidden)]
-#[deprecated = "Use `ClientMessages` instead"]
-pub type RepliconClient = ClientMessages;
