@@ -200,7 +200,7 @@ struct UiRoot;
         align_items: AlignItems::Center,
         ..Default::default()
     },
-    BorderColor(Color::WHITE),
+    BorderColor::all(Color::WHITE),
     BorderRadius::MAX,
 )]
 struct ToggleButton(bool);

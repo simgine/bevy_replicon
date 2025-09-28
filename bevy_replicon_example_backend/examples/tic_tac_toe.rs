@@ -22,7 +22,7 @@ fn main() {
             DefaultPlugins.build().set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Tic-Tac-Toe".into(),
-                    resolution: (800.0, 600.0).into(),
+                    resolution: (800, 600).into(),
                     ..Default::default()
                 }),
                 ..Default::default()
