@@ -185,7 +185,8 @@ fn local_resending() {
     .add_server_event::<TestEvent>(Channel::Ordered)
     .finish();
 
-    const PLACEHOLDER_CLIENT_ID: ClientId = ClientId::Client(Entity::from_raw(1));
+    const CLIENT_ENTITY: Entity = Entity::from_raw_u32(1).unwrap();
+    const PLACEHOLDER_CLIENT_ID: ClientId = ClientId::Client(CLIENT_ENTITY);
     for (mode, events_count) in [
         (SendMode::Broadcast, 1),
         (SendMode::Direct(ClientId::Server), 1),
