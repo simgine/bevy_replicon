@@ -30,11 +30,12 @@ bevy = { version = "0.17", default-features = false, features = [
   "bevy_gizmos",
   "bevy_text",
   "bevy_ui_picking_backend",
-  "bevy_ui",
+  "bevy_ui_render",
   "bevy_window",
   "default_font",
   "serialize",
   "x11",
+  "zstd_rust",
 ] }
 clap = { version = "4.1", features = ["derive"] }
 fastrand-contrib = "0.1"
