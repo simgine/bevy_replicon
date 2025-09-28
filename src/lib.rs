@@ -46,7 +46,7 @@ These entities are automatically spawned and despawned by the messaging backend.
 also despawn them yourself to trigger a disconnect or use the [`DisconnectRequest`] event
 to disconnect after sending messages.
 
-You can use [`Trigger<OnAdd, ConnectedClient>`] to react to new connections,
+You can use [`On<Add, ConnectedClient>`] to react to new connections,
 or use backend-provided events if you need the disconnect reason.
 
 ## States
@@ -203,11 +203,11 @@ app.replicate::<Transform>()
     .add_observer(init_player_mesh);
 
 fn init_player_mesh(
-    trigger: Trigger<OnAdd, Mesh2d>,
+    add: On<Add, Mesh2d>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut players: Query<&mut Mesh2d>,
 ) {
-    let mut mesh = players.get_mut(trigger.target()).unwrap();
+    let mut mesh = players.get_mut(add.entity).unwrap();
     **mesh = meshes.add(Capsule2d::default());
 }
 
@@ -344,19 +344,19 @@ using [`ClientTriggerAppExt::add_client_trigger`], and then use [`ClientTriggerE
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_client_trigger::<ExampleEvent>(Channel::Ordered)
-    .add_observer(receive_events)
-    .add_systems(Update, send_events.run_if(in_state(ClientState::Connected)));
+app.add_client_trigger::<Hello>(Channel::Ordered)
+    .add_observer(receive_hello)
+    .add_systems(Update, send_hello.run_if(in_state(ClientState::Connected)));
 
-fn send_events(mut commands: Commands) {
-    commands.client_trigger(ExampleEvent);
+fn send_hello(mut commands: Commands) {
+    commands.client_trigger(Hello);
 }
 
-fn receive_events(trigger: Trigger<FromClient<ExampleEvent>>) {
-    info!("received event `{:?}` from client `{}`", **trigger, trigger.client_id);
+fn receive_hello(hello: On<FromClient<Hello>>) {
+    info!("received greetings from client `{}`", hello.client_id);
 }
 # #[derive(Event, Debug, Deserialize, Serialize)]
-# struct ExampleEvent;
+# struct Hello;
 ```
 
 Trigger targets are also supported via [`ClientTriggerExt::client_trigger_targets`], no change
@@ -419,22 +419,22 @@ with [`ServerTriggerAppExt::add_server_trigger`] and then use [`ServerTriggerExt
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_server_trigger::<ExampleEvent>(Channel::Ordered)
-    .add_observer(receive_events)
-    .add_systems(Update, send_events.run_if(in_state(ServerState::Running)));
+app.add_server_trigger::<Hello>(Channel::Ordered)
+    .add_observer(receive_hello)
+    .add_systems(Update, send_hello.run_if(in_state(ServerState::Running)));
 
-fn send_events(mut commands: Commands) {
+fn send_hello(mut commands: Commands) {
     commands.server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: ExampleEvent,
+        event: Hello,
     });
 }
 
-fn receive_events(trigger: Trigger<ExampleEvent>) {
-    info!("received event {:?} from server", *trigger);
+fn receive_hello(_on: On<Hello>) {
+    info!("received greetings from server");
 }
 # #[derive(Event, Debug, Deserialize, Serialize)]
-# struct ExampleEvent;
+# struct Hello;
 ```
 
 And just like for client trigger, we provide [`ServerTriggerAppExt::add_mapped_server_trigger`]

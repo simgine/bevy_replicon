@@ -68,24 +68,24 @@ impl ProtocolHasher {
         self.hash::<B>(ProtocolPart::ReplicateBundle);
     }
 
+    pub(crate) fn add_client_message<E>(&mut self) {
+        debug!("adding client message `{}`", any::type_name::<E>());
+        self.hash::<E>(ProtocolPart::ClientMessage);
+    }
+
     pub(crate) fn add_client_event<E>(&mut self) {
         debug!("adding client event `{}`", any::type_name::<E>());
         self.hash::<E>(ProtocolPart::ClientEvent);
     }
 
-    pub(crate) fn add_client_trigger<E>(&mut self) {
-        debug!("adding client trigger `{}`", any::type_name::<E>());
-        self.hash::<E>(ProtocolPart::ClientTrigger);
+    pub(crate) fn add_server_message<E>(&mut self) {
+        debug!("adding server message `{}`", any::type_name::<E>());
+        self.hash::<E>(ProtocolPart::ServerMessage);
     }
 
     pub(crate) fn add_server_event<E>(&mut self) {
         debug!("adding server event `{}`", any::type_name::<E>());
         self.hash::<E>(ProtocolPart::ServerEvent);
-    }
-
-    pub(crate) fn add_server_trigger<E>(&mut self) {
-        debug!("adding server trigger `{}`", any::type_name::<E>());
-        self.hash::<E>(ProtocolPart::ServerTrigger);
     }
 
     pub(crate) fn make_event_independent<E>(&mut self) {
@@ -121,10 +121,10 @@ impl ProtocolHasher {
 enum ProtocolPart {
     Replicate { priority: u64 },
     ReplicateBundle,
+    ClientMessage,
     ClientEvent,
-    ClientTrigger,
+    ServerMessage,
     ServerEvent,
-    ServerTrigger,
     IndependentEvent,
     IndependentTrigger,
 }
@@ -188,10 +188,10 @@ mod tests {
     #[test]
     fn different_parts() {
         let mut hasher1 = ProtocolHasher::default();
-        hasher1.add_server_event::<StructA>();
+        hasher1.add_server_message::<StructA>();
 
         let mut hasher2 = ProtocolHasher::default();
-        hasher2.add_client_event::<StructA>();
+        hasher2.add_client_message::<StructA>();
 
         assert_ne!(hasher1.finish(), hasher2.finish());
     }
@@ -203,10 +203,10 @@ mod tests {
 
         for hasher in [&mut hasher1, &mut hasher2] {
             hasher.replicate::<StructA>(1);
-            hasher.add_server_event::<StructB>();
-            hasher.add_server_trigger::<StructC>();
-            hasher.add_client_event::<StructB>();
-            hasher.add_client_trigger::<StructC>();
+            hasher.add_server_message::<StructB>();
+            hasher.add_server_event::<StructC>();
+            hasher.add_client_message::<StructB>();
+            hasher.add_client_event::<StructC>();
         }
         hasher1.add_custom(0);
         hasher2.add_custom(1);
@@ -221,10 +221,10 @@ mod tests {
 
         for hasher in [&mut hasher1, &mut hasher2] {
             hasher.replicate::<StructA>(1);
-            hasher.add_server_event::<StructB>();
-            hasher.add_server_trigger::<StructC>();
-            hasher.add_client_event::<StructB>();
-            hasher.add_client_trigger::<StructC>();
+            hasher.add_server_message::<StructB>();
+            hasher.add_server_event::<StructC>();
+            hasher.add_client_message::<StructB>();
+            hasher.add_client_event::<StructC>();
             hasher.add_custom(0usize);
         }
 

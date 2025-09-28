@@ -1,7 +1,7 @@
 use core::any::{self, TypeId};
 
 use bevy::{
-    ecs::{component::ComponentId, entity::MapEntities, event::EventCursor},
+    ecs::{component::ComponentId, entity::MapEntities, message::MessageCursor},
     prelude::*,
     ptr::{Ptr, PtrMut},
 };
@@ -33,7 +33,7 @@ pub trait ClientEventAppExt {
     /// which could break other Bevy or third-party plugin systems that listen for `E`.
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
-    fn add_client_event<E: Event + Serialize + DeserializeOwned>(
+    fn add_client_event<E: Message + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
@@ -47,7 +47,7 @@ pub trait ClientEventAppExt {
     ///
     /// [`Clone`] is required because, before sending, we need to map entities from the client to the server without
     /// modifying the original component.
-    fn add_mapped_client_event<E: Event + Serialize + DeserializeOwned + MapEntities + Clone>(
+    fn add_mapped_client_event<E: Message + Serialize + DeserializeOwned + MapEntities + Clone>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
@@ -113,7 +113,7 @@ pub trait ClientEventAppExt {
 
     See also [`AppRuleExt::replicate_with`] for more examples with custom ser/de.
     */
-    fn add_client_event_with<E: Event>(
+    fn add_client_event_with<E: Message>(
         &mut self,
         channel: Channel,
         serialize: EventSerializeFn<ClientSendCtx, E>,
@@ -122,7 +122,7 @@ pub trait ClientEventAppExt {
 }
 
 impl ClientEventAppExt for App {
-    fn add_client_event_with<E: Event>(
+    fn add_client_event_with<E: Message>(
         &mut self,
         channel: Channel,
         serialize: EventSerializeFn<ClientSendCtx, E>,
@@ -130,7 +130,7 @@ impl ClientEventAppExt for App {
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .add_client_event::<E>();
+            .add_client_message::<E>();
 
         let event_fns = EventFns::new(serialize, deserialize);
         let event = ClientEvent::new(self, channel, event_fns);
@@ -168,7 +168,7 @@ pub(crate) struct ClientEvent {
 }
 
 impl ClientEvent {
-    pub(super) fn new<E: Event, I: 'static>(
+    pub(super) fn new<E: Message, I: 'static>(
         app: &mut App,
         channel: Channel,
         event_fns: EventFns<ClientSendCtx, ServerReceiveCtx, E, I>,
@@ -178,12 +178,15 @@ impl ClientEvent {
             .resource_mut::<RepliconChannels>()
             .create_client_channel(channel);
 
-        app.add_event::<E>()
-            .add_event::<FromClient<E>>()
+        app.add_message::<E>()
+            .add_message::<FromClient<E>>()
             .init_resource::<ClientEventReader<E>>();
 
-        let events_id = app.world().resource_id::<Events<E>>().unwrap();
-        let client_events_id = app.world().resource_id::<Events<FromClient<E>>>().unwrap();
+        let events_id = app.world().resource_id::<Messages<E>>().unwrap();
+        let client_events_id = app
+            .world()
+            .resource_id::<Messages<FromClient<E>>>()
+            .unwrap();
         let reader_id = app.world().resource_id::<ClientEventReader<E>>().unwrap();
 
         Self {
@@ -242,7 +245,7 @@ impl ClientEvent {
     ///
     /// The caller must ensure that `events` is [`Events<E>`], `reader` is [`ClientEventReader<E>`],
     /// and this instance was created for `E` and `I`.
-    unsafe fn send_typed<E: Event, I: 'static>(
+    unsafe fn send_typed<E: Message, I: 'static>(
         &self,
         ctx: &mut ClientSendCtx,
         events: &Ptr,
@@ -287,13 +290,13 @@ impl ClientEvent {
     ///
     /// The caller must ensure that `client_events` is [`Events<FromClient<E>>`]
     /// and this instance was created for `E` and `I`.
-    unsafe fn receive_typed<E: Event, I: 'static>(
+    unsafe fn receive_typed<E: Message, I: 'static>(
         &self,
         ctx: &mut ServerReceiveCtx,
         client_events: PtrMut,
         messages: &mut ServerMessages,
     ) {
-        let client_events: &mut Events<FromClient<E>> = unsafe { client_events.deref_mut() };
+        let client_events: &mut Messages<FromClient<E>> = unsafe { client_events.deref_mut() };
         for (client, mut message) in messages.receive(self.channel_id) {
             match unsafe { self.deserialize::<E, I>(ctx, &mut message) } {
                 Ok(event) => {
@@ -301,7 +304,7 @@ impl ClientEvent {
                         "applying event `{}` from client `{client}`",
                         any::type_name::<E>()
                     );
-                    client_events.send(FromClient {
+                    client_events.write(FromClient {
                         client_id: client.into(),
                         event,
                     });
@@ -329,16 +332,16 @@ impl ClientEvent {
     /// # Safety
     ///
     /// The caller must ensure that `events` is [`Events<E>`] and `server_events` is [`Events<ToClients<E>>`].
-    unsafe fn resend_locally_typed<E: Event>(server_events: PtrMut, events: PtrMut) {
-        let client_events: &mut Events<FromClient<E>> = unsafe { server_events.deref_mut() };
-        let events: &mut Events<E> = unsafe { events.deref_mut() };
+    unsafe fn resend_locally_typed<E: Message>(server_events: PtrMut, events: PtrMut) {
+        let client_events: &mut Messages<FromClient<E>> = unsafe { server_events.deref_mut() };
+        let events: &mut Messages<E> = unsafe { events.deref_mut() };
         if !events.is_empty() {
             debug!(
                 "resending {} event(s) `{}` locally",
                 events.len(),
                 any::type_name::<E>()
             );
-            client_events.send_batch(events.drain().map(|event| FromClient {
+            client_events.write_batch(events.drain().map(|event| FromClient {
                 client_id: ClientId::Server,
                 event,
             }));
@@ -360,8 +363,8 @@ impl ClientEvent {
     /// # Safety
     ///
     /// The caller must ensure that `events` is [`Events<E>`].
-    unsafe fn reset_typed<E: Event>(events: PtrMut) {
-        let events: &mut Events<E> = unsafe { events.deref_mut() };
+    unsafe fn reset_typed<E: Message>(events: PtrMut) {
+        let events: &mut Messages<E> = unsafe { events.deref_mut() };
         let drained_count = events.drain().count();
         if drained_count > 0 {
             warn!(
@@ -435,11 +438,11 @@ type ResetFn = unsafe fn(PtrMut);
 ///
 /// Unlike with server events, we don't always drain all events in [`ClientEventPlugin::resend_locally`].
 #[derive(Resource, Deref, DerefMut)]
-struct ClientEventReader<E: Event>(EventCursor<E>);
+struct ClientEventReader<E: Message>(MessageCursor<E>);
 
-impl<E: Event> FromWorld for ClientEventReader<E> {
+impl<E: Message> FromWorld for ClientEventReader<E> {
     fn from_world(world: &mut World) -> Self {
-        let events = world.resource::<Events<E>>();
+        let events = world.resource::<Messages<E>>();
         Self(events.get_cursor())
     }
 }
@@ -447,7 +450,7 @@ impl<E: Event> FromWorld for ClientEventReader<E> {
 /// An event indicating that a message from client was received.
 ///
 /// Emitted only on server.
-#[derive(Clone, Copy, Event, Debug, Deref, DerefMut)]
+#[derive(Clone, Copy, Event, Message, Debug, Deref, DerefMut)]
 pub struct FromClient<T> {
     /// Sender of the event.
     ///
@@ -460,7 +463,7 @@ pub struct FromClient<T> {
 }
 
 /// Default event serialization function.
-pub fn default_serialize<E: Event + Serialize>(
+pub fn default_serialize<E: Serialize>(
     _ctx: &mut ClientSendCtx,
     event: &E,
     message: &mut Vec<u8>,
@@ -470,7 +473,7 @@ pub fn default_serialize<E: Event + Serialize>(
 }
 
 /// Like [`default_serialize`], but also maps entities.
-pub fn default_serialize_mapped<E: Event + MapEntities + Clone + Serialize>(
+pub fn default_serialize_mapped<E: MapEntities + Clone + Serialize>(
     ctx: &mut ClientSendCtx,
     event: &E,
     message: &mut Vec<u8>,
@@ -482,7 +485,7 @@ pub fn default_serialize_mapped<E: Event + MapEntities + Clone + Serialize>(
 }
 
 /// Default event deserialization function.
-pub fn default_deserialize<E: Event + DeserializeOwned>(
+pub fn default_deserialize<E: DeserializeOwned>(
     _ctx: &mut ServerReceiveCtx,
     message: &mut Bytes,
 ) -> Result<E> {

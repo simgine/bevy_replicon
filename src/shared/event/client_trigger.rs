@@ -73,7 +73,7 @@ impl ClientTriggerAppExt for App {
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .add_client_trigger::<E>();
+            .add_client_event::<E>();
 
         let event_fns = EventFns::new(serialize, deserialize)
             .with_outer(trigger_serialize, trigger_deserialize);
@@ -117,19 +117,20 @@ impl ClientTrigger {
     /// The caller must ensure that `client_events` is [`Events<FromClient<TriggerEvent<E>>>`]
     /// and this instance was created for `E`.
     unsafe fn trigger_typed<E: Event>(commands: &mut Commands, client_events: PtrMut) {
-        let client_events: &mut Events<FromClient<ClientTriggerEvent<E>>> =
+        let client_events: &mut Messages<FromClient<ClientTriggerEvent<E>>> =
             unsafe { client_events.deref_mut() };
         for FromClient { client_id, event } in client_events.drain() {
             debug!(
                 "triggering `{}` from `{client_id}`",
                 any::type_name::<FromClient<E>>()
             );
-            commands.trigger_targets(
+            commands.trigger(
                 FromClient {
                     client_id,
                     event: event.event,
                 },
-                event.targets,
+                // TODO: rework
+                // event.targets,
             );
         }
     }
@@ -199,7 +200,7 @@ impl ClientTriggerExt for Commands<'_, '_> {
     }
 
     fn client_trigger_targets(&mut self, event: impl Event, targets: impl RemoteTargets) {
-        self.send_event(ClientTriggerEvent {
+        self.write_message(ClientTriggerEvent {
             event,
             targets: targets.into_entities(),
         });
@@ -212,7 +213,7 @@ impl ClientTriggerExt for World {
     }
 
     fn client_trigger_targets(&mut self, event: impl Event, targets: impl RemoteTargets) {
-        self.send_event(ClientTriggerEvent {
+        self.write_message(ClientTriggerEvent {
             event,
             targets: targets.into_entities(),
         });
@@ -224,7 +225,7 @@ impl ClientTriggerExt for World {
 /// We can't just observe for triggers like we do for events since we need access to all its targets
 /// and we need to buffer them. This is why we just emit this event instead and after receive drain it
 /// to trigger regular events.
-#[derive(Event)]
+#[derive(Message)]
 struct ClientTriggerEvent<E> {
     event: E,
     targets: Vec<Entity>,

@@ -59,23 +59,23 @@ pub struct RepliconSharedPlugin {
     }
 
     fn start_game(
-        trigger: Trigger<FromClient<ClientInfo>>,
+        client_info: On<FromClient<ClientInfo>>,
         mut commands: Commands,
         mut events: EventWriter<DisconnectRequest>,
         protocol: Res<ProtocolHash>,
     ) {
-        let client = trigger
+        let client = client_info
             .client_id
             .entity()
             .expect("protocol hash sent only from clients");
 
         // Since we are using custom authorization,
         // we need to verify the protocol manually.
-        if trigger.protocol != *protocol {
+        if client_info.protocol != *protocol {
             // Notify the client about the problem. No delivery
             // guarantee, since we disconnect after sending.
             commands.server_trigger(ToClients {
-                mode: SendMode::Direct(trigger.client_id),
+                mode: SendMode::Direct(client_info.client_id),
                 event: ProtocolMismatch,
             });
             events.write(DisconnectRequest { client });
@@ -116,7 +116,7 @@ impl Plugin for RepliconSharedPlugin {
             .init_resource::<CommandMarkers>()
             .init_resource::<RemoteEventRegistry>()
             .insert_resource(self.auth_method)
-            .add_event::<DisconnectRequest>();
+            .add_message::<DisconnectRequest>();
 
         if self.auth_method == AuthMethod::ProtocolCheck {
             app.add_client_trigger::<ProtocolHash>(Channel::Ordered)

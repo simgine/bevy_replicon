@@ -214,7 +214,7 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
 ///
 /// We don't just send mouse clicks to save traffic, they contain a lot of extra information.
 fn pick_cell(
-    trigger: Trigger<Pointer<Click>>,
+    click: On<Pointer<Click>>,
     mut commands: Commands,
     turn_symbol: Res<TurnSymbol>,
     game_state: Res<State<GameState>>,
@@ -230,7 +230,7 @@ fn pick_cell(
     }
 
     let cell = cells
-        .get(trigger.target())
+        .get(click.entity)
         .expect("cells should have assigned indices");
     // We don't check if a cell can't be picked on client on purpose
     // just to demonstrate how server can receive invalid requests from a client.
@@ -242,27 +242,27 @@ fn pick_cell(
 ///
 /// Used only for single-player and server.
 fn apply_pick(
-    trigger: Trigger<FromClient<CellPick>>,
+    pick: On<FromClient<CellPick>>,
     mut commands: Commands,
     cells: Query<(Entity, &Cell), Without<Symbol>>,
     turn_symbol: Res<TurnSymbol>,
     players: Query<&Symbol>,
 ) {
     // It's good to check the received data because client could be cheating.
-    if let ClientId::Client(client) = trigger.client_id {
+    if let ClientId::Client(client) = pick.client_id {
         let symbol = *players
             .get(client)
             .expect("all clients should have assigned symbols");
         if symbol != **turn_symbol {
-            error!("`{client}` chose cell {} at wrong turn", trigger.index);
+            error!("`{client}` chose cell {} at wrong turn", pick.index);
             return;
         }
     }
 
-    let Some((entity, _)) = cells.iter().find(|(_, cell)| cell.index == trigger.index) else {
+    let Some((entity, _)) = cells.iter().find(|(_, cell)| cell.index == pick.index) else {
         error!(
             "`{}` has chosen occupied or invalid cell {}",
-            trigger.client_id, trigger.index
+            pick.client_id, pick.index
         );
         return;
     };
@@ -272,18 +272,18 @@ fn apply_pick(
 
 /// Initializes spawned symbol on client after replication and on server / single-player right after the spawn.
 fn init_symbols(
-    trigger: Trigger<OnAdd, Symbol>,
+    add: On<Add, Symbol>,
     mut commands: Commands,
     symbol_font: Res<SymbolFont>,
     mut cells: Query<(&mut BackgroundColor, &Symbol), With<Button>>,
 ) {
-    let Ok((mut background, symbol)) = cells.get_mut(trigger.target()) else {
+    let Ok((mut background, symbol)) = cells.get_mut(add.entity) else {
         return;
     };
     *background = BACKGROUND_COLOR.into();
 
     commands
-        .entity(trigger.target())
+        .entity(add.entity)
         .remove::<Interaction>()
         .with_child((
             Text::new(symbol.glyph()),
@@ -307,12 +307,12 @@ fn client_start(mut commands: Commands) {
 ///
 /// Used only for server.
 fn init_client(
-    trigger: Trigger<OnAdd, AuthorizedClient>,
+    add: On<Add, AuthorizedClient>,
     mut commands: Commands,
     server_symbol: Single<&Symbol, With<LocalPlayer>>,
 ) {
     // Utilize client entity as a player for convenient lookups by `client`.
-    commands.entity(trigger.target()).insert((
+    commands.entity(add.entity).insert((
         ClientPlayer,
         Signature::of::<ClientPlayer>(),
         server_symbol.next(),
@@ -325,7 +325,7 @@ fn init_client(
 ///
 /// Used only for server.
 fn disconnect_by_client(
-    _trigger: Trigger<OnRemove, ConnectedClient>,
+    _on: On<Remove, ConnectedClient>,
     game_state: Res<State<GameState>>,
     mut commands: Commands,
 ) {
@@ -351,7 +351,7 @@ fn stop_networking(mut commands: Commands) {
 
 /// Checks the winner and advances the turn.
 fn advance_turn(
-    _trigger: Trigger<OnAdd, Symbol>,
+    _on: On<Add, Symbol>,
     mut commands: Commands,
     mut turn_symbol: ResMut<TurnSymbol>,
     symbols: Query<(&Cell, &Symbol)>,

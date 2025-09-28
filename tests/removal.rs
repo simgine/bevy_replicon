@@ -419,7 +419,7 @@ fn confirm_history() {
     // Clear previous events.
     client_app
         .world_mut()
-        .resource_mut::<Events<EntityReplicated>>()
+        .resource_mut::<Messages<EntityReplicated>>()
         .clear();
 
     server_app.update();
@@ -436,7 +436,7 @@ fn confirm_history() {
 
     let mut replicated_events = client_app
         .world_mut()
-        .resource_mut::<Events<EntityReplicated>>();
+        .resource_mut::<Messages<EntityReplicated>>();
     let [event] = replicated_events
         .drain()
         .collect::<Vec<_>>()

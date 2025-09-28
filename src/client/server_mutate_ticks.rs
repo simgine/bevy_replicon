@@ -189,10 +189,10 @@ impl TickMessages {
     }
 }
 
-/// Triggered when all mutate messages are received for a tick.
+/// Sent when all mutate messages are received for a tick.
 ///
 /// See also [`ServerMutateTicks`].
-#[derive(Debug, Event, Clone, Copy)]
+#[derive(Message, Debug, Clone, Copy)]
 pub struct MutateTickReceived {
     /// Message(s) tick.
     pub tick: RepliconTick,

@@ -71,7 +71,7 @@ pub enum ServerState {
 /// The disconnection should occur **after** all pending messages
 /// for this client have been sent. The actual delivery of these
 /// messages is not guaranteed.
-#[derive(Event, Clone, Copy, Debug)]
+#[derive(Message, Clone, Copy, Debug)]
 pub struct DisconnectRequest {
     pub client: Entity,
 }

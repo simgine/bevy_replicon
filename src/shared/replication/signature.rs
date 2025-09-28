@@ -4,7 +4,7 @@ use core::{
 };
 
 use bevy::{
-    ecs::{component::HookContext, entity::EntityHashMap, world::DeferredWorld},
+    ecs::{entity::EntityHashMap, lifecycle::HookContext, world::DeferredWorld},
     platform::{collections::HashMap, hash::NoOpHash},
     prelude::*,
 };
@@ -183,11 +183,11 @@ impl Signature {
     /// Depending on the type of game you may want to correct the client or disconnect it.
     /// In this example we just always confirm the spawn.
     fn confirm_projectile(
-        trigger: Trigger<FromClient<SpawnFireball>>,
+        fireball: On<FromClient<SpawnFireball>>,
         mut commands: Commands,
         clients: Query<&Controls>,
     ) {
-        if let ClientId::Client(client) = trigger.client_id {
+        if let ClientId::Client(client) = fireball.client_id {
             let instigator = **clients.get(client).unwrap();
 
             // You can insert more components, they will be replicated to the client's entity.

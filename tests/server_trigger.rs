@@ -261,9 +261,9 @@ struct TriggerReader<E: Event> {
 
 impl<E: Event + Clone> FromWorld for TriggerReader<E> {
     fn from_world(world: &mut World) -> Self {
-        world.add_observer(|trigger: Trigger<E>, mut counter: ResMut<Self>| {
-            counter.events.push(trigger.event().clone());
-            counter.entities.push(trigger.target());
+        world.add_observer(|on: On<E>, mut counter: ResMut<Self>| {
+            counter.events.push(on.event().clone());
+            // counter.entities.push(on.target());
         });
 
         Self {

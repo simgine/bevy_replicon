@@ -204,46 +204,40 @@ fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     trace!("incremented {server_tick:?}");
 }
 
-fn handle_connects(
-    trigger: Trigger<OnAdd, ConnectedClient>,
-    mut event_buffer: ResMut<EventBuffer>,
-) {
-    debug!("client `{}` connected", trigger.target());
-    event_buffer.exclude_client(trigger.target());
+fn handle_connects(add: On<Add, ConnectedClient>, mut event_buffer: ResMut<EventBuffer>) {
+    debug!("client `{}` connected", add.entity);
+    event_buffer.exclude_client(add.entity);
 }
 
-fn handle_disconnects(
-    trigger: Trigger<OnRemove, ConnectedClient>,
-    mut messages: ResMut<ServerMessages>,
-) {
-    debug!("client `{}` disconnected", trigger.target());
-    messages.remove_client(trigger.target());
+fn handle_disconnects(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
+    debug!("client `{}` disconnected", remove.entity);
+    messages.remove_client(remove.entity);
 }
 
 fn check_protocol(
-    trigger: Trigger<FromClient<ProtocolHash>>,
+    client_protocol: On<FromClient<ProtocolHash>>,
     mut commands: Commands,
-    mut events: EventWriter<DisconnectRequest>,
+    mut disconnects: MessageWriter<DisconnectRequest>,
     protocol: Res<ProtocolHash>,
 ) {
-    let client = trigger
+    let client = client_protocol
         .client_id
         .entity()
         .expect("protocol hash sent only from clients");
 
-    if **trigger == *protocol {
+    if **client_protocol == *protocol {
         debug!("marking client `{client}` as authorized");
         commands.entity(client).insert(AuthorizedClient);
     } else {
         debug!(
             "disconnecting client `{client}` due to protocol mismatch (client: `{:?}`, server: `{:?}`)",
-            **trigger, *protocol
+            **client_protocol, *protocol
         );
         commands.server_trigger(ToClients {
-            mode: SendMode::Direct(trigger.client_id),
+            mode: SendMode::Direct(client_protocol.client_id),
             event: ProtocolMismatch,
         });
-        events.write(DisconnectRequest { client });
+        disconnects.write(DisconnectRequest { client });
     }
 }
 
@@ -290,12 +284,12 @@ fn receive_acks(
 }
 
 fn buffer_despawns(
-    trigger: Trigger<OnRemove, Replicated>,
+    remove: On<Remove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     state: Res<State<ServerState>>,
 ) {
     if *state == ServerState::Running {
-        despawn_buffer.push(trigger.target());
+        despawn_buffer.push(remove.entity);
     }
 }
 

@@ -132,12 +132,12 @@ fn spawn_boids(commands: &mut Commands) {
 /// is inserted. This way, visuals are applied automatically both when a boid is spawned
 /// manually on the server (or in singleplayer) and when it is replicated to a client.
 fn init_boid(
-    trigger: Trigger<OnInsert, Boid>,
+    insert: On<Insert, Boid>,
     boid_mesh: Local<BoidMesh>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut boids: Query<(&Boid, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,
 ) {
-    let (boid, mut mesh, mut material) = boids.get_mut(trigger.target()).unwrap();
+    let (boid, mut mesh, mut material) = boids.get_mut(insert.entity).unwrap();
 
     // All boids share the same mesh, but each gets a unique material from its color.
     **mesh = boid_mesh.0.clone();

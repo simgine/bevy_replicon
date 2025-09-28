@@ -41,7 +41,7 @@ pub trait ServerEventAppExt {
     /// for more details.
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
-    fn add_server_event<E: Event + Serialize + DeserializeOwned>(
+    fn add_server_event<E: Message + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
@@ -52,7 +52,7 @@ pub trait ServerEventAppExt {
     ///
     /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
-    fn add_mapped_server_event<E: Event + Serialize + DeserializeOwned + MapEntities>(
+    fn add_mapped_server_event<E: Message + Serialize + DeserializeOwned + MapEntities>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
@@ -118,7 +118,7 @@ pub trait ServerEventAppExt {
 
     See also [`AppRuleExt::replicate_with`] for more examples with custom ser/de.
     */
-    fn add_server_event_with<E: Event>(
+    fn add_server_event_with<E: Message>(
         &mut self,
         channel: Channel,
         serialize: EventSerializeFn<ServerSendCtx, E>,
@@ -150,11 +150,11 @@ pub trait ServerEventAppExt {
     /// </div>
     ///
     /// See also [`ServerTriggerAppExt::make_event_independent`](crate::shared::event::server_trigger::ServerTriggerAppExt::make_trigger_independent).
-    fn make_event_independent<E: Event>(&mut self) -> &mut Self;
+    fn make_event_independent<E: Message>(&mut self) -> &mut Self;
 }
 
 impl ServerEventAppExt for App {
-    fn add_server_event_with<E: Event>(
+    fn add_server_event_with<E: Message>(
         &mut self,
         channel: Channel,
         serialize: EventSerializeFn<ServerSendCtx, E>,
@@ -162,7 +162,7 @@ impl ServerEventAppExt for App {
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .add_server_event::<E>();
+            .add_server_message::<E>();
 
         let event_fns = EventFns::new(serialize, deserialize);
         let event = ServerEvent::new(self, channel, event_fns);
@@ -172,7 +172,7 @@ impl ServerEventAppExt for App {
         self
     }
 
-    fn make_event_independent<E: Event>(&mut self) -> &mut Self {
+    fn make_event_independent<E: Message>(&mut self) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
             .make_event_independent::<E>();
@@ -180,7 +180,7 @@ impl ServerEventAppExt for App {
         let events_id = self
             .world()
             .components()
-            .resource_id::<Events<E>>()
+            .resource_id::<Messages<E>>()
             .unwrap_or_else(|| {
                 panic!(
                     "event `{}` should be previously registered",
@@ -239,7 +239,7 @@ pub(crate) struct ServerEvent {
 }
 
 impl ServerEvent {
-    pub(super) fn new<E: Event, I: 'static>(
+    pub(super) fn new<E: Message, I: 'static>(
         app: &mut App,
         channel: Channel,
         event_fns: EventFns<ServerSendCtx, ClientReceiveCtx, E, I>,
@@ -249,12 +249,12 @@ impl ServerEvent {
             .resource_mut::<RepliconChannels>()
             .create_server_channel(channel);
 
-        app.add_event::<E>()
-            .add_event::<ToClients<E>>()
+        app.add_message::<E>()
+            .add_message::<ToClients<E>>()
             .init_resource::<EventQueue<E>>();
 
-        let events_id = app.world().resource_id::<Events<E>>().unwrap();
-        let server_events_id = app.world().resource_id::<Events<ToClients<E>>>().unwrap();
+        let events_id = app.world().resource_id::<Messages<E>>().unwrap();
+        let server_events_id = app.world().resource_id::<Messages<ToClients<E>>>().unwrap();
         let queue_id = app.world().resource_id::<EventQueue<E>>().unwrap();
 
         Self {
@@ -315,7 +315,7 @@ impl ServerEvent {
     ///
     /// The caller must ensure that `server_events` is [`Events<ToClients<E>>`]
     /// and this instance was created for `E` and `I`.
-    unsafe fn send_or_buffer_typed<E: Event, I: 'static>(
+    unsafe fn send_or_buffer_typed<E: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
         server_events: &Ptr,
@@ -323,7 +323,7 @@ impl ServerEvent {
         clients: &Query<Entity, With<ConnectedClient>>,
         event_buffer: &mut EventBuffer,
     ) {
-        let events: &Events<ToClients<E>> = unsafe { server_events.deref() };
+        let events: &Messages<ToClients<E>> = unsafe { server_events.deref() };
         // For server events we don't track read events because
         // all of them will always be drained in the local resending system.
         for ToClients { event, mode } in events.get_cursor().read(events) {
@@ -350,7 +350,7 @@ impl ServerEvent {
     /// The caller must ensure that this instance was created for `E` and `I`.
     ///
     /// For regular events see [`Self::buffer_event`].
-    unsafe fn send_independent_event<E: Event, I: 'static>(
+    unsafe fn send_independent_event<E: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
         event: &E,
@@ -392,7 +392,7 @@ impl ServerEvent {
     /// The caller must ensure that this instance was created for `E` and `I`.
     ///
     /// For independent events see [`Self::send_independent_event`].
-    unsafe fn buffer_event<E: Event, I: 'static>(
+    unsafe fn buffer_event<E: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
         event: &E,
@@ -411,7 +411,7 @@ impl ServerEvent {
     /// # Safety
     ///
     /// The caller must ensure that this instance was created for `E` and `I`.
-    unsafe fn serialize_with_padding<E: Event, I: 'static>(
+    unsafe fn serialize_with_padding<E: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
         event: &E,
@@ -446,7 +446,7 @@ impl ServerEvent {
     ///
     /// The caller must ensure that `events` is [`Events<E>`], `queue` is [`EventQueue<E>`]
     /// and this instance was created for `E` and `I`.
-    unsafe fn receive_typed<E: Event, I: 'static>(
+    unsafe fn receive_typed<E: Message, I: 'static>(
         &self,
         ctx: &mut ClientReceiveCtx,
         events: PtrMut,
@@ -454,7 +454,7 @@ impl ServerEvent {
         messages: &mut ClientMessages,
         update_tick: RepliconTick,
     ) {
-        let events: &mut Events<E> = unsafe { events.deref_mut() };
+        let events: &mut Messages<E> = unsafe { events.deref_mut() };
         let queue: &mut EventQueue<E> = unsafe { queue.deref_mut() };
 
         while let Some((tick, messages)) = queue.pop_if_le(update_tick) {
@@ -465,7 +465,7 @@ impl ServerEvent {
                             "applying event `{}` from queue with `{tick:?}`",
                             any::type_name::<E>()
                         );
-                        events.send(event);
+                        events.write(event);
                     }
                     Err(e) => error!(
                         "ignoring event `{}` from queue with `{tick:?}` that failed to deserialize: {e}",
@@ -502,7 +502,7 @@ impl ServerEvent {
             match unsafe { self.deserialize::<E, I>(ctx, &mut message) } {
                 Ok(event) => {
                     debug!("applying event `{}`", any::type_name::<E>());
-                    events.send(event);
+                    events.write(event);
                 }
                 Err(e) => error!(
                     "ignoring event `{}` that failed to deserialize: {e}",
@@ -527,23 +527,23 @@ impl ServerEvent {
     /// # Safety
     ///
     /// The caller must ensure that `events` is [`Events<E>`] and `server_events` is [`Events<ToClients<E>>`].
-    unsafe fn resend_locally_typed<E: Event>(server_events: PtrMut, events: PtrMut) {
-        let server_events: &mut Events<ToClients<E>> = unsafe { server_events.deref_mut() };
-        let events: &mut Events<E> = unsafe { events.deref_mut() };
+    unsafe fn resend_locally_typed<E: Message>(server_events: PtrMut, events: PtrMut) {
+        let server_events: &mut Messages<ToClients<E>> = unsafe { server_events.deref_mut() };
+        let events: &mut Messages<E> = unsafe { events.deref_mut() };
         for ToClients { event, mode } in server_events.drain() {
             debug!("resending event `{}` locally", any::type_name::<E>());
             match mode {
                 SendMode::Broadcast => {
-                    events.send(event);
+                    events.write(event);
                 }
                 SendMode::BroadcastExcept(ignored_id) => {
                     if ignored_id != ClientId::Server {
-                        events.send(event);
+                        events.write(event);
                     }
                 }
                 SendMode::Direct(client_id) => {
                     if client_id == ClientId::Server {
-                        events.send(event);
+                        events.write(event);
                     }
                 }
             }
@@ -567,7 +567,7 @@ impl ServerEvent {
     /// # Safety
     ///
     /// The caller must ensure that `queue` is [`Events<E>`].
-    unsafe fn reset_typed<E: Event>(queue: PtrMut) {
+    unsafe fn reset_typed<E: Message>(queue: PtrMut) {
         let queue: &mut EventQueue<E> = unsafe { queue.deref_mut() };
         if !queue.is_empty() {
             warn!(
@@ -583,7 +583,7 @@ impl ServerEvent {
     /// # Safety
     ///
     /// The caller must ensure that this instance was created for `E` and `I`.
-    unsafe fn serialize<E: Event, I: 'static>(
+    unsafe fn serialize<E: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
         event: &E,
@@ -601,7 +601,7 @@ impl ServerEvent {
     /// # Safety
     ///
     /// The caller must ensure that this instance was created for `E` and `I`.
-    unsafe fn deserialize<E: Event, I: 'static>(
+    unsafe fn deserialize<E: Message, I: 'static>(
         &self,
         ctx: &mut ClientReceiveCtx,
         message: &mut Bytes,
@@ -653,7 +653,7 @@ type ResendLocallyFn = unsafe fn(PtrMut, PtrMut);
 type ResetFn = unsafe fn(PtrMut);
 
 /// An event that will be send to client(s).
-#[derive(Clone, Copy, Debug, Event, Deref, DerefMut)]
+#[derive(Clone, Copy, Debug, Event, Message, Deref, DerefMut)]
 pub struct ToClients<T> {
     /// Recipients.
     pub mode: SendMode,
@@ -674,7 +674,7 @@ pub enum SendMode {
 }
 
 /// Default event serialization function.
-pub fn default_serialize<E: Event + Serialize>(
+pub fn default_serialize<E: Serialize>(
     _ctx: &mut ServerSendCtx,
     event: &E,
     message: &mut Vec<u8>,
@@ -684,7 +684,7 @@ pub fn default_serialize<E: Event + Serialize>(
 }
 
 /// Default event deserialization function.
-pub fn default_deserialize<E: Event + DeserializeOwned>(
+pub fn default_deserialize<E: DeserializeOwned>(
     _ctx: &mut ClientReceiveCtx,
     message: &mut Bytes,
 ) -> Result<E> {
@@ -693,7 +693,7 @@ pub fn default_deserialize<E: Event + DeserializeOwned>(
 }
 
 /// Default event deserialization function.
-pub fn default_deserialize_mapped<E: Event + DeserializeOwned + MapEntities>(
+pub fn default_deserialize_mapped<E: DeserializeOwned + MapEntities>(
     ctx: &mut ClientReceiveCtx,
     bytes: &mut Bytes,
 ) -> Result<E> {

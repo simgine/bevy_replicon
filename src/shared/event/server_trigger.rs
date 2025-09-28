@@ -27,7 +27,7 @@ pub trait ServerTriggerAppExt {
     /// (not to be confused with trigger target), then `E` event will be emitted on the server as well.
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
-    fn add_server_trigger<E: Event + Serialize + DeserializeOwned>(
+    fn add_server_trigger<'a, E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
@@ -42,7 +42,10 @@ pub trait ServerTriggerAppExt {
     ///
     /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
-    fn add_mapped_server_trigger<E: Event + Serialize + DeserializeOwned + MapEntities>(
+    fn add_mapped_server_trigger<
+        'a,
+        E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned + MapEntities,
+    >(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
@@ -56,7 +59,7 @@ pub trait ServerTriggerAppExt {
     /// Same as [`Self::add_server_trigger`], but uses the specified functions for serialization and deserialization.
     ///
     /// See also [`ServerEventAppExt::add_server_event_with`].
-    fn add_server_trigger_with<E: Event>(
+    fn add_server_trigger_with<'a, E: Event<Trigger<'a>: Default>>(
         &mut self,
         channel: Channel,
         serialize: EventSerializeFn<ServerSendCtx, E>,
@@ -68,7 +71,7 @@ pub trait ServerTriggerAppExt {
 }
 
 impl ServerTriggerAppExt for App {
-    fn add_server_trigger_with<E: Event>(
+    fn add_server_trigger_with<'a, E: Event<Trigger<'a>: Default>>(
         &mut self,
         channel: Channel,
         serialize: EventSerializeFn<ServerSendCtx, E>,
@@ -76,7 +79,7 @@ impl ServerTriggerAppExt for App {
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .add_server_trigger::<E>();
+            .add_server_event::<E>();
 
         let event_fns = EventFns::new(serialize, deserialize)
             .with_outer(trigger_serialize, trigger_deserialize);
@@ -95,7 +98,7 @@ impl ServerTriggerAppExt for App {
         let events_id = self
             .world()
             .components()
-            .resource_id::<Events<ServerTriggerEvent<E>>>()
+            .resource_id::<Messages<ServerTriggerEvent<E>>>()
             .unwrap_or_else(|| {
                 panic!(
                     "event `{}` should be previously registered",
@@ -127,7 +130,7 @@ pub(crate) struct ServerTrigger {
 }
 
 impl ServerTrigger {
-    fn new<E: Event>(
+    fn new<'a, E: Event<Trigger<'a>: Default>>(
         app: &mut App,
         channel: Channel,
         event_fns: EventFns<ServerSendCtx, ClientReceiveCtx, ServerTriggerEvent<E>, E>,
@@ -151,11 +154,14 @@ impl ServerTrigger {
     ///
     /// The caller must ensure that `events` is [`Events<TriggerEvent<E>>`]
     /// and this instance was created for `E`.
-    unsafe fn trigger_typed<E: Event>(commands: &mut Commands, events: PtrMut) {
-        let events: &mut Events<ServerTriggerEvent<E>> = unsafe { events.deref_mut() };
+    unsafe fn trigger_typed<'a, E: Event<Trigger<'a>: Default>>(
+        commands: &mut Commands,
+        events: PtrMut,
+    ) {
+        let events: &mut Messages<ServerTriggerEvent<E>> = unsafe { events.deref_mut() };
         for trigger in events.drain() {
             debug!("triggering `{}`", any::type_name::<E>());
-            commands.trigger_targets(trigger.event, trigger.targets);
+            commands.trigger(trigger.event);
         }
     }
 
@@ -233,7 +239,7 @@ impl ServerTriggerExt for Commands<'_, '_> {
         event: ToClients<impl Event>,
         targets: impl RemoteTargets,
     ) {
-        self.send_event(ToClients {
+        self.write_message(ToClients {
             mode: event.mode,
             event: ServerTriggerEvent {
                 event: event.event,
@@ -253,7 +259,7 @@ impl ServerTriggerExt for World {
         event: ToClients<impl Event>,
         targets: impl RemoteTargets,
     ) {
-        self.send_event(ToClients {
+        self.write_message(ToClients {
             mode: event.mode,
             event: ServerTriggerEvent {
                 event: event.event,
@@ -268,7 +274,7 @@ impl ServerTriggerExt for World {
 /// We can't just observe for triggers like we do for events since we need access to all its targets
 /// and we need to buffer them. This is why we just emit this event instead and after receive drain it
 /// to trigger regular events.
-#[derive(Event)]
+#[derive(Message)]
 struct ServerTriggerEvent<E> {
     event: E,
     targets: Vec<Entity>,

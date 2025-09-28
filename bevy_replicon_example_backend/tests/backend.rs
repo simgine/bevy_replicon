@@ -65,7 +65,7 @@ fn disconnect_request() {
     setup(&mut server_app, &mut client_app).unwrap();
 
     server_app.world_mut().spawn(Replicated);
-    server_app.world_mut().send_event(ToClients {
+    server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
         event: TestEvent,
     });
@@ -76,7 +76,7 @@ fn disconnect_request() {
     let client = clients.single(server_app.world()).unwrap();
     server_app
         .world_mut()
-        .send_event(DisconnectRequest { client });
+        .write_message(DisconnectRequest { client });
 
     server_app.update();
     client_app.update();
@@ -86,8 +86,8 @@ fn disconnect_request() {
     let client_state = client_app.world().resource::<State<ClientState>>();
     assert_eq!(*client_state, ClientState::Disconnected);
 
-    let events = client_app.world().resource::<Events<TestEvent>>();
-    assert_eq!(events.len(), 1, "last event should be received");
+    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    assert_eq!(messages.len(), 1, "last message should be received");
 
     let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(
@@ -116,7 +116,7 @@ fn server_stop() {
 
     server_app.world_mut().remove_resource::<ExampleServer>();
     server_app.world_mut().spawn(Replicated);
-    server_app.world_mut().send_event(ToClients {
+    server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
         event: TestEvent,
     });
@@ -133,8 +133,11 @@ fn server_stop() {
     let client_state = client_app.world().resource::<State<ClientState>>();
     assert_eq!(*client_state, ClientState::Disconnected);
 
-    let events = client_app.world().resource::<Events<TestEvent>>();
-    assert!(events.is_empty(), "event after stop shouldn't be received");
+    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    assert!(
+        messages.is_empty(),
+        "message shouldn't be received after stop"
+    );
 
     let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(
@@ -186,7 +189,7 @@ fn server_event() {
 
     setup(&mut server_app, &mut client_app).unwrap();
 
-    server_app.world_mut().send_event(ToClients {
+    server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
         event: TestEvent,
     });
@@ -194,8 +197,8 @@ fn server_event() {
     server_app.update();
     client_app.update();
 
-    let events = client_app.world().resource::<Events<TestEvent>>();
-    assert_eq!(events.len(), 1);
+    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    assert_eq!(messages.len(), 1);
 }
 
 #[test]
@@ -215,15 +218,15 @@ fn client_event() {
 
     setup(&mut server_app, &mut client_app).unwrap();
 
-    client_app.world_mut().send_event(TestEvent);
+    client_app.world_mut().write_message(TestEvent);
 
     client_app.update();
     server_app.update();
 
-    let client_events = server_app
+    let messages = server_app
         .world()
-        .resource::<Events<FromClient<TestEvent>>>();
-    assert_eq!(client_events.len(), 1);
+        .resource::<Messages<FromClient<TestEvent>>>();
+    assert_eq!(messages.len(), 1);
 }
 
 fn setup(server_app: &mut App, client_app: &mut App) -> io::Result<()> {
@@ -242,5 +245,5 @@ fn setup(server_app: &mut App, client_app: &mut App) -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Deserialize, Event, Serialize)]
+#[derive(Message, Serialize, Deserialize)]
 struct TestEvent;

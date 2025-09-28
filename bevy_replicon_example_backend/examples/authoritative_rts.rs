@@ -16,6 +16,7 @@ use std::{
 };
 
 use bevy::{
+    camera::primitives::Aabb,
     color::palettes::tailwind::{
         BLUE_500, GREEN_500, LIME_500, ORANGE_500, PINK_500, PURPLE_500, RED_500, TEAL_500,
         YELLOW_500,
@@ -23,7 +24,6 @@ use bevy::{
     ecs::entity::MapEntities,
     platform::collections::HashMap,
     prelude::*,
-    render::primitives::Aabb,
 };
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
@@ -46,7 +46,7 @@ fn main() {
         .replicate_as::<Transform, Transform2DWithoutScale>()
         .add_client_trigger::<TeamRequest>(Channel::Unordered)
         .add_client_trigger::<UnitSpawn>(Channel::Unordered)
-        .add_mapped_client_trigger::<UnitsMove>(Channel::Unordered)
+        .add_mapped_client_trigger::<MoveUnits>(Channel::Unordered)
         .add_observer(apply_team_request)
         .add_observer(trigger_unit_spawn)
         .add_observer(apply_unit_spawn)
@@ -131,29 +131,29 @@ fn trigger_team_request(mut commands: Commands, team: Res<Team>) {
 
 /// Assigns a team to a player.
 fn apply_team_request(
-    trigger: Trigger<FromClient<TeamRequest>>,
-    mut events: EventWriter<DisconnectRequest>,
+    team_request: On<FromClient<TeamRequest>>,
+    mut disconnects: MessageWriter<DisconnectRequest>,
     mut teams: ResMut<ClientTeams>,
 ) {
-    if let Some((client_id, team)) = teams.iter().find(|&(_, team)| *team == trigger.team) {
+    if let Some((client_id, team)) = teams.iter().find(|&(_, team)| *team == team_request.team) {
         error!(
             "`{}` requested team `{team:?}`, but it's already taken by `{client_id}`",
-            trigger.client_id,
+            team_request.client_id,
         );
-        let client = trigger
+        let client = team_request
             .client_id
             .entity()
             .expect("server can't request an invalid team");
-        events.write(DisconnectRequest { client });
+        disconnects.write(DisconnectRequest { client });
         return;
     }
 
     info!(
         "associating `{}` with team `{:?}`",
-        trigger.client_id, trigger.team
+        team_request.client_id, team_request.team
     );
 
-    teams.insert(trigger.client_id, trigger.team);
+    teams.insert(team_request.client_id, team_request.team);
 }
 
 /// Requests spawning a unit at the click location.
@@ -165,16 +165,16 @@ fn apply_team_request(
 /// This also makes the logic independent of camera position - even though in
 /// this demo the camera cannot move.
 fn trigger_unit_spawn(
-    trigger: Trigger<Pointer<Pressed>>,
+    press: On<Pointer<Press>>,
     mut commands: Commands,
     camera: Single<(&Camera, &GlobalTransform)>,
 ) -> Result<()> {
-    if trigger.button != PointerButton::Middle {
+    if press.button != PointerButton::Middle {
         return Ok(());
     }
 
     let (camera, transform) = *camera;
-    let position = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
+    let position = camera.viewport_to_world_2d(transform, press.pointer_location.position)?;
 
     commands.client_trigger(UnitSpawn { position });
 
@@ -186,21 +186,21 @@ fn trigger_unit_spawn(
 /// Executed on server and singleplayer.
 /// The unit will be replicated back to clients.
 fn apply_unit_spawn(
-    trigger: Trigger<FromClient<UnitSpawn>>,
+    spawn: On<FromClient<UnitSpawn>>,
     mut commands: Commands,
     teams: Res<ClientTeams>,
 ) {
-    let Some(&team) = teams.get(&trigger.client_id) else {
+    let Some(&team) = teams.get(&spawn.client_id) else {
         error!(
             "`{}` attempted to spawn a unit but has no team",
-            trigger.client_id
+            spawn.client_id
         );
         return;
     };
 
     commands.spawn((
         Unit { team },
-        Transform::from_translation(trigger.position.extend(0.0)),
+        Transform::from_translation(spawn.position.extend(0.0)),
     ));
 }
 
@@ -215,12 +215,12 @@ fn apply_unit_spawn(
 /// Works for initialization on both the server (when a unit
 /// is spawned) and the client (when the unit is replicated).
 fn init_unit(
-    trigger: Trigger<OnInsert, Unit>,
+    insert: On<Insert, Unit>,
     unit_mesh: Local<UnitMesh>,
     unit_materials: Local<UnitMaterials>,
     mut units: Query<(&Unit, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,
 ) {
-    let (unit, mut mesh, mut material) = units.get_mut(trigger.target()).unwrap();
+    let (unit, mut mesh, mut material) = units.get_mut(insert.entity).unwrap();
     **mesh = unit_mesh.0.clone();
     **material = unit_materials.get(&unit.team).unwrap().clone();
 }
@@ -229,24 +229,22 @@ fn init_unit(
 ///
 /// The selection is local to the player and is not networked.
 fn select_units(
-    trigger: Trigger<Pointer<Drag>>,
+    drag: On<Pointer<Drag>>,
     mut commands: Commands,
     mut selection: ResMut<Selection>,
     team: Res<Team>,
     camera: Single<(&Camera, &GlobalTransform)>,
     units: Query<(Entity, &Unit, &GlobalTransform, &Aabb, Has<Selected>)>,
 ) -> Result<()> {
-    if trigger.button != PointerButton::Primary {
+    if drag.button != PointerButton::Primary {
         return Ok(());
     }
 
     let (camera, transform) = *camera;
 
-    let origin = camera.viewport_to_world_2d(
-        transform,
-        trigger.pointer_location.position - trigger.distance,
-    )?;
-    let end = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
+    let origin =
+        camera.viewport_to_world_2d(transform, drag.pointer_location.position - drag.distance)?;
+    let end = camera.viewport_to_world_2d(transform, drag.pointer_location.position)?;
 
     selection.rect = Rect::from_corners(origin, end);
     selection.active = true;
@@ -268,16 +266,16 @@ fn select_units(
 }
 
 /// Stops displaying the selection rectangle.
-fn end_selection(_trigger: Trigger<Pointer<DragEnd>>, mut rect: ResMut<Selection>) {
+fn end_selection(_on: On<Pointer<DragEnd>>, mut rect: ResMut<Selection>) {
     rect.active = false;
 }
 
 fn clear_selection(
-    trigger: Trigger<Pointer<Pressed>>,
+    press: On<Pointer<Press>>,
     mut commands: Commands,
     units: Query<Entity, With<Selected>>,
 ) {
-    if trigger.button != PointerButton::Primary {
+    if press.button != PointerButton::Primary {
         return;
     }
     for unit in &units {
@@ -287,19 +285,19 @@ fn clear_selection(
 
 /// Requests movement into a location for previously the selected units.
 fn trigger_units_move(
-    trigger: Trigger<Pointer<Pressed>>,
+    press: On<Pointer<Press>>,
     mut commands: Commands,
     camera: Single<(&Camera, &GlobalTransform)>,
     units: Populated<Entity, With<Selected>>,
 ) -> Result<()> {
-    if trigger.button != PointerButton::Secondary {
+    if press.button != PointerButton::Secondary {
         return Ok(());
     }
 
     let (camera, transform) = *camera;
-    let position = camera.viewport_to_world_2d(transform, trigger.pointer_location.position)?;
+    let position = camera.viewport_to_world_2d(transform, press.pointer_location.position)?;
 
-    commands.client_trigger(UnitsMove {
+    commands.client_trigger(MoveUnits {
         units: units.iter().collect(),
         position,
     });
@@ -314,7 +312,7 @@ const MOVE_SPACING: f32 = 30.0;
 /// Each unit receives a unique `Command::Move`, arranged in a grid formation
 /// centered on the requested position. The grid is oriented toward that position.
 fn apply_units_move(
-    trigger: Trigger<FromClient<UnitsMove>>,
+    move_units: On<FromClient<MoveUnits>>,
     teams: Res<ClientTeams>,
     mut slots: Local<Vec<Vec2>>,
     mut positions: Local<Vec<Vec2>>,
@@ -323,26 +321,26 @@ fn apply_units_move(
     // Validate the received data since the client could be malicious.
     // For example, on the client side we skip empty selections, but a modified
     // client could bypass this and cause a division by zero on the server.
-    if trigger.units.is_empty() {
-        error!("`{}` attempted to move zero units", trigger.client_id);
+    if move_units.units.is_empty() {
+        error!("`{}` attempted to move zero units", move_units.client_id);
         return;
     }
 
-    let Some(&client_team) = teams.get(&trigger.client_id) else {
+    let Some(&client_team) = teams.get(&move_units.client_id) else {
         error!(
             "`{}` attempted to move units but has no team",
-            trigger.client_id
+            move_units.client_id
         );
         return;
     };
 
     positions.clear();
-    positions.reserve(trigger.units.len());
-    for (unit, transform, _) in units.iter_many(&trigger.units) {
+    positions.reserve(move_units.units.len());
+    for (unit, transform, _) in units.iter_many(&move_units.units) {
         if unit.team != client_team {
             error!(
                 "`{}` has team `{client_team:?}`, but tried to move unit with team `{:?}`",
-                trigger.client_id, unit.team
+                move_units.client_id, unit.team
             );
             return;
         }
@@ -350,7 +348,7 @@ fn apply_units_move(
         positions.push(transform.translation().truncate());
     }
 
-    let units_count = trigger.units.len();
+    let units_count = move_units.units.len();
     let cols = (units_count as f32).sqrt().ceil() as usize;
     let rows = units_count.div_ceil(cols);
     let centering_offset = -Vec2::new(cols as f32 - 1.0, rows as f32 - 1.0) / 2.0 * MOVE_SPACING;
@@ -358,7 +356,7 @@ fn apply_units_move(
     // Orientation basis to make grid facing from group centroid toward the click.
     let positions_sum = positions.iter().sum::<Vec2>();
     let centroid = positions_sum / units_count as f32;
-    let forward = (trigger.position - centroid).normalize_or(Vec2::Y);
+    let forward = (move_units.position - centroid).normalize_or(Vec2::Y);
     let right = Vec2::new(forward.y, -forward.x);
     let rotation = Mat2::from_cols(right, forward);
 
@@ -369,7 +367,7 @@ fn apply_units_move(
         let col = index % cols;
 
         let grid_position = centering_offset + Vec2::new(col as f32, row as f32) * MOVE_SPACING;
-        slots.push(trigger.position + rotation * grid_position);
+        slots.push(move_units.position + rotation * grid_position);
     }
 
     // Pick closest slot for each unit using
@@ -385,7 +383,7 @@ fn apply_units_move(
         .collect();
     let (_, unit_to_slot) = kuhn_munkres_min(&weights);
 
-    let mut iter = units.iter_many_mut(&trigger.units);
+    let mut iter = units.iter_many_mut(&move_units.units);
     for &slot_index in &unit_to_slot {
         let (.., mut command) = iter.fetch_next().unwrap();
         *command = Command::Move(slots[slot_index]);
@@ -661,9 +659,9 @@ struct UnitSpawn {
     position: Vec2,
 }
 
-/// A trigger that orders units to move to a specified location.
+/// Orders units to move to a specified location.
 #[derive(Event, Serialize, Deserialize, MapEntities, Clone)]
-struct UnitsMove {
+struct MoveUnits {
     #[entities]
     units: Vec<Entity>,
     position: Vec2,

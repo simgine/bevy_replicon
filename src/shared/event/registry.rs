@@ -67,7 +67,8 @@ impl RemoteEventRegistry {
     ///
     /// See also [`ServerEventAppExt::add_server_event`](super::server_event::ServerEventAppExt::add_server_event)
     /// and [`ServerTriggerAppExt::add_server_trigger`](super::server_trigger::ServerTriggerAppExt::add_server_trigger).
-    pub fn server_channel<E: Event>(&self) -> Option<usize> {
+    // TODO: typing
+    pub fn server_channel<E: 'static>(&self) -> Option<usize> {
         self.iter_all_server()
             .find(|event| event.type_id() == TypeId::of::<E>())
             .map(|event| event.channel_id())
@@ -77,7 +78,8 @@ impl RemoteEventRegistry {
     ///
     /// See also [`ClientEventAppExt::add_client_event`](super::client_event::ClientEventAppExt::add_client_event)
     /// and [`ClientTriggerAppExt::add_client_trigger`](super::client_trigger::ClientTriggerAppExt::add_client_trigger).
-    pub fn client_channel<E: Event>(&self) -> Option<usize> {
+    // TODO: typing
+    pub fn client_channel<E: 'static>(&self) -> Option<usize> {
         self.iter_all_client()
             .find(|event| event.type_id() == TypeId::of::<E>())
             .map(|event| event.channel_id())

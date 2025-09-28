@@ -1,9 +1,4 @@
-use bevy::{
-    ecs::{entity::MapEntities, event::Events},
-    prelude::*,
-    state::app::StatesPlugin,
-    time::TimePlugin,
-};
+use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     prelude::*,
     shared::{event::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
@@ -20,7 +15,7 @@ fn channels() {
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
-    .add_event::<NonRemoteEvent>()
+    .add_message::<NonRemoteEvent>()
     .add_client_event::<TestEvent>(Channel::Ordered)
     .finish();
 
@@ -41,16 +36,16 @@ fn regular() {
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().send_event(TestEvent);
+    client_app.world_mut().write_message(TestEvent);
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let client_events = server_app
+    let messages = server_app
         .world()
-        .resource::<Events<FromClient<TestEvent>>>();
-    assert_eq!(client_events.len(), 1);
+        .resource::<Messages<FromClient<TestEvent>>>();
+    assert_eq!(messages.len(), 1);
 }
 
 #[test]
@@ -84,7 +79,7 @@ fn mapped() {
 
     client_app
         .world_mut()
-        .send_event(EntityEvent(client_entity));
+        .write_message(EntityEvent(client_entity));
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -92,7 +87,7 @@ fn mapped() {
 
     let mapped_entities: Vec<_> = server_app
         .world_mut()
-        .resource_mut::<Events<FromClient<EntityEvent>>>()
+        .resource_mut::<Messages<FromClient<EntityEvent>>>()
         .drain()
         .map(|event| event.0)
         .collect();
@@ -128,16 +123,16 @@ fn without_plugins() {
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().send_event(TestEvent);
+    client_app.world_mut().write_message(TestEvent);
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let client_events = server_app
+    let messages = server_app
         .world()
-        .resource::<Events<FromClient<TestEvent>>>();
-    assert_eq!(client_events.len(), 1);
+        .resource::<Messages<FromClient<TestEvent>>>();
+    assert_eq!(messages.len(), 1);
 }
 
 #[test]
@@ -147,22 +142,22 @@ fn local_resending() {
         .add_client_event::<TestEvent>(Channel::Ordered)
         .finish();
 
-    app.world_mut().send_event(TestEvent);
+    app.world_mut().write_message(TestEvent);
 
     app.update();
 
-    let events = app.world().resource::<Events<TestEvent>>();
-    assert!(events.is_empty());
+    let messages = app.world().resource::<Messages<TestEvent>>();
+    assert!(messages.is_empty());
 
-    let client_events = app.world().resource::<Events<FromClient<TestEvent>>>();
-    assert_eq!(client_events.len(), 1);
+    let client_messages = app.world().resource::<Messages<FromClient<TestEvent>>>();
+    assert_eq!(client_messages.len(), 1);
 }
 
-#[derive(Event)]
+#[derive(Message)]
 struct NonRemoteEvent;
 
-#[derive(Deserialize, Event, Serialize)]
+#[derive(Deserialize, Message, Serialize)]
 struct TestEvent;
 
-#[derive(Deserialize, Event, Serialize, Clone, MapEntities)]
+#[derive(Deserialize, Message, Serialize, Clone, MapEntities)]
 struct EntityEvent(#[entities] Entity);

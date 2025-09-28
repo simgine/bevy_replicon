@@ -145,7 +145,7 @@ fn network_id_map() {
     assert!(app.world().resource::<NetworkIdMap>().is_empty());
 }
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(Message, Serialize, Deserialize)]
 struct TestEvent;
 
 #[derive(Resource)]
@@ -156,7 +156,7 @@ struct TriggerCounter<E: Event> {
 
 impl<E: Event> FromWorld for TriggerCounter<E> {
     fn from_world(world: &mut World) -> Self {
-        world.add_observer(|_trigger: Trigger<E>, mut counter: ResMut<Self>| {
+        world.add_observer(|_on: On<E>, mut counter: ResMut<Self>| {
             counter.triggers += 1;
         });
 

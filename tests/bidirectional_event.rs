@@ -1,4 +1,4 @@
-use bevy::{ecs::event::Events, prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use serde::{Deserialize, Serialize};
 use test_log::test;
@@ -16,8 +16,8 @@ fn event() {
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().send_event(TestEvent);
-    server_app.world_mut().send_event(ToClients {
+    client_app.world_mut().write_message(TestEvent);
+    server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
         event: TestEvent,
     });
@@ -28,15 +28,18 @@ fn event() {
     client_app.update();
     server_app.update();
 
-    let client_events = server_app
+    let messages = server_app
         .world()
-        .resource::<Events<FromClient<TestEvent>>>();
+        .resource::<Messages<FromClient<TestEvent>>>();
     assert_eq!(
-        client_events.len(),
+        messages.len(),
         2,
-        "server should get 2 events due to local resending"
+        "server should get 2 messages due to local resending"
     );
-    assert_eq!(client_app.world().resource::<Events<TestEvent>>().len(), 1);
+    assert_eq!(
+        client_app.world().resource::<Messages<TestEvent>>().len(),
+        1
+    );
 }
 
 #[test]
@@ -79,7 +82,7 @@ fn trigger() {
     assert_eq!(client_reader.events.len(), 1);
 }
 
-#[derive(Event, Serialize, Deserialize, Clone)]
+#[derive(Event, Message, Serialize, Deserialize, Clone)]
 struct TestEvent;
 
 #[derive(Resource)]
@@ -89,8 +92,8 @@ struct TriggerReader<E: Event> {
 
 impl<E: Event + Clone> FromWorld for TriggerReader<E> {
     fn from_world(world: &mut World) -> Self {
-        world.add_observer(|trigger: Trigger<E>, mut counter: ResMut<Self>| {
-            counter.events.push(trigger.event().clone());
+        world.add_observer(|on: On<E>, mut counter: ResMut<Self>| {
+            counter.events.push(on.event().clone());
         });
 
         Self {
