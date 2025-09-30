@@ -1,5 +1,5 @@
-mod client_event_queue;
 pub(crate) mod event_buffer;
+mod event_queue;
 
 use core::any::{self, TypeId};
 
@@ -19,8 +19,8 @@ use super::{
     remote_event_registry::RemoteEventRegistry,
 };
 use crate::{postcard_utils, prelude::*};
-use client_event_queue::ClientEventQueue;
 use event_buffer::{EventBuffer, SerializedMessage};
+use event_queue::EventQueue;
 
 /// An extension trait for [`App`] for creating server events.
 ///
@@ -222,7 +222,7 @@ pub(crate) struct ServerEvent {
     /// ID of [`Events<ToClients<E>>`].
     server_events_id: ComponentId,
 
-    /// ID of [`ServerEventQueue<T>`].
+    /// ID of [`EventQueue<T>`].
     queue_id: ComponentId,
 
     /// Used channel.
@@ -251,11 +251,11 @@ impl ServerEvent {
 
         app.add_event::<E>()
             .add_event::<ToClients<E>>()
-            .init_resource::<ClientEventQueue<E>>();
+            .init_resource::<EventQueue<E>>();
 
         let events_id = app.world().resource_id::<Events<E>>().unwrap();
         let server_events_id = app.world().resource_id::<Events<ToClients<E>>>().unwrap();
-        let queue_id = app.world().resource_id::<ClientEventQueue<E>>().unwrap();
+        let queue_id = app.world().resource_id::<EventQueue<E>>().unwrap();
 
         Self {
             independent: false,
@@ -427,7 +427,7 @@ impl ServerEvent {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `events` is [`Events<E>`], `queue` is [`ServerEventQueue<E>`],
+    /// The caller must ensure that `events` is [`Events<E>`], `queue` is [`EventQueue<E>`],
     /// and this instance was created for `E`.
     pub(crate) unsafe fn receive(
         &self,
@@ -444,7 +444,7 @@ impl ServerEvent {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `events` is [`Events<E>`], `queue` is [`ServerEventQueue<E>`]
+    /// The caller must ensure that `events` is [`Events<E>`], `queue` is [`EventQueue<E>`]
     /// and this instance was created for `E` and `I`.
     unsafe fn receive_typed<E: Event, I: 'static>(
         &self,
@@ -455,7 +455,7 @@ impl ServerEvent {
         update_tick: RepliconTick,
     ) {
         let events: &mut Events<E> = unsafe { events.deref_mut() };
-        let queue: &mut ClientEventQueue<E> = unsafe { queue.deref_mut() };
+        let queue: &mut EventQueue<E> = unsafe { queue.deref_mut() };
 
         while let Some((tick, messages)) = queue.pop_if_le(update_tick) {
             for mut message in messages {
@@ -568,7 +568,7 @@ impl ServerEvent {
     ///
     /// The caller must ensure that `queue` is [`Events<E>`].
     unsafe fn reset_typed<E: Event>(queue: PtrMut) {
-        let queue: &mut ClientEventQueue<E> = unsafe { queue.deref_mut() };
+        let queue: &mut EventQueue<E> = unsafe { queue.deref_mut() };
         if !queue.is_empty() {
             warn!(
                 "discarding {} queued events due to a disconnect",

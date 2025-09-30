@@ -11,7 +11,7 @@ use crate::prelude::*;
 /// Stores data sorted by ticks and maintains order of arrival.
 /// Needed to ensure that when an event is triggered, all the data that it affects or references already exists.
 #[derive(Resource)]
-pub(super) struct ClientEventQueue<E> {
+pub(super) struct EventQueue<E> {
     map: BTreeMap<RepliconTick, Vec<Bytes>>,
     /// [`Vec`]s from removals.
     ///
@@ -21,7 +21,7 @@ pub(super) struct ClientEventQueue<E> {
     marker: PhantomData<E>,
 }
 
-impl<E> ClientEventQueue<E> {
+impl<E> EventQueue<E> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
         self.map
             .entry(tick)
@@ -60,7 +60,7 @@ impl<E> ClientEventQueue<E> {
     }
 }
 
-impl<E> Default for ClientEventQueue<E> {
+impl<E> Default for EventQueue<E> {
     fn default() -> Self {
         Self {
             map: Default::default(),
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn lower_tick() {
-        let mut queue = ClientEventQueue::<TestEvent>::default();
+        let mut queue = EventQueue::<TestEvent>::default();
         queue.insert(RepliconTick::new(1), Default::default());
 
         assert_eq!(queue.len(), 1);
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn bigger_tick() {
-        let mut queue = ClientEventQueue::<TestEvent>::default();
+        let mut queue = EventQueue::<TestEvent>::default();
         queue.insert(RepliconTick::new(1), Default::default());
 
         assert!(queue.pop_if_le(RepliconTick::new(2)).is_some());
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn ticks_ordering() {
-        let mut queue = ClientEventQueue::<TestEvent>::default();
+        let mut queue = EventQueue::<TestEvent>::default();
         queue.insert(RepliconTick::new(0), Default::default());
         queue.insert(RepliconTick::new(1), Default::default());
         queue.insert(RepliconTick::new(2), Default::default());
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn messages_ordering() {
-        let mut queue = ClientEventQueue::<TestEvent>::default();
+        let mut queue = EventQueue::<TestEvent>::default();
         queue.insert(RepliconTick::new(0), Bytes::from_static(&[0]));
         queue.insert(RepliconTick::new(0), Bytes::from_static(&[1]));
 
