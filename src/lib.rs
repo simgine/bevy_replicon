@@ -685,7 +685,7 @@ Alternatively you can configure `LogPlugin` from Bevy to make it permanent.
 For deserialization errors on client we use `error` level which should be visible by default.
 But on server we use `debug` for it to avoid flooding server logs with errors caused by clients.
 */
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
 
 extern crate alloc;
