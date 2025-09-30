@@ -447,7 +447,7 @@ impl<E: Event> FromWorld for ClientEventReader<E> {
 /// An event indicating that a message from client was received.
 ///
 /// Emitted only on server.
-#[derive(Clone, Copy, Event, Deref, DerefMut)]
+#[derive(Clone, Copy, Event, Debug, Deref, DerefMut)]
 pub struct FromClient<T> {
     /// Sender of the event.
     ///
