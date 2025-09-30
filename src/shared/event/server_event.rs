@@ -1,22 +1,16 @@
 mod client_event_queue;
+pub(crate) mod event_buffer;
 
-use core::{
-    any::{self, TypeId},
-    mem,
-};
+use core::any::{self, TypeId};
 
 use bevy::{
-    ecs::{
-        component::ComponentId,
-        entity::{MapEntities, hash_set::EntityHashSet},
-    },
+    ecs::{component::ComponentId, entity::MapEntities},
     prelude::*,
     ptr::{Ptr, PtrMut},
 };
 use bytes::Bytes;
-use client_event_queue::ClientEventQueue;
 use log::{debug, error, warn};
-use postcard::experimental::{max_size::MaxSize, serialized_size};
+use postcard::experimental::max_size::MaxSize;
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
@@ -24,7 +18,9 @@ use super::{
     event_fns::{EventDeserializeFn, EventFns, EventSerializeFn, UntypedEventFns},
     remote_event_registry::RemoteEventRegistry,
 };
-use crate::{postcard_utils, prelude::*, shared::replication::client_ticks::ClientTicks};
+use crate::{postcard_utils, prelude::*};
+use client_event_queue::ClientEventQueue;
+use event_buffer::{EventBuffer, SerializedMessage};
 
 /// An extension trait for [`App`] for creating server events.
 ///
@@ -308,11 +304,9 @@ impl ServerEvent {
         server_events: &Ptr,
         messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
-        buffered_events: &mut BufferedServerEvents,
+        event_buffer: &mut EventBuffer,
     ) {
-        unsafe {
-            (self.send_or_buffer)(self, ctx, server_events, messages, clients, buffered_events)
-        }
+        unsafe { (self.send_or_buffer)(self, ctx, server_events, messages, clients, event_buffer) }
     }
 
     /// Typed version of [`Self::send_or_buffer`].
@@ -327,7 +321,7 @@ impl ServerEvent {
         server_events: &Ptr,
         messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
-        buffered_events: &mut BufferedServerEvents,
+        event_buffer: &mut EventBuffer,
     ) {
         let events: &Events<ToClients<E>> = unsafe { server_events.deref() };
         // For server events we don't track read events because
@@ -342,7 +336,7 @@ impl ServerEvent {
                 }
             } else {
                 unsafe {
-                    self.buffer_event::<E, I>(ctx, event, *mode, buffered_events)
+                    self.buffer_event::<E, I>(ctx, event, *mode, event_buffer)
                         .expect("server event should be serializable");
                 }
             }
@@ -403,10 +397,10 @@ impl ServerEvent {
         ctx: &mut ServerSendCtx,
         event: &E,
         mode: SendMode,
-        buffered_events: &mut BufferedServerEvents,
+        event_buffer: &mut EventBuffer,
     ) -> Result<()> {
         let message = unsafe { self.serialize_with_padding::<E, I>(ctx, event)? };
-        buffered_events.insert(mode, self.channel_id, message);
+        event_buffer.insert(mode, self.channel_id, message);
         Ok(())
     }
 
@@ -639,7 +633,7 @@ type SendOrBufferFn = unsafe fn(
     &Ptr,
     &mut ServerMessages,
     &Query<Entity, With<ConnectedClient>>,
-    &mut BufferedServerEvents,
+    &mut EventBuffer,
 );
 
 /// Signature of server event receiving functions.
@@ -657,215 +651,6 @@ type ResendLocallyFn = unsafe fn(PtrMut, PtrMut);
 
 /// Signature of server event reset functions.
 type ResetFn = unsafe fn(PtrMut);
-
-/// Cached message for use in [`BufferedServerEvents`].
-enum SerializedMessage {
-    /// A message without serialized tick.
-    ///
-    /// `padding | message`
-    ///
-    /// The padding length equals max serialized bytes of [`RepliconTick`]. It should be overwritten before sending
-    /// to clients.
-    Raw(Vec<u8>),
-    /// A message with serialized tick.
-    ///
-    /// `tick | message`
-    Resolved {
-        tick: RepliconTick,
-        tick_size: usize,
-        bytes: Bytes,
-    },
-}
-
-impl SerializedMessage {
-    /// Optimized to avoid reallocations when clients have the same update tick as other clients receiving the
-    /// same message.
-    fn get_bytes(&mut self, update_tick: RepliconTick) -> Result<Bytes> {
-        match self {
-            // Resolve the raw value into a message with serialized tick.
-            Self::Raw(raw) => {
-                let mut bytes = mem::take(raw);
-
-                // Serialize the tick at the end of the pre-allocated space for it,
-                // then shift the buffer to avoid reallocation.
-                let tick_size = serialized_size(&update_tick)?;
-                let padding = RepliconTick::POSTCARD_MAX_SIZE - tick_size;
-                postcard::to_slice(&update_tick, &mut bytes[padding..])?;
-                let bytes = Bytes::from(bytes).slice(padding..);
-
-                *self = Self::Resolved {
-                    tick: update_tick,
-                    tick_size,
-                    bytes: bytes.clone(),
-                };
-                Ok(bytes)
-            }
-            // Get the already-resolved value or reserialize with a different tick.
-            Self::Resolved {
-                tick,
-                tick_size,
-                bytes,
-            } => {
-                if *tick == update_tick {
-                    return Ok(bytes.clone());
-                }
-
-                let new_tick_size = serialized_size(&update_tick)?;
-                let mut new_bytes = Vec::with_capacity(new_tick_size + bytes.len() - *tick_size);
-                postcard_utils::to_extend_mut(&update_tick, &mut new_bytes)?;
-                new_bytes.extend_from_slice(&bytes[*tick_size..]);
-                Ok(new_bytes.into())
-            }
-        }
-    }
-}
-
-struct BufferedServerEvent {
-    mode: SendMode,
-    channel_id: usize,
-    message: SerializedMessage,
-}
-
-impl BufferedServerEvent {
-    fn send(
-        &mut self,
-        messages: &mut ServerMessages,
-        client_entity: Entity,
-        client: &ClientTicks,
-    ) -> Result<()> {
-        let message = self.message.get_bytes(client.update_tick())?;
-        messages.send(client_entity, self.channel_id, message);
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct BufferedServerEventSet {
-    events: Vec<BufferedServerEvent>,
-    /// Client entities excluded from receiving events in this set because they connected after the events were sent.
-    excluded: EntityHashSet,
-}
-
-impl BufferedServerEventSet {
-    fn clear(&mut self) {
-        self.events.clear();
-        self.excluded.clear();
-    }
-}
-
-/// Caches synchronization-dependent server events until they can be sent with an accurate update tick.
-///
-/// This exists because replication does not scan the world every tick. If a server event is sent in the same
-/// tick as a spawn and the event references that spawn, then the server event's update tick needs to be synchronized
-/// with that spawn on the client. We buffer the event until the spawn can be detected.
-#[derive(Resource, Default)]
-pub(crate) struct BufferedServerEvents {
-    buffer: Vec<BufferedServerEventSet>,
-
-    /// Caches unused sets to avoid reallocations when pushing into the buffer.
-    ///
-    /// These are cleared before insertion.
-    cache: Vec<BufferedServerEventSet>,
-}
-
-impl BufferedServerEvents {
-    pub(crate) fn start_tick(&mut self) {
-        self.buffer.push(self.cache.pop().unwrap_or_default());
-    }
-
-    fn active_tick(&mut self) -> Option<&mut BufferedServerEventSet> {
-        self.buffer.last_mut()
-    }
-
-    fn insert(&mut self, mode: SendMode, channel_id: usize, message: SerializedMessage) {
-        let buffer = self
-            .active_tick()
-            .expect("`BufferedServerEvents::start_tick` should be called before buffering");
-
-        buffer.events.push(BufferedServerEvent {
-            mode,
-            channel_id,
-            message,
-        });
-    }
-
-    /// Used to prevent newly-connected clients from receiving old events.
-    pub(crate) fn exclude_client(&mut self, client: Entity) {
-        for set in self.buffer.iter_mut() {
-            set.excluded.insert(client);
-        }
-    }
-
-    pub(crate) fn send_all(
-        &mut self,
-        messages: &mut ServerMessages,
-        clients: &Query<(Entity, Option<&ClientTicks>), With<ConnectedClient>>,
-    ) -> Result<()> {
-        for mut set in self.buffer.drain(..) {
-            for mut event in set.events.drain(..) {
-                match event.mode {
-                    SendMode::Broadcast => {
-                        for (client, ticks) in
-                            clients.iter().filter(|(e, _)| !set.excluded.contains(e))
-                        {
-                            if let Some(ticks) = ticks {
-                                event.send(messages, client, ticks)?;
-                            } else {
-                                debug!(
-                                    "ignoring broadcast for channel {} for non-authorized client `{client}`",
-                                    event.channel_id
-                                );
-                            }
-                        }
-                    }
-                    SendMode::BroadcastExcept(ignored_id) => {
-                        for (client, ticks) in
-                            clients.iter().filter(|(c, _)| !set.excluded.contains(c))
-                        {
-                            if ignored_id == client.into() {
-                                continue;
-                            }
-
-                            if let Some(ticks) = ticks {
-                                event.send(messages, client, ticks)?;
-                            } else {
-                                debug!(
-                                    "ignoring broadcast except `{ignored_id}` for channel {} for non-authorized client `{client}`",
-                                    event.channel_id
-                                );
-                            }
-                        }
-                    }
-                    SendMode::Direct(client_id) => {
-                        if let ClientId::Client(client) = client_id
-                            && let Ok((_, ticks)) = clients.get(client)
-                            && !set.excluded.contains(&client)
-                        {
-                            if let Some(ticks) = ticks {
-                                event.send(messages, client, ticks)?;
-                            } else {
-                                error!(
-                                    "ignoring direct event for non-authorized client `{client}`, \
-                                         mark it as independent to allow this"
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-            set.clear();
-            self.cache.push(set);
-        }
-        Ok(())
-    }
-
-    pub(crate) fn clear(&mut self) {
-        for mut set in self.buffer.drain(..) {
-            set.clear();
-            self.cache.push(set);
-        }
-    }
-}
 
 /// An event that will be send to client(s).
 #[derive(Clone, Copy, Debug, Event, Deref, DerefMut)]

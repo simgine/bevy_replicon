@@ -29,7 +29,7 @@ use crate::{
     prelude::*,
     shared::{
         backend::channels::ClientChannel,
-        event::server_event::BufferedServerEvents,
+        event::server_event::event_buffer::EventBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityBuffer},
             registry::{
@@ -114,7 +114,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<EntityBuffer>()
-            .init_resource::<BufferedServerEvents>()
+            .init_resource::<EventBuffer>()
             .init_resource::<RelatedEntities>()
             .configure_sets(
                 PreUpdate,
@@ -206,10 +206,10 @@ fn increment_tick(mut server_tick: ResMut<ServerTick>) {
 
 fn handle_connects(
     trigger: Trigger<OnAdd, ConnectedClient>,
-    mut buffered_events: ResMut<BufferedServerEvents>,
+    mut event_buffer: ResMut<EventBuffer>,
 ) {
     debug!("client `{}` connected", trigger.target());
-    buffered_events.exclude_client(trigger.target());
+    event_buffer.exclude_client(trigger.target());
 }
 
 fn handle_disconnects(
@@ -388,11 +388,11 @@ fn reset(
     mut server_tick: ResMut<ServerTick>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
-    mut buffered_events: ResMut<BufferedServerEvents>,
+    mut event_buffer: ResMut<EventBuffer>,
 ) {
     messages.clear();
     *server_tick = Default::default();
-    buffered_events.clear();
+    event_buffer.clear();
     related_entities.clear();
     for entity in &clients {
         commands.entity(entity).despawn();

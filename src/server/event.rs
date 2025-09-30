@@ -10,7 +10,7 @@ use crate::{
         event::{
             ctx::{ServerReceiveCtx, ServerSendCtx},
             remote_event_registry::RemoteEventRegistry,
-            server_event::BufferedServerEvents,
+            server_event::event_buffer::EventBuffer,
         },
         replication::client_ticks::ClientTicks,
     },
@@ -118,12 +118,12 @@ impl Plugin for ServerEventPlugin {
 fn send_or_buffer(
     server_events: FilteredResources,
     mut messages: ResMut<ServerMessages>,
-    mut buffered_events: ResMut<BufferedServerEvents>,
+    mut event_buffer: ResMut<EventBuffer>,
     type_registry: Res<AppTypeRegistry>,
     event_registry: Res<RemoteEventRegistry>,
     clients: Query<Entity, With<ConnectedClient>>,
 ) {
-    buffered_events.start_tick();
+    event_buffer.start_tick();
     let mut ctx = ServerSendCtx {
         type_registry: &type_registry,
     };
@@ -140,7 +140,7 @@ fn send_or_buffer(
                 &server_events,
                 &mut messages,
                 &clients,
-                &mut buffered_events,
+                &mut event_buffer,
             );
         }
     }
@@ -148,10 +148,10 @@ fn send_or_buffer(
 
 fn send_buffered(
     mut messages: ResMut<ServerMessages>,
-    mut buffered_events: ResMut<BufferedServerEvents>,
+    mut event_buffer: ResMut<EventBuffer>,
     clients: Query<(Entity, Option<&ClientTicks>), With<ConnectedClient>>,
 ) {
-    buffered_events
+    event_buffer
         .send_all(&mut messages, &clients)
         .expect("buffered server events should send");
 }
