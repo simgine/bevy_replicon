@@ -233,7 +233,7 @@ pub(crate) struct ServerMessage {
 
     send_or_buffer: SendOrBufferFn,
     receive: ReceiveFn,
-    resend_locally: ResendLocallyFn,
+    send_locally: SendLocallyFn,
     reset: ResetFn,
     fns: UntypedMessageFns,
 }
@@ -266,7 +266,7 @@ impl ServerMessage {
             type_id: TypeId::of::<E>(),
             send_or_buffer: Self::send_or_buffer_typed::<E, I>,
             receive: Self::receive_typed::<E, I>,
-            resend_locally: Self::resend_locally_typed::<E>,
+            send_locally: Self::send_locally_typed::<E>,
             reset: Self::reset_typed::<E>,
             fns: fns.into(),
         }
@@ -334,7 +334,7 @@ impl ServerMessage {
     ) {
         let to_messages: &Messages<ToClients<E>> = unsafe { to_messages.deref() };
         // For server messages we don't track read message because
-        // all of them will always be drained in the local resending system.
+        // all of them will always be drained in the local sending system.
         for ToClients { message, mode } in to_messages.get_cursor().read(to_messages) {
             debug!(
                 "sending message `{}` with `{mode:?}`",
@@ -539,20 +539,20 @@ impl ServerMessage {
     ///
     /// The caller must ensure that `messages` is [`Messages<E>`], `to_messages` is [`Messages<ToClients<E>>`],
     /// and this instance was created for `E`.
-    pub(crate) unsafe fn resend_locally(&self, to_messages: PtrMut, messages: PtrMut) {
-        unsafe { (self.resend_locally)(to_messages, messages) }
+    pub(crate) unsafe fn send_locally(&self, to_messages: PtrMut, messages: PtrMut) {
+        unsafe { (self.send_locally)(to_messages, messages) }
     }
 
-    /// Typed version of [`Self::resend_locally`].
+    /// Typed version of [`Self::send_locally`].
     ///
     /// # Safety
     ///
     /// The caller must ensure that `messages` is [`Messages<E>`] and `to_messages` is [`Messages<ToClients<E>>`].
-    unsafe fn resend_locally_typed<E: Message>(to_messages: PtrMut, messages: PtrMut) {
+    unsafe fn send_locally_typed<E: Message>(to_messages: PtrMut, messages: PtrMut) {
         let to_messages: &mut Messages<ToClients<E>> = unsafe { to_messages.deref_mut() };
         let messages: &mut Messages<E> = unsafe { messages.deref_mut() };
         for ToClients { message, mode } in to_messages.drain() {
-            debug!("resending message `{}` locally", any::type_name::<E>());
+            debug!("writing message `{}` locally", any::type_name::<E>());
             match mode {
                 SendMode::Broadcast => {
                     messages.write(message);
@@ -667,8 +667,8 @@ type ReceiveFn = unsafe fn(
     RepliconTick,
 );
 
-/// Signature of server message resending functions.
-type ResendLocallyFn = unsafe fn(PtrMut, PtrMut);
+/// Signature of server message sending functions.
+type SendLocallyFn = unsafe fn(PtrMut, PtrMut);
 
 /// Signature of server message reset functions.
 type ResetFn = unsafe fn(PtrMut);

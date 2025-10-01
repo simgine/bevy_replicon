@@ -32,7 +32,7 @@ fn message() {
     assert_eq!(
         messages.len(),
         2,
-        "server should get 2 messages due to local resending"
+        "server should get 2 messages due to local sending"
     );
     assert_eq!(client_app.world().resource::<Messages<Test>>().len(), 1);
 }

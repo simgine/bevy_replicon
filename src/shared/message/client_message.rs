@@ -162,7 +162,7 @@ pub(crate) struct ClientMessage {
 
     send: SendFn,
     receive: ReceiveFn,
-    resend_locally: ResendLocallyFn,
+    send_locally: SendLocallyFn,
     reset: ResetFn,
     fns: UntypedMessageFns,
 }
@@ -197,7 +197,7 @@ impl ClientMessage {
             type_id: TypeId::of::<E>(),
             send: Self::send_typed::<E, I>,
             receive: Self::receive_typed::<E, I>,
-            resend_locally: Self::resend_locally_typed::<E>,
+            send_locally: Self::send_locally_typed::<E>,
             reset: Self::reset_typed::<E>,
             fns: fns.into(),
         }
@@ -323,21 +323,21 @@ impl ClientMessage {
     ///
     /// The caller must ensure that `messages` is [`Messages<E>`], `from_messages` is [`Messages<FromClient<E>>`]
     /// and this instance was created for `E`.
-    pub(crate) unsafe fn resend_locally(&self, from_messages: PtrMut, messages: PtrMut) {
-        unsafe { (self.resend_locally)(from_messages, messages) }
+    pub(crate) unsafe fn send_locally(&self, from_messages: PtrMut, messages: PtrMut) {
+        unsafe { (self.send_locally)(from_messages, messages) }
     }
 
-    /// Typed version of [`ClientMessage::resend_locally`].
+    /// Typed version of [`ClientMessage::send_locally`].
     ///
     /// # Safety
     ///
     /// The caller must ensure that `messages` is [`Messages<E>`] and `from_messages` is [`Messages<FromClient<E>>`].
-    unsafe fn resend_locally_typed<E: Message>(from_messages: PtrMut, messages: PtrMut) {
+    unsafe fn send_locally_typed<E: Message>(from_messages: PtrMut, messages: PtrMut) {
         let from_messages: &mut Messages<FromClient<E>> = unsafe { from_messages.deref_mut() };
         let messages: &mut Messages<E> = unsafe { messages.deref_mut() };
         if !messages.is_empty() {
             debug!(
-                "resending {} message(s) `{}` locally",
+                "writing {} message(s) `{}` locally",
                 messages.len(),
                 any::type_name::<E>()
             );
@@ -428,15 +428,15 @@ type SendFn = unsafe fn(&ClientMessage, &mut ClientSendCtx, &Ptr, PtrMut, &mut C
 /// Signature of client message receiving functions.
 type ReceiveFn = unsafe fn(&ClientMessage, &mut ServerReceiveCtx, PtrMut, &mut ServerMessages);
 
-/// Signature of client message resending functions.
-type ResendLocallyFn = unsafe fn(PtrMut, PtrMut);
+/// Signature of client message sending functions.
+type SendLocallyFn = unsafe fn(PtrMut, PtrMut);
 
 /// Signature of client message reset functions.
 type ResetFn = unsafe fn(PtrMut);
 
 /// Tracks read messages for [`ClientMessagePlugin::send`].
 ///
-/// Unlike with server messages, we don't always drain all messages in [`ClientMessagePlugin::resend_locally`].
+/// Unlike with server messages, we don't always drain all messages in [`ClientMessagePlugin::send_locally`].
 #[derive(Resource, Deref, DerefMut)]
 struct ClientMessageReader<E: Message>(MessageCursor<E>);
 

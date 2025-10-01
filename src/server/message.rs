@@ -73,7 +73,7 @@ impl Plugin for ServerMessagePlugin {
             .build_state(app.world_mut())
             .build_system(trigger);
 
-        let resend_locally_fn = (
+        let send_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_server() {
                     builder.add_write_by_id(message.to_messages_id());
@@ -87,7 +87,7 @@ impl Plugin for ServerMessagePlugin {
             ParamBuilder,
         )
             .build_state(app.world_mut())
-            .build_system(resend_locally);
+            .build_system(send_locally);
 
         app.insert_resource(registry)
             .add_systems(
@@ -106,7 +106,7 @@ impl Plugin for ServerMessagePlugin {
                     send_buffered
                         .run_if(in_state(ServerState::Running))
                         .run_if(resource_changed::<ServerTick>),
-                    resend_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .after(super::send_replication)
@@ -190,7 +190,7 @@ fn trigger(
     }
 }
 
-fn resend_locally(
+fn send_locally(
     mut to_messages: FilteredResourcesMut,
     mut messages: FilteredResourcesMut,
     registry: Res<RemoteMessageRegistry>,
@@ -204,6 +204,6 @@ fn resend_locally(
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
-        unsafe { message.resend_locally(to_messages.into_inner(), messages.into_inner()) };
+        unsafe { message.send_locally(to_messages.into_inner(), messages.into_inner()) };
     }
 }

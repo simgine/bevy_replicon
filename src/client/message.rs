@@ -97,7 +97,7 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(trigger);
 
-        let resend_locally_fn = (
+        let send_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_client() {
                     builder.add_write_by_id(message.from_messages_id());
@@ -111,7 +111,7 @@ impl Plugin for ClientMessagePlugin {
             ParamBuilder,
         )
             .build_state(app.world_mut())
-            .build_system(resend_locally);
+            .build_system(send_locally);
 
         let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
@@ -154,7 +154,7 @@ impl Plugin for ClientMessagePlugin {
                 PostUpdate,
                 (
                     send_fn.run_if(in_state(ClientState::Connected)),
-                    resend_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .in_set(ClientSystems::Send),
@@ -245,7 +245,7 @@ fn trigger(
     }
 }
 
-fn resend_locally(
+fn send_locally(
     mut from_messages: FilteredResourcesMut,
     mut messages: FilteredResourcesMut,
     registry: Res<RemoteMessageRegistry>,
@@ -259,7 +259,7 @@ fn resend_locally(
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
-        unsafe { message.resend_locally(from_messages.into_inner(), messages.into_inner()) };
+        unsafe { message.send_locally(from_messages.into_inner(), messages.into_inner()) };
     }
 }
 

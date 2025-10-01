@@ -132,7 +132,7 @@ fn without_plugins() {
 }
 
 #[test]
-fn local_resending() {
+fn local_sending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
         .add_client_message::<Test>(Channel::Ordered)

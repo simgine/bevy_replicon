@@ -112,7 +112,7 @@ fn without_plugins() {
 }
 
 #[test]
-fn local_resending() {
+fn local_sending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
         .add_client_event::<Test>(Channel::Ordered)
@@ -121,7 +121,7 @@ fn local_resending() {
 
     app.world_mut().client_trigger(Test);
 
-    // Requires 2 updates because local resending runs
+    // Requires 2 updates because local sending runs
     // in `PostUpdate` and triggering runs in `PreUpdate`.
     app.update();
     app.update();

@@ -121,7 +121,7 @@ fn without_plugins() {
 }
 
 #[test]
-fn local_resending() {
+fn local_sending() {
     let mut app = App::new();
     app.add_plugins((
         TimePlugin,
@@ -137,7 +137,7 @@ fn local_resending() {
         message: Test,
     });
 
-    // Requires 2 updates because local resending runs
+    // Requires 2 updates because local sending runs
     // in `PostUpdate` and triggering runs in `PreUpdate`.
     app.update();
     app.update();
