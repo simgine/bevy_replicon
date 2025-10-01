@@ -25,7 +25,7 @@ pub trait ClientMessageAppExt {
     /// After writing `E` message on the client, [`FromClient<E>`] message will be written on the server.
     ///
     /// If [`ServerMessagePlugin`] is enabled and the client state is [`ClientState::Disconnected`], the message will be drained
-    /// right after writing and will be written locally as [`FromClient<E>`] message with [`FromClient::client_id`]
+    /// right after sending and will be written locally as [`FromClient<E>`] message with [`FromClient::client_id`]
     /// equal to [`ClientId::Server`].
     ///
     /// Calling [`App::add_message`] is not necessary. Can used for regular messages that were

@@ -207,7 +207,7 @@ impl ServerTriggerExt for World {
 /// A message that used under the hood for server events.
 ///
 /// Events are implemented through messages in order to reuse their logic.
-/// So we write this message instead and, after receiving it, drain it to trigger regular events.
+/// So we send this message instead and, after receiving it, drain it to trigger regular events.
 /// This also allows us to avoid requiring [`Clone`] because events can't be drained.
 #[derive(Message)]
 struct ServerTriggerEvent<E> {

@@ -285,7 +285,7 @@ server.
 
 ### From client to server
 
-To write a message from client to server, you need to register the message
+To send a message from client to server, you need to register the message
 with [`ClientMessageAppExt::add_client_message`] instead of [`App::add_message`].
 
 Messages include [`Channel`] to configure delivery guarantees (reliability and

@@ -31,7 +31,7 @@ pub trait ServerMessageAppExt {
     /// After writing [`ToClients<E>`] message on the server, `E` message will be written on clients.
     ///
     /// If [`ClientMessagePlugin`] is enabled and [`ClientId::Server`] is a recipient of the message, then
-    /// [`ToClients<E>`] message will be drained after writing to clients and `E` message will be written
+    /// [`ToClients<E>`] message will be drained after sending to clients and `E` message will be written
     /// on the server as well.
     ///
     /// Calling [`App::add_message`] is not necessary. Can used for regular messages that were
