@@ -73,7 +73,7 @@ fn protocol_mismatch() {
     let mut client_app = App::new();
     server_app
         .add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_message::<TestEvent>(Channel::Ordered)
         .finish();
     client_app
         .init_resource::<TriggerCounter<ProtocolMismatch>>()

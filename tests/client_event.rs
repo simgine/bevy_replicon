@@ -11,7 +11,7 @@ fn regular() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_client_trigger::<TestEvent>(Channel::Ordered)
+            .add_client_event::<TestEvent>(Channel::Ordered)
             .finish();
     }
     server_app.init_resource::<TriggerReader<TestEvent>>();
@@ -38,7 +38,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_client_trigger::<EntityEvent>(Channel::Ordered)
+        .add_mapped_client_event::<EntityEvent>(Channel::Ordered)
         .finish();
     }
     server_app.init_resource::<TriggerReader<EntityEvent>>();
@@ -82,9 +82,9 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .disable::<ClientPlugin>()
-                .disable::<ClientEventPlugin>(),
+                .disable::<ClientMessagePlugin>(),
         ))
-        .add_client_trigger::<TestEvent>(Channel::Ordered)
+        .add_client_event::<TestEvent>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -93,9 +93,9 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
-                .disable::<ServerEventPlugin>(),
+                .disable::<ServerMessagePlugin>(),
         ))
-        .add_client_trigger::<TestEvent>(Channel::Ordered)
+        .add_client_event::<TestEvent>(Channel::Ordered)
         .finish();
     server_app.init_resource::<TriggerReader<TestEvent>>();
 
@@ -115,7 +115,7 @@ fn without_plugins() {
 fn local_resending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
-        .add_client_trigger::<TestEvent>(Channel::Ordered)
+        .add_client_event::<TestEvent>(Channel::Ordered)
         .finish();
     app.init_resource::<TriggerReader<TestEvent>>();
 

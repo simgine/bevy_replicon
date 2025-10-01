@@ -58,7 +58,7 @@ fn disconnect_request() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -67,7 +67,7 @@ fn disconnect_request() {
     server_app.world_mut().spawn(Replicated);
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     let mut clients = server_app
@@ -108,7 +108,7 @@ fn server_stop() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -118,7 +118,7 @@ fn server_stop() {
     server_app.world_mut().spawn(Replicated);
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     server_app.update();
@@ -183,7 +183,7 @@ fn server_event() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -191,7 +191,7 @@ fn server_event() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     server_app.update();
@@ -212,7 +212,7 @@ fn client_event() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 

@@ -88,14 +88,14 @@ impl ProtocolHasher {
         self.hash::<E>(ProtocolPart::ServerEvent);
     }
 
+    pub(crate) fn make_message_independent<E>(&mut self) {
+        debug!("making message `{}` independent", any::type_name::<E>());
+        self.hash::<E>(ProtocolPart::IndependentMessage);
+    }
+
     pub(crate) fn make_event_independent<E>(&mut self) {
         debug!("making event `{}` independent", any::type_name::<E>());
         self.hash::<E>(ProtocolPart::IndependentEvent);
-    }
-
-    pub(crate) fn make_trigger_independent<E>(&mut self) {
-        debug!("making trigger `{}` independent", any::type_name::<E>());
-        self.hash::<E>(ProtocolPart::IndependentTrigger);
     }
 
     fn hash<T>(&mut self, part: ProtocolPart) {
@@ -125,8 +125,8 @@ enum ProtocolPart {
     ClientEvent,
     ServerMessage,
     ServerEvent,
+    IndependentMessage,
     IndependentEvent,
-    IndependentTrigger,
 }
 
 /// Hash of all registered events and replication rules.

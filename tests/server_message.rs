@@ -3,7 +3,7 @@ use bevy_replicon::{
     client::ServerUpdateTick,
     prelude::*,
     server::server_tick::ServerTick,
-    shared::{message::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
+    shared::{message::registry::RemoteMessageRegistry, server_entity_map::ServerEntityMap},
     test_app::{ServerTestAppExt, TestClientEntity},
 };
 use serde::{Deserialize, Serialize};
@@ -18,12 +18,12 @@ fn channels() {
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .add_message::<NonRemoteEvent>()
-    .add_server_event::<TestEvent>(Channel::Ordered)
+    .add_server_message::<TestEvent>(Channel::Ordered)
     .finish();
 
-    let event_registry = app.world().resource::<RemoteEventRegistry>();
-    assert_eq!(event_registry.server_channel::<NonRemoteEvent>(), None);
-    assert_eq!(event_registry.server_channel::<TestEvent>(), Some(3));
+    let registry = app.world().resource::<RemoteMessageRegistry>();
+    assert_eq!(registry.server_channel::<NonRemoteEvent>(), None);
+    assert_eq!(registry.server_channel::<TestEvent>(), Some(3));
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn regular() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -52,7 +52,7 @@ fn regular() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            event: TestEvent,
+            message: TestEvent,
         });
 
         server_app.update();
@@ -79,7 +79,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_server_event::<EntityEvent>(Channel::Ordered)
+        .add_mapped_server_message::<EntityEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -89,7 +89,7 @@ fn mapped() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: EntityEvent(server_entity),
+        message: EntityEvent(server_entity),
     });
 
     server_app.update();
@@ -124,9 +124,9 @@ fn without_plugins() {
                 .build()
                 .set(ServerPlugin::new(PostUpdate))
                 .disable::<ClientPlugin>()
-                .disable::<ClientEventPlugin>(),
+                .disable::<ClientMessagePlugin>(),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -135,9 +135,9 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
-                .disable::<ServerEventPlugin>(),
+                .disable::<ServerMessagePlugin>(),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
 
     server_app.connect_client(&mut client_app);
@@ -152,7 +152,7 @@ fn without_plugins() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            event: TestEvent,
+            message: TestEvent,
         });
 
         server_app.update();
@@ -177,7 +177,7 @@ fn local_resending() {
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
-    .add_server_event::<TestEvent>(Channel::Ordered)
+    .add_server_message::<TestEvent>(Channel::Ordered)
     .finish();
 
     const CLIENT_ENTITY: Entity = Entity::from_raw_u32(1).unwrap();
@@ -191,7 +191,7 @@ fn local_resending() {
     ] {
         app.world_mut().write_message(ToClients {
             mode,
-            event: TestEvent,
+            message: TestEvent,
         });
 
         app.update();
@@ -214,7 +214,7 @@ fn server_buffering() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_server_event::<TestEvent>(Channel::Ordered)
+            .add_server_message::<TestEvent>(Channel::Ordered)
             .finish();
     }
 
@@ -222,7 +222,7 @@ fn server_buffering() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     server_app.update();
@@ -258,7 +258,7 @@ fn client_queue() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -278,7 +278,7 @@ fn client_queue() {
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     server_app.update();
@@ -307,7 +307,7 @@ fn client_queue_and_mapping() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_server_event::<EntityEvent>(Channel::Ordered)
+        .add_mapped_server_message::<EntityEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -327,7 +327,7 @@ fn client_queue_and_mapping() {
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: EntityEvent(server_entity),
+        message: EntityEvent(server_entity),
     });
 
     server_app.update();
@@ -368,8 +368,8 @@ fn multiple_client_queues() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
-        .add_server_event::<EntityEvent>(Channel::Ordered) // Use as a regular event with a different serialization size.
+        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<EntityEvent>(Channel::Ordered) // Use as a regular event with a different serialization size.
         .finish();
     }
 
@@ -389,11 +389,11 @@ fn multiple_client_queues() {
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: EntityEvent(Entity::PLACEHOLDER),
+        message: EntityEvent(Entity::PLACEHOLDER),
     });
 
     server_app.update();
@@ -428,9 +428,9 @@ fn independent() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
-        .add_server_event::<IndependentEvent>(Channel::Ordered)
-        .make_event_independent::<IndependentEvent>()
+        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<IndependentEvent>(Channel::Ordered)
+        .make_message_independent::<IndependentEvent>()
         .finish();
     }
 
@@ -459,11 +459,11 @@ fn independent() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            event: TestEvent,
+            message: TestEvent,
         });
         server_app.world_mut().write_message(ToClients {
             mode,
-            event: IndependentEvent,
+            message: IndependentEvent,
         });
 
         server_app.update();
@@ -501,7 +501,7 @@ fn before_started_replication() {
                     auth_method: AuthMethod::Custom,
                 }),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -515,7 +515,7 @@ fn before_started_replication() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            event: TestEvent,
+            message: TestEvent,
         });
     }
 
@@ -542,9 +542,9 @@ fn independent_before_started_replication() {
                     auth_method: AuthMethod::Custom,
                 }),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
-        .add_server_event::<IndependentEvent>(Channel::Ordered)
-        .make_event_independent::<IndependentEvent>()
+        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<IndependentEvent>(Channel::Ordered)
+        .make_message_independent::<IndependentEvent>()
         .finish();
     }
 
@@ -555,11 +555,11 @@ fn independent_before_started_replication() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: IndependentEvent,
+        message: IndependentEvent,
     });
 
     server_app.update();
@@ -585,7 +585,7 @@ fn different_ticks() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_message::<TestEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -607,7 +607,7 @@ fn different_ticks() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     // If any client does not have a replicon tick >= the update tick associated with this event,

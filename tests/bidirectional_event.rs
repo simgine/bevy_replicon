@@ -9,8 +9,8 @@ fn event() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_client_event::<TestEvent>(Channel::Ordered)
-            .add_server_event::<TestEvent>(Channel::Ordered)
+            .add_client_message::<TestEvent>(Channel::Ordered)
+            .add_server_message::<TestEvent>(Channel::Ordered)
             .finish();
     }
 
@@ -19,7 +19,7 @@ fn event() {
     client_app.world_mut().write_message(TestEvent);
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     client_app.update();
@@ -52,8 +52,8 @@ fn trigger() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_client_trigger::<TestEvent>(Channel::Ordered)
-        .add_server_trigger::<TestEvent>(Channel::Ordered)
+        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();
     }
     server_app.init_resource::<TriggerReader<FromClient<TestEvent>>>();
@@ -64,7 +64,7 @@ fn trigger() {
     client_app.world_mut().client_trigger(TestEvent);
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     client_app.update();

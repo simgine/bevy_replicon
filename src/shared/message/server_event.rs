@@ -6,70 +6,67 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
-    message_fns::{DeserializeFn, EventFns, SerializeFn},
-    registry::RemoteEventRegistry,
-    server_message::{self, ServerEvent},
+    message_fns::{DeserializeFn, MessageFns, SerializeFn},
+    registry::RemoteMessageRegistry,
+    server_message::{self, ServerMessage},
 };
 use crate::prelude::*;
 
-/// An extension trait for [`App`] for creating server triggers.
+/// An extension trait for [`App`] for creating server events.
 ///
-/// See also [`ServerTriggerExt`] for triggering, [`ClientTriggerAppExt`] for client triggers
-/// and [`ServerEventAppExt`] for events.
-pub trait ServerTriggerAppExt {
+/// See also [`ServerTriggerExt`] for triggering, [`ClientEventAppExt`] for client events
+/// and [`ServerMessageAppExt`] for messages.
+pub trait ServerEventAppExt {
     /// Registers a remote event that can be triggered using [`ServerTriggerExt::server_trigger`].
     ///
     /// After triggering [`ToClients<E>`] event on the server, `E` event will be triggered on clients.
     ///
-    /// If [`ClientEventPlugin`] is enabled and [`ClientId::Server`] is a recipient of the event
-    /// (not to be confused with trigger target), then `E` event will be emitted on the server as well.
+    /// If [`ClientMessagePlugin`] is enabled and [`ClientId::Server`] is a recipient of the event,
+    /// then `E` event will be emitted on the server as well.
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
-    fn add_server_trigger<'a, E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned>(
-        &mut self,
-        channel: Channel,
-    ) -> &mut Self {
-        self.add_server_trigger_with(
+    fn add_server_event<'a, E>(&mut self, channel: Channel) -> &mut Self
+    where
+        E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned,
+    {
+        self.add_server_event_with(
             channel,
             server_message::default_serialize::<E>,
             server_message::default_deserialize::<E>,
         )
     }
 
-    /// Same as [`Self::add_server_trigger`], but additionally maps client entities to server inside the event before receiving.
+    /// Same as [`Self::add_server_event`], but additionally maps client entities to server inside the event before receiving.
     ///
     /// Always use it for events that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
-    fn add_mapped_server_trigger<
-        'a,
+    fn add_mapped_server_event<'a, E>(&mut self, channel: Channel) -> &mut Self
+    where
         E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned + MapEntities,
-    >(
-        &mut self,
-        channel: Channel,
-    ) -> &mut Self {
-        self.add_server_trigger_with(
+    {
+        self.add_server_event_with(
             channel,
             server_message::default_serialize::<E>,
             server_message::default_deserialize_mapped::<E>,
         )
     }
 
-    /// Same as [`Self::add_server_trigger`], but uses the specified functions for serialization and deserialization.
+    /// Same as [`Self::add_server_event`], but uses the specified functions for serialization and deserialization.
     ///
-    /// See also [`ServerEventAppExt::add_server_event_with`].
-    fn add_server_trigger_with<'a, E: Event<Trigger<'a>: Default>>(
+    /// See also [`ServerMessageAppExt::add_server_message_with`].
+    fn add_server_event_with<'a, E: Event<Trigger<'a>: Default>>(
         &mut self,
         channel: Channel,
         serialize: SerializeFn<ServerSendCtx, E>,
         deserialize: DeserializeFn<ClientReceiveCtx, E>,
     ) -> &mut Self;
 
-    /// Like [`ServerEventAppExt::make_event_independent`], but for triggers.
-    fn make_trigger_independent<E: Event>(&mut self) -> &mut Self;
+    /// Like [`ServerMessageAppExt::make_message_independent`], but for triggers.
+    fn make_event_independent<E: Event>(&mut self) -> &mut Self;
 }
 
-impl ServerTriggerAppExt for App {
-    fn add_server_trigger_with<'a, E: Event<Trigger<'a>: Default>>(
+impl ServerEventAppExt for App {
+    fn add_server_event_with<'a, E: Event<Trigger<'a>: Default>>(
         &mut self,
         channel: Channel,
         serialize: SerializeFn<ServerSendCtx, E>,
@@ -79,21 +76,20 @@ impl ServerTriggerAppExt for App {
             .resource_mut::<ProtocolHasher>()
             .add_server_event::<E>();
 
-        let event_fns =
-            EventFns::new(serialize, deserialize).with_convert::<ServerTriggerEvent<E>>();
-        let trigger = ServerTrigger::new(self, channel, event_fns);
-        let mut event_registry = self.world_mut().resource_mut::<RemoteEventRegistry>();
-        event_registry.register_server_trigger(trigger);
+        let fns = MessageFns::new(serialize, deserialize).with_convert::<ServerTriggerEvent<E>>();
+        let event = ServerEvent::new(self, channel, fns);
+        let mut registry = self.world_mut().resource_mut::<RemoteMessageRegistry>();
+        registry.register_server_event(event);
 
         self
     }
 
-    fn make_trigger_independent<E: Event>(&mut self) -> &mut Self {
+    fn make_event_independent<E: Event>(&mut self) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .make_trigger_independent::<E>();
+            .make_event_independent::<E>();
 
-        let events_id = self
+        let messages_id = self
             .world()
             .components()
             .resource_id::<Messages<ServerTriggerEvent<E>>>()
@@ -104,71 +100,73 @@ impl ServerTriggerAppExt for App {
                 )
             });
 
-        let mut event_registry = self.world_mut().resource_mut::<RemoteEventRegistry>();
-        let trigger = event_registry
-            .iter_server_triggers_mut()
-            .find(|trigger| trigger.event().events_id() == events_id)
+        let mut registry = self.world_mut().resource_mut::<RemoteMessageRegistry>();
+        let event = registry
+            .iter_server_events_mut()
+            .find(|e| e.message().messages_id() == messages_id)
             .unwrap_or_else(|| {
                 panic!(
-                    "event `{}` should be previously registered as a server trigger",
+                    "message `{}` should be previously registered as a server message",
                     any::type_name::<E>()
                 )
             });
 
-        trigger.event_mut().independent = true;
+        event.message_mut().independent = true;
 
         self
     }
 }
 
 /// Small abstraction on top of [`ServerEvent`] that stores a function to trigger them.
-pub(crate) struct ServerTrigger {
+pub(crate) struct ServerEvent {
+    message: ServerMessage,
     trigger: TriggerFn,
-    event: ServerEvent,
 }
 
-impl ServerTrigger {
+impl ServerEvent {
     fn new<'a, E: Event<Trigger<'a>: Default>>(
         app: &mut App,
         channel: Channel,
-        event_fns: EventFns<ServerSendCtx, ClientReceiveCtx, ServerTriggerEvent<E>, E>,
+        fns: MessageFns<ServerSendCtx, ClientReceiveCtx, ServerTriggerEvent<E>, E>,
     ) -> Self {
-        let event = ServerEvent::new(app, channel, event_fns);
         Self {
+            message: ServerMessage::new(app, channel, fns),
             trigger: Self::trigger_typed::<E>,
-            event,
         }
     }
 
-    pub(crate) fn trigger(&self, commands: &mut Commands, events: PtrMut) {
-        unsafe {
-            (self.trigger)(commands, events);
-        }
-    }
-
-    /// Drains received [`TriggerEvent<E>`] events and triggers them as `E`.
+    /// Drains received [`ServerTriggerEvent<E>`] messages and triggers them as `E`.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `events` is [`Events<TriggerEvent<E>>`]
+    /// The caller must ensure that `messages` is [`Messages<ServerTriggerEvent<E>>`]
     /// and this instance was created for `E`.
+    pub(crate) fn trigger(&self, commands: &mut Commands, messages: PtrMut) {
+        unsafe { (self.trigger)(commands, messages) }
+    }
+
+    /// Typed version of [`Self::trigger`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `messages` is [`Messages<ServerTriggerEvent<E>>`].
     unsafe fn trigger_typed<'a, E: Event<Trigger<'a>: Default>>(
         commands: &mut Commands,
-        events: PtrMut,
+        messages: PtrMut,
     ) {
-        let events: &mut Messages<ServerTriggerEvent<E>> = unsafe { events.deref_mut() };
-        for trigger in events.drain() {
+        let messages: &mut Messages<ServerTriggerEvent<E>> = unsafe { messages.deref_mut() };
+        for message in messages.drain() {
             debug!("triggering `{}`", any::type_name::<E>());
-            commands.trigger(trigger.event);
+            commands.trigger(message.event);
         }
     }
 
-    pub(crate) fn event(&self) -> &ServerEvent {
-        &self.event
+    pub(crate) fn message(&self) -> &ServerMessage {
+        &self.message
     }
 
-    pub(super) fn event_mut(&mut self) -> &mut ServerEvent {
-        &mut self.event
+    pub(super) fn message_mut(&mut self) -> &mut ServerMessage {
+        &mut self.message
     }
 }
 
@@ -177,7 +175,7 @@ type TriggerFn = unsafe fn(&mut Commands, PtrMut);
 
 /// Extension trait for triggering server events.
 ///
-/// See also [`ServerTriggerAppExt`].
+/// See also [`ServerEventAppExt`].
 pub trait ServerTriggerExt {
     /// Like [`Commands::trigger`], but triggers `E` on server and locally
     /// if [`ClientId::Server`] is a recipient of the event).
@@ -188,7 +186,9 @@ impl ServerTriggerExt for Commands<'_, '_> {
     fn server_trigger(&mut self, event: ToClients<impl Event>) {
         self.write_message(ToClients {
             mode: event.mode,
-            event: ServerTriggerEvent { event: event.event },
+            message: ServerTriggerEvent {
+                event: event.message,
+            },
         });
     }
 }
@@ -197,16 +197,18 @@ impl ServerTriggerExt for World {
     fn server_trigger(&mut self, event: ToClients<impl Event>) {
         self.write_message(ToClients {
             mode: event.mode,
-            event: ServerTriggerEvent { event: event.event },
+            message: ServerTriggerEvent {
+                event: event.message,
+            },
         });
     }
 }
 
-/// An event that used under the hood for server triggers.
+/// A message that used under the hood for server events.
 ///
-/// We can't just observe for triggers like we do for events since we need access to all its targets
-/// and we need to buffer them. This is why we just emit this event instead and after receive drain it
-/// to trigger regular events.
+/// Events are implemented through messages in order to reuse their logic.
+/// So we write this message instead and, after receiving it, drain it to trigger regular events.
+/// This also allows us to avoid requiring [`Clone`] because events can't be drained.
 #[derive(Message)]
 struct ServerTriggerEvent<E> {
     event: E,

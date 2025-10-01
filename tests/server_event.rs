@@ -16,7 +16,7 @@ fn regular() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_trigger::<TestEvent>(Channel::Ordered)
+        .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();
     }
     client_app.init_resource::<TriggerReader<TestEvent>>();
@@ -25,7 +25,7 @@ fn regular() {
 
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     server_app.update();
@@ -46,7 +46,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_server_trigger::<EntityEvent>(Channel::Ordered)
+        .add_mapped_server_event::<EntityEvent>(Channel::Ordered)
         .finish();
     }
     client_app.init_resource::<TriggerReader<EntityEvent>>();
@@ -57,7 +57,7 @@ fn mapped() {
 
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: EntityEvent(server_entity),
+        message: EntityEvent(server_entity),
     });
 
     server_app.update();
@@ -88,9 +88,9 @@ fn without_plugins() {
                 .build()
                 .set(ServerPlugin::new(PostUpdate))
                 .disable::<ClientPlugin>()
-                .disable::<ClientEventPlugin>(),
+                .disable::<ClientMessagePlugin>(),
         ))
-        .add_server_trigger::<TestEvent>(Channel::Ordered)
+        .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -99,9 +99,9 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
-                .disable::<ServerEventPlugin>(),
+                .disable::<ServerMessagePlugin>(),
         ))
-        .add_server_trigger::<TestEvent>(Channel::Ordered)
+        .add_server_event::<TestEvent>(Channel::Ordered)
         .finish();
     client_app.init_resource::<TriggerReader<TestEvent>>();
 
@@ -109,7 +109,7 @@ fn without_plugins() {
 
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     server_app.update();
@@ -128,13 +128,13 @@ fn local_resending() {
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
-    .add_server_trigger::<TestEvent>(Channel::Ordered)
+    .add_server_event::<TestEvent>(Channel::Ordered)
     .finish();
     app.init_resource::<TriggerReader<TestEvent>>();
 
     app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
 
     // Requires 2 updates because local resending runs
@@ -156,9 +156,9 @@ fn independent() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_trigger::<TestEvent>(Channel::Ordered)
-        .add_server_trigger::<IndependentEvent>(Channel::Ordered)
-        .make_trigger_independent::<IndependentEvent>()
+        .add_server_event::<TestEvent>(Channel::Ordered)
+        .add_server_event::<IndependentEvent>(Channel::Ordered)
+        .make_event_independent::<IndependentEvent>()
         .finish();
     }
     client_app
@@ -182,11 +182,11 @@ fn independent() {
 
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: TestEvent,
+        message: TestEvent,
     });
     server_app.world_mut().server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: IndependentEvent,
+        message: IndependentEvent,
     });
 
     server_app.update();

@@ -29,7 +29,7 @@ use crate::{
     prelude::*,
     shared::{
         backend::channels::ClientChannel,
-        message::server_message::message_buffer::EventBuffer,
+        message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityBuffer},
             registry::{
@@ -114,7 +114,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<EntityBuffer>()
-            .init_resource::<EventBuffer>()
+            .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .configure_sets(
                 PreUpdate,
@@ -204,9 +204,9 @@ fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     trace!("incremented {server_tick:?}");
 }
 
-fn handle_connects(add: On<Add, ConnectedClient>, mut event_buffer: ResMut<EventBuffer>) {
+fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
     debug!("client `{}` connected", add.entity);
-    event_buffer.exclude_client(add.entity);
+    message_buffer.exclude_client(add.entity);
 }
 
 fn handle_disconnects(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
@@ -235,7 +235,7 @@ fn check_protocol(
         );
         commands.server_trigger(ToClients {
             mode: SendMode::Direct(client_protocol.client_id),
-            event: ProtocolMismatch,
+            message: ProtocolMismatch,
         });
         disconnects.write(DisconnectRequest { client });
     }
@@ -382,11 +382,11 @@ fn reset(
     mut server_tick: ResMut<ServerTick>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
-    mut event_buffer: ResMut<EventBuffer>,
+    mut message_buffer: ResMut<MessageBuffer>,
 ) {
     messages.clear();
     *server_tick = Default::default();
-    event_buffer.clear();
+    message_buffer.clear();
     related_entities.clear();
     for entity in &clients {
         commands.entity(entity).despawn();
@@ -909,7 +909,7 @@ struct DespawnBuffer(Vec<Entity>);
 /// Marker that enables replication and all events for a client.
 ///
 /// Until authorization happened, the client and server can still exchange network events that are marked as
-/// independent via [`ServerEventAppExt::make_event_independent`] or [`ServerTriggerAppExt::make_trigger_independent`].
+/// independent via [`ServerMessageAppExt::make_message_independent`] or [`ServerEventAppExt::make_event_independent`].
 /// **All other events will be ignored**.
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].

@@ -123,7 +123,7 @@ impl RepliconChannels {
 /// [`SyncRelatedAppExt::sync_related_entities`](crate::server::related_entities::SyncRelatedAppExt::sync_related_entities).
 ///
 /// Server events also have minimum required tick. For details, see the documentation on
-/// [`ServerEventAppExt::make_event_independent`](crate::shared::event::server_event::ServerEventAppExt::make_event_independent).
+/// [`ServerMessageAppExt::make_message_independent`](crate::shared::event::server_event::ServerMessageAppExt::make_message_independent).
 ///
 /// See also [`RepliconChannels`], [`Channel`] and [corresponding section](../index.html#eventual-consistency)
 /// from the quick start guide.

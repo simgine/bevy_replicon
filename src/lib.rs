@@ -286,7 +286,7 @@ server.
 ### From client to server
 
 To send specific events from client to server, you need to register the event
-with [`ClientEventAppExt::add_client_event`] instead of [`App::add_event`].
+with [`ClientMessageAppExt::add_client_message`] instead of [`App::add_event`].
 
 Events include [`Channel`] to configure delivery guarantees (reliability and
 ordering).
@@ -300,7 +300,7 @@ contains sender ID and the sent event.
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_client_event::<ExampleEvent>(Channel::Ordered)
+app.add_client_message::<ExampleEvent>(Channel::Ordered)
     .add_systems(
         PreUpdate,
         receive_events
@@ -328,15 +328,15 @@ struct ExampleEvent;
 
 If an event contains an entity, implement
 [`MapEntities`](bevy::ecs::entity::MapEntities) for it and use use
-[`ClientEventAppExt::add_mapped_client_event`] instead.
+[`ClientMessageAppExt::add_mapped_client_message`] instead.
 
-There is also [`ClientEventAppExt::add_client_event_with`] to register an event with special serialization and
+There is also [`ClientMessageAppExt::add_client_message_with`] to register an event with special serialization and
 deserialization functions. This could be used for sending events that contain [`Box<dyn PartialReflect>`], which
 require access to the [`AppTypeRegistry`] resource. Don't forget to validate the contents of every
 [`Box<dyn PartialReflect>`] from a client, it could be anything!
 
 Alternatively, you can use triggers with a similar API. First, you need to register the event
-using [`ClientTriggerAppExt::add_client_trigger`], and then use [`ClientTriggerExt::client_trigger`].
+using [`ClientEventAppExt::add_client_event`], and then use [`ClientTriggerExt::client_trigger`].
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -344,7 +344,7 @@ using [`ClientTriggerAppExt::add_client_trigger`], and then use [`ClientTriggerE
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_client_trigger::<Hello>(Channel::Ordered)
+app.add_client_event::<Hello>(Channel::Ordered)
     .add_observer(receive_hello)
     .add_systems(Update, send_hello.run_if(in_state(ClientState::Connected)));
 
@@ -362,13 +362,13 @@ fn receive_hello(hello: On<FromClient<Hello>>) {
 Trigger targets are also supported via [`ClientTriggerExt::client_trigger_targets`], no change
 in registration needed. Target entities will be automatically mapped to server entities before sending.
 
-For event triggers with entities inside use [`ClientTriggerAppExt::add_mapped_client_trigger`].
-Similar to events, serialization can also be customized with [`ClientTriggerAppExt::add_client_trigger_with`].
+For event triggers with entities inside use [`ClientEventAppExt::add_mapped_client_event`].
+Similar to events, serialization can also be customized with [`ClientEventAppExt::add_client_event_with`].
 
 ### From server to client
 
 A similar technique is used to send events from server to clients. To do this,
-register the event with [`ServerEventAppExt::add_server_event`]
+register the event with [`ServerMessageAppExt::add_server_message`]
 and send it from server using [`ToClients`]. This wrapper contains send parameters
 and the event itself.
 
@@ -378,7 +378,7 @@ and the event itself.
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_server_event::<ExampleEvent>(Channel::Ordered)
+app.add_server_message::<ExampleEvent>(Channel::Ordered)
     .add_systems(
         PreUpdate,
         receive_events
@@ -407,11 +407,11 @@ fn receive_events(mut events: EventReader<ExampleEvent>) {
 struct ExampleEvent;
 ```
 
-Just like for client events, we provide [`ServerEventAppExt::add_mapped_server_event`]
-and [`ServerEventAppExt::add_server_event_with`].
+Just like for client events, we provide [`ServerMessageAppExt::add_mapped_server_message`]
+and [`ServerMessageAppExt::add_server_message_with`].
 
 Trigger-based API available for server events as well. First, you need to register the event
-with [`ServerTriggerAppExt::add_server_trigger`] and then use [`ServerTriggerExt::server_trigger`]:
+with [`ServerEventAppExt::add_server_event`] and then use [`ServerTriggerExt::server_trigger`]:
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -419,7 +419,7 @@ with [`ServerTriggerAppExt::add_server_trigger`] and then use [`ServerTriggerExt
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_server_trigger::<Hello>(Channel::Ordered)
+app.add_server_event::<Hello>(Channel::Ordered)
     .add_observer(receive_hello)
     .add_systems(Update, send_hello.run_if(in_state(ServerState::Running)));
 
@@ -437,12 +437,12 @@ fn receive_hello(_on: On<Hello>) {
 # struct Hello;
 ```
 
-And just like for client trigger, we provide [`ServerTriggerAppExt::add_mapped_server_trigger`]
-and [`ServerTriggerAppExt::add_server_trigger_with`].
+And just like for client trigger, we provide [`ServerEventAppExt::add_mapped_server_event`]
+and [`ServerEventAppExt::add_server_event_with`].
 
 We guarantee that clients will never receive events that point to an entity or require specific
 component to be presentt which client haven't received yet. For more details see the documentation on
-[`ServerEventAppExt::make_event_independent`].
+[`ServerMessageAppExt::make_message_independent`].
 
 ## Abstracting over configurations
 
@@ -533,8 +533,8 @@ basis.
 ### Authorization
 
 Connected clients are considered authorized when they have the [`AuthorizedClient`] component. Without this
-component, clients can only receive events marked as independent via [`ServerEventAppExt::make_event_independent`]
-or [`ServerTriggerAppExt::make_trigger_independent`]. Additionally, some components on connected clients are only present
+component, clients can only receive events marked as independent via [`ServerMessageAppExt::make_message_independent`]
+or [`ServerEventAppExt::make_event_independent`]. Additionally, some components on connected clients are only present
 after replication starts. See the required components for [`AuthorizedClient`] for details.
 
 By default, this component is automatically inserted when the client and server [`ProtocolHash`] matches.
@@ -716,10 +716,10 @@ pub mod prelude {
             },
             client_id::ClientId,
             message::{
-                client_event::{ClientTriggerAppExt, ClientTriggerExt},
-                client_message::{ClientEventAppExt, FromClient},
-                server_event::{ServerTriggerAppExt, ServerTriggerExt},
-                server_message::{SendMode, ServerEventAppExt, ToClients},
+                client_event::{ClientEventAppExt, ClientTriggerExt},
+                client_message::{ClientMessageAppExt, FromClient},
+                server_event::{ServerEventAppExt, ServerTriggerExt},
+                server_message::{SendMode, ServerMessageAppExt, ToClients},
             },
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
@@ -735,13 +735,13 @@ pub mod prelude {
 
     #[cfg(feature = "client")]
     pub use super::client::{
-        ClientPlugin, ClientReplicationStats, ClientSystems, message::ClientEventPlugin,
+        ClientPlugin, ClientReplicationStats, ClientSystems, message::ClientMessagePlugin,
     };
 
     #[cfg(feature = "server")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, VisibilityPolicy,
-        client_visibility::ClientVisibility, message::ServerEventPlugin,
+        client_visibility::ClientVisibility, message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
     };
 
@@ -760,9 +760,9 @@ use prelude::*;
 /// Contains the following:
 /// * [`RepliconSharedPlugin`].
 /// * [`ServerPlugin`] - with feature `server`.
-/// * [`ServerEventPlugin`] - with feature `server`.
+/// * [`ServerMessagePlugin`] - with feature `server`.
 /// * [`ClientPlugin`] - with feature `client`.
-/// * [`ClientEventPlugin`] - with feature `client`.
+/// * [`ClientMessagePlugin`] - with feature `client`.
 /// * [`ClientDiagnosticsPlugin`] - with feature `client_diagnostics`.
 pub struct RepliconPlugins;
 
@@ -773,12 +773,12 @@ impl PluginGroup for RepliconPlugins {
 
         #[cfg(feature = "server")]
         {
-            group = group.add(ServerPlugin::default()).add(ServerEventPlugin);
+            group = group.add(ServerPlugin::default()).add(ServerMessagePlugin);
         }
 
         #[cfg(feature = "client")]
         {
-            group = group.add(ClientPlugin).add(ClientEventPlugin);
+            group = group.add(ClientPlugin).add(ClientMessagePlugin);
         }
 
         #[cfg(feature = "client_diagnostics")]

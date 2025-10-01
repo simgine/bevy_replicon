@@ -154,7 +154,7 @@ impl Signature {
 
     # let mut app = App::new();
     # app.add_plugins((StatesPlugin, RepliconPlugins));
-    app.add_client_trigger::<SpawnFireball>(Channel::Ordered)
+    app.add_client_event::<SpawnFireball>(Channel::Ordered)
         .add_observer(confirm_projectile)
         .add_systems(
             FixedUpdate,

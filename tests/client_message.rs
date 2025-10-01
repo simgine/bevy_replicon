@@ -1,7 +1,7 @@
 use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     prelude::*,
-    shared::{message::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
+    shared::{message::registry::RemoteMessageRegistry, server_entity_map::ServerEntityMap},
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};
@@ -16,12 +16,12 @@ fn channels() {
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .add_message::<NonRemoteEvent>()
-    .add_client_event::<TestEvent>(Channel::Ordered)
+    .add_client_message::<TestEvent>(Channel::Ordered)
     .finish();
 
-    let event_registry = app.world().resource::<RemoteEventRegistry>();
-    assert_eq!(event_registry.client_channel::<NonRemoteEvent>(), None);
-    assert_eq!(event_registry.client_channel::<TestEvent>(), Some(2));
+    let registry = app.world().resource::<RemoteMessageRegistry>();
+    assert_eq!(registry.client_channel::<NonRemoteEvent>(), None);
+    assert_eq!(registry.client_channel::<TestEvent>(), Some(2));
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn regular() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_client_event::<TestEvent>(Channel::Ordered)
+            .add_client_message::<TestEvent>(Channel::Ordered)
             .finish();
     }
 
@@ -58,7 +58,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_client_event::<EntityEvent>(Channel::Ordered)
+        .add_mapped_client_message::<EntityEvent>(Channel::Ordered)
         .finish();
     }
 
@@ -105,9 +105,9 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .disable::<ClientPlugin>()
-                .disable::<ClientEventPlugin>(),
+                .disable::<ClientMessagePlugin>(),
         ))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_message::<TestEvent>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -116,9 +116,9 @@ fn without_plugins() {
             RepliconPlugins
                 .build()
                 .disable::<ServerPlugin>()
-                .disable::<ServerEventPlugin>(),
+                .disable::<ServerMessagePlugin>(),
         ))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_message::<TestEvent>(Channel::Ordered)
         .finish();
 
     server_app.connect_client(&mut client_app);
@@ -139,7 +139,7 @@ fn without_plugins() {
 fn local_resending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_message::<TestEvent>(Channel::Ordered)
         .finish();
 
     app.world_mut().write_message(TestEvent);

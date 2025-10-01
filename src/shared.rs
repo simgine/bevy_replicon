@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
-use message::registry::RemoteEventRegistry;
+use message::registry::RemoteMessageRegistry;
 use replication::signature::SignatureMap;
 use replication::{
     command_markers::CommandMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
@@ -42,9 +42,9 @@ pub struct RepliconSharedPlugin {
             auth_method: AuthMethod::Custom,
         }),
     ))
-    .add_client_trigger::<ClientInfo>(Channel::Ordered)
-    .add_server_trigger::<ProtocolMismatch>(Channel::Unreliable)
-    .make_trigger_independent::<ProtocolMismatch>() // Let the client receive it without replication.
+    .add_client_event::<ClientInfo>(Channel::Ordered)
+    .add_server_event::<ProtocolMismatch>(Channel::Unreliable)
+    .make_event_independent::<ProtocolMismatch>() // Let the client receive it without replication.
     .add_observer(start_game)
     .add_systems(OnEnter(ClientState::Connected), send_info);
 
@@ -114,14 +114,14 @@ impl Plugin for RepliconSharedPlugin {
             .init_resource::<ReplicationRules>()
             .init_resource::<SignatureMap>()
             .init_resource::<CommandMarkers>()
-            .init_resource::<RemoteEventRegistry>()
+            .init_resource::<RemoteMessageRegistry>()
             .insert_resource(self.auth_method)
             .add_message::<DisconnectRequest>();
 
         if self.auth_method == AuthMethod::ProtocolCheck {
-            app.add_client_trigger::<ProtocolHash>(Channel::Ordered)
-                .add_server_trigger::<ProtocolMismatch>(Channel::Unreliable)
-                .make_trigger_independent::<ProtocolMismatch>();
+            app.add_client_event::<ProtocolHash>(Channel::Ordered)
+                .add_server_event::<ProtocolMismatch>(Channel::Unreliable)
+                .make_event_independent::<ProtocolMismatch>();
         }
     }
 

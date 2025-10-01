@@ -34,7 +34,7 @@ fn main() {
         .init_resource::<SymbolFont>()
         .init_resource::<TurnSymbol>()
         .replicate::<Symbol>()
-        .add_client_trigger::<CellPick>(Channel::Ordered)
+        .add_client_event::<CellPick>(Channel::Ordered)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_observer(disconnect_by_client)
         .add_observer(init_client)

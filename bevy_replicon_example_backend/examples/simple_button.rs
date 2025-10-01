@@ -21,7 +21,7 @@ fn main() {
         .replicate::<UiRoot>()
         .replicate::<ToggleButton>()
         .replicate_filtered::<ChildOf, With<ToggleButton>>() // Replicate parent only for `ToggleButton`.
-        .add_client_trigger::<RemoteToggle>(Channel::Unordered)
+        .add_client_event::<RemoteToggle>(Channel::Unordered)
         .add_observer(init_toggle_button)
         .add_observer(trigger_remote_toggle)
         .add_observer(apply_remote_toggle)
