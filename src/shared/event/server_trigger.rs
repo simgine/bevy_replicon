@@ -9,10 +9,9 @@ use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
     event_fns::{EventDeserializeFn, EventFns, EventSerializeFn},
     registry::RemoteEventRegistry,
-    remote_targets::RemoteTargets,
     server_event::{self, ServerEvent},
 };
-use crate::{postcard_utils, prelude::*};
+use crate::prelude::*;
 
 /// An extension trait for [`App`] for creating server triggers.
 ///
@@ -187,11 +186,6 @@ fn trigger_serialize<'a, E>(
     message: &mut Vec<u8>,
     serialize: EventSerializeFn<ServerSendCtx<'a>, E>,
 ) -> Result<()> {
-    postcard_utils::to_extend_mut(&trigger.targets.len(), message)?;
-    for entity in &trigger.targets {
-        postcard_utils::entity_to_extend_mut(entity, message)?;
-    }
-
     (serialize)(ctx, &trigger.event, message)
 }
 
@@ -204,16 +198,9 @@ fn trigger_deserialize<'a, E>(
     message: &mut Bytes,
     deserialize: EventDeserializeFn<ClientReceiveCtx<'a>, E>,
 ) -> Result<ServerTriggerEvent<E>> {
-    let len = postcard_utils::from_buf(message)?;
-    let mut targets = Vec::with_capacity(len);
-    for _ in 0..len {
-        let entity = postcard_utils::entity_from_buf(message)?;
-        targets.push(ctx.get_mapped(entity));
-    }
-
     let event = (deserialize)(ctx, message)?;
 
-    Ok(ServerTriggerEvent { event, targets })
+    Ok(ServerTriggerEvent { event })
 }
 
 /// Extension trait for triggering server events.
@@ -223,48 +210,22 @@ pub trait ServerTriggerExt {
     /// Like [`Commands::trigger`], but triggers `E` on server and locally
     /// if [`ClientId::Server`] is a recipient of the event).
     fn server_trigger(&mut self, event: ToClients<impl Event>);
-
-    /// Like [`Self::server_trigger`], but allows you to specify target entities, similar to
-    /// [`Commands::trigger_targets`].
-    fn server_trigger_targets(&mut self, event: ToClients<impl Event>, targets: impl RemoteTargets);
 }
 
 impl ServerTriggerExt for Commands<'_, '_> {
     fn server_trigger(&mut self, event: ToClients<impl Event>) {
-        self.server_trigger_targets(event, []);
-    }
-
-    fn server_trigger_targets(
-        &mut self,
-        event: ToClients<impl Event>,
-        targets: impl RemoteTargets,
-    ) {
         self.write_message(ToClients {
             mode: event.mode,
-            event: ServerTriggerEvent {
-                event: event.event,
-                targets: targets.into_entities(),
-            },
+            event: ServerTriggerEvent { event: event.event },
         });
     }
 }
 
 impl ServerTriggerExt for World {
     fn server_trigger(&mut self, event: ToClients<impl Event>) {
-        self.server_trigger_targets(event, []);
-    }
-
-    fn server_trigger_targets(
-        &mut self,
-        event: ToClients<impl Event>,
-        targets: impl RemoteTargets,
-    ) {
         self.write_message(ToClients {
             mode: event.mode,
-            event: ServerTriggerEvent {
-                event: event.event,
-                targets: targets.into_entities(),
-            },
+            event: ServerTriggerEvent { event: event.event },
         });
     }
 }
@@ -277,5 +238,4 @@ impl ServerTriggerExt for World {
 #[derive(Message)]
 struct ServerTriggerEvent<E> {
     event: E,
-    targets: Vec<Entity>,
 }

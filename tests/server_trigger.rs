@@ -33,49 +33,7 @@ fn regular() {
     client_app.update();
 
     let reader = client_app.world().resource::<TriggerReader<TestEvent>>();
-    assert_eq!(reader.entities, [Entity::PLACEHOLDER]);
-}
-
-#[test]
-fn with_target() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .add_server_trigger::<TestEvent>(Channel::Ordered)
-        .finish();
-    }
-    client_app.init_resource::<TriggerReader<TestEvent>>();
-
-    server_app.connect_client(&mut client_app);
-
-    let server_entity = server_app.world_mut().spawn(Replicated).id();
-
-    server_app.world_mut().server_trigger_targets(
-        ToClients {
-            mode: SendMode::Broadcast,
-            event: TestEvent,
-        },
-        server_entity,
-    );
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
-    let client_entity = *client_app
-        .world()
-        .resource::<ServerEntityMap>()
-        .to_client()
-        .get(&server_entity)
-        .unwrap();
-
-    let reader = client_app.world().resource::<TriggerReader<TestEvent>>();
-    assert_eq!(reader.entities, [client_entity]);
+    assert_eq!(reader.events.len(), 1);
 }
 
 #[test]
@@ -256,19 +214,16 @@ struct EntityEvent(#[entities] Entity);
 #[derive(Resource)]
 struct TriggerReader<E: Event> {
     events: Vec<E>,
-    entities: Vec<Entity>,
 }
 
 impl<E: Event + Clone> FromWorld for TriggerReader<E> {
     fn from_world(world: &mut World) -> Self {
-        world.add_observer(|on: On<E>, mut counter: ResMut<Self>| {
-            counter.events.push(on.event().clone());
-            // counter.entities.push(on.target());
+        world.add_observer(|on: On<E>, mut reader: ResMut<Self>| {
+            reader.events.push(on.event().clone());
         });
 
         Self {
             events: Default::default(),
-            entities: Default::default(),
         }
     }
 }
