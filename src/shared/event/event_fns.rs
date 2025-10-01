@@ -21,8 +21,8 @@ pub(super) struct UntypedEventFns {
     inner_id: TypeId,
     inner_name: &'static str,
 
-    outer_serialize: unsafe fn(),
-    outer_deserialize: unsafe fn(),
+    serialize_adapter: unsafe fn(),
+    deserialize_adapter: unsafe fn(),
     serialize: unsafe fn(),
     deserialize: unsafe fn(),
 }
@@ -67,17 +67,17 @@ impl UntypedEventFns {
         );
 
         EventFns {
-            outer_serialize: unsafe {
-                mem::transmute::<unsafe fn(), OuterSerializeFn<S, E, I>>(self.outer_serialize)
+            serialize_adapter: unsafe {
+                mem::transmute::<unsafe fn(), AdapterSerializeFn<S, E, I>>(self.serialize_adapter)
             },
-            outer_deserialize: unsafe {
-                mem::transmute::<unsafe fn(), OuterDeserializeFn<D, E, I>>(self.outer_deserialize)
+            deserialize_adapter: unsafe {
+                mem::transmute::<unsafe fn(), AdapterDeserializeFn<D, E, I>>(
+                    self.deserialize_adapter,
+                )
             },
-            serialize: unsafe {
-                mem::transmute::<unsafe fn(), EventSerializeFn<S, I>>(self.serialize)
-            },
+            serialize: unsafe { mem::transmute::<unsafe fn(), SerializeFn<S, I>>(self.serialize) },
             deserialize: unsafe {
-                mem::transmute::<unsafe fn(), EventDeserializeFn<D, I>>(self.deserialize)
+                mem::transmute::<unsafe fn(), DeserializeFn<D, I>>(self.deserialize)
             },
         }
     }
@@ -95,17 +95,17 @@ impl<S, D, E: 'static, I: 'static> From<EventFns<S, D, E, I>> for UntypedEventFn
             event_name: any::type_name::<E>(),
             inner_id: TypeId::of::<I>(),
             inner_name: any::type_name::<I>(),
-            outer_serialize: unsafe {
-                mem::transmute::<OuterSerializeFn<S, E, I>, unsafe fn()>(value.outer_serialize)
+            serialize_adapter: unsafe {
+                mem::transmute::<AdapterSerializeFn<S, E, I>, unsafe fn()>(value.serialize_adapter)
             },
-            outer_deserialize: unsafe {
-                mem::transmute::<OuterDeserializeFn<D, E, I>, unsafe fn()>(value.outer_deserialize)
+            deserialize_adapter: unsafe {
+                mem::transmute::<AdapterDeserializeFn<D, E, I>, unsafe fn()>(
+                    value.deserialize_adapter,
+                )
             },
-            serialize: unsafe {
-                mem::transmute::<EventSerializeFn<S, I>, unsafe fn()>(value.serialize)
-            },
+            serialize: unsafe { mem::transmute::<SerializeFn<S, I>, unsafe fn()>(value.serialize) },
             deserialize: unsafe {
-                mem::transmute::<EventDeserializeFn<D, I>, unsafe fn()>(value.deserialize)
+                mem::transmute::<DeserializeFn<D, I>, unsafe fn()>(value.deserialize)
             },
         }
     }
@@ -114,26 +114,23 @@ impl<S, D, E: 'static, I: 'static> From<EventFns<S, D, E, I>> for UntypedEventFn
 /// Serialization and deserialization functions for an event.
 ///
 /// For triggers, we want to allow users to customize these functions, but it would be inconvenient
-/// to write serialization and deserialization logic for trigger target entities every time.
-/// Since closures can't be used, we provide outer functions that accept regular serialization functions.
-/// By default, these outer functions simply call the inner function, but they can be overridden
-/// to write common serde logic.
+/// to write serialization and deserialization logic for the trigger adapter instead of the actual type.
+/// Since closures can't be used, we provide adapter functions that accept regular serialization functions.
+/// By default, these adapter functions simply call the passed function, but they can be overridden
+/// to perform the type conversion.
 pub(super) struct EventFns<S, D, E, I = E> {
-    outer_serialize: OuterSerializeFn<S, E, I>,
-    outer_deserialize: OuterDeserializeFn<D, E, I>,
-    serialize: EventSerializeFn<S, I>,
-    deserialize: EventDeserializeFn<D, I>,
+    serialize_adapter: AdapterSerializeFn<S, E, I>,
+    deserialize_adapter: AdapterDeserializeFn<D, E, I>,
+    serialize: SerializeFn<S, I>,
+    deserialize: DeserializeFn<D, I>,
 }
 
 impl<S, D, E> EventFns<S, D, E, E> {
-    /// Creates a new instance with default outer functions.
-    pub(super) fn new(
-        serialize: EventSerializeFn<S, E>,
-        deserialize: EventDeserializeFn<D, E>,
-    ) -> Self {
+    /// Creates a new instance with default adapter functions.
+    pub(super) fn new(serialize: SerializeFn<S, E>, deserialize: DeserializeFn<D, E>) -> Self {
         Self {
-            outer_serialize: default_outer_serialize::<S, E>,
-            outer_deserialize: default_outer_deserialize::<D, E>,
+            serialize_adapter: default_serialize_adapter::<S, E>,
+            deserialize_adapter: default_deserialize_adapter::<D, E>,
             serialize,
             deserialize,
         }
@@ -141,56 +138,70 @@ impl<S, D, E> EventFns<S, D, E, E> {
 }
 
 impl<S, D, E, I> EventFns<S, D, E, I> {
-    /// Overrides current outer functions.
-    pub(super) fn with_outer<T>(
-        self,
-        outer_serialize: OuterSerializeFn<S, T, I>,
-        outer_deserialize: OuterDeserializeFn<D, T, I>,
-    ) -> EventFns<S, D, T, I> {
+    /// Adds conversion to type `T` before serialization and after deserialiation.
+    pub(super) fn with_convert<T: AsRef<I> + From<I>>(self) -> EventFns<S, D, T, I> {
         EventFns {
-            outer_serialize,
-            outer_deserialize,
+            serialize_adapter: convert_serialize_adapter,
+            deserialize_adapter: convert_deserialize_adapter,
             serialize: self.serialize,
             deserialize: self.deserialize,
         }
     }
 
     pub(super) fn serialize(self, ctx: &mut S, event: &E, message: &mut Vec<u8>) -> Result<()> {
-        (self.outer_serialize)(ctx, event, message, self.serialize)
+        (self.serialize_adapter)(ctx, event, message, self.serialize)
     }
 
     pub(super) fn deserialize(self, ctx: &mut D, message: &mut Bytes) -> Result<E> {
-        (self.outer_deserialize)(ctx, message, self.deserialize)
+        (self.deserialize_adapter)(ctx, message, self.deserialize)
     }
 }
 
-fn default_outer_serialize<C, E>(
+fn default_serialize_adapter<C, E>(
     ctx: &mut C,
     event: &E,
     message: &mut Vec<u8>,
-    serialize: EventSerializeFn<C, E>,
+    serialize: SerializeFn<C, E>,
 ) -> Result<()> {
     (serialize)(ctx, event, message)
 }
 
-fn default_outer_deserialize<C, E>(
+fn default_deserialize_adapter<C, E>(
     ctx: &mut C,
     message: &mut Bytes,
-    deserialize: EventDeserializeFn<C, E>,
+    deserialize: DeserializeFn<C, E>,
 ) -> Result<E> {
     (deserialize)(ctx, message)
 }
 
+fn convert_serialize_adapter<C, E: AsRef<I>, I>(
+    ctx: &mut C,
+    event: &E,
+    message: &mut Vec<u8>,
+    serialize: SerializeFn<C, I>,
+) -> Result<()> {
+    (serialize)(ctx, event.as_ref(), message)
+}
+
+fn convert_deserialize_adapter<C, E: From<I>, I>(
+    ctx: &mut C,
+    message: &mut Bytes,
+    deserialize: DeserializeFn<C, I>,
+) -> Result<E> {
+    let event = (deserialize)(ctx, message)?;
+    Ok(E::from(event))
+}
+
 /// Signature of event serialization functions.
-pub type EventSerializeFn<C, E> = fn(&mut C, &E, &mut Vec<u8>) -> Result<()>;
+pub type SerializeFn<C, E> = fn(&mut C, &E, &mut Vec<u8>) -> Result<()>;
 
 /// Signature of event deserialization functions.
-pub type EventDeserializeFn<C, E> = fn(&mut C, &mut Bytes) -> Result<E>;
+pub type DeserializeFn<C, E> = fn(&mut C, &mut Bytes) -> Result<E>;
 
-/// Signature of outer serialization functions.
-pub(super) type OuterSerializeFn<C, E, I> =
-    fn(&mut C, &E, &mut Vec<u8>, EventSerializeFn<C, I>) -> Result<()>;
+/// Signature of adapter serialization functions.
+pub(super) type AdapterSerializeFn<C, E, I> =
+    fn(&mut C, &E, &mut Vec<u8>, SerializeFn<C, I>) -> Result<()>;
 
-/// Signature of outer deserialization functions.
-pub(super) type OuterDeserializeFn<C, E, I> =
-    fn(&mut C, &mut Bytes, EventDeserializeFn<C, I>) -> Result<E>;
+/// Signature of adapter deserialization functions.
+pub(super) type AdapterDeserializeFn<C, E, I> =
+    fn(&mut C, &mut Bytes, DeserializeFn<C, I>) -> Result<E>;

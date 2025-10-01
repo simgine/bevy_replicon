@@ -1,13 +1,12 @@
 use core::any;
 
 use bevy::{ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
-use bytes::Bytes;
 use log::debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
-    event_fns::{EventDeserializeFn, EventFns, EventSerializeFn},
+    event_fns::{DeserializeFn, EventFns, SerializeFn},
     registry::RemoteEventRegistry,
     server_event::{self, ServerEvent},
 };
@@ -61,8 +60,8 @@ pub trait ServerTriggerAppExt {
     fn add_server_trigger_with<'a, E: Event<Trigger<'a>: Default>>(
         &mut self,
         channel: Channel,
-        serialize: EventSerializeFn<ServerSendCtx, E>,
-        deserialize: EventDeserializeFn<ClientReceiveCtx, E>,
+        serialize: SerializeFn<ServerSendCtx, E>,
+        deserialize: DeserializeFn<ClientReceiveCtx, E>,
     ) -> &mut Self;
 
     /// Like [`ServerEventAppExt::make_event_independent`], but for triggers.
@@ -73,15 +72,15 @@ impl ServerTriggerAppExt for App {
     fn add_server_trigger_with<'a, E: Event<Trigger<'a>: Default>>(
         &mut self,
         channel: Channel,
-        serialize: EventSerializeFn<ServerSendCtx, E>,
-        deserialize: EventDeserializeFn<ClientReceiveCtx, E>,
+        serialize: SerializeFn<ServerSendCtx, E>,
+        deserialize: DeserializeFn<ClientReceiveCtx, E>,
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
             .add_server_event::<E>();
 
-        let event_fns = EventFns::new(serialize, deserialize)
-            .with_outer(trigger_serialize, trigger_deserialize);
+        let event_fns =
+            EventFns::new(serialize, deserialize).with_convert::<ServerTriggerEvent<E>>();
         let trigger = ServerTrigger::new(self, channel, event_fns);
         let mut event_registry = self.world_mut().resource_mut::<RemoteEventRegistry>();
         event_registry.register_server_trigger(trigger);
@@ -176,33 +175,6 @@ impl ServerTrigger {
 /// Signature of server trigger functions.
 type TriggerFn = unsafe fn(&mut Commands, PtrMut);
 
-/// Serializes targets for [`TriggerEvent`] and delegates the event
-/// serialiaztion to `serialize`.
-///
-/// Used as outer function for [`EventFns`].
-fn trigger_serialize<'a, E>(
-    ctx: &mut ServerSendCtx<'a>,
-    trigger: &ServerTriggerEvent<E>,
-    message: &mut Vec<u8>,
-    serialize: EventSerializeFn<ServerSendCtx<'a>, E>,
-) -> Result<()> {
-    (serialize)(ctx, &trigger.event, message)
-}
-
-/// Deserializes targets for [`TriggerEvent`] and delegates the event
-/// deserialiaztion to `deserialize`.
-///
-/// Used as outer function for [`EventFns`].
-fn trigger_deserialize<'a, E>(
-    ctx: &mut ClientReceiveCtx<'a>,
-    message: &mut Bytes,
-    deserialize: EventDeserializeFn<ClientReceiveCtx<'a>, E>,
-) -> Result<ServerTriggerEvent<E>> {
-    let event = (deserialize)(ctx, message)?;
-
-    Ok(ServerTriggerEvent { event })
-}
-
 /// Extension trait for triggering server events.
 ///
 /// See also [`ServerTriggerAppExt`].
@@ -238,4 +210,16 @@ impl ServerTriggerExt for World {
 #[derive(Message)]
 struct ServerTriggerEvent<E> {
     event: E,
+}
+
+impl<E> From<E> for ServerTriggerEvent<E> {
+    fn from(event: E) -> Self {
+        Self { event }
+    }
+}
+
+impl<E> AsRef<E> for ServerTriggerEvent<E> {
+    fn as_ref(&self) -> &E {
+        &self.event
+    }
 }

@@ -15,7 +15,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
-    event_fns::{EventDeserializeFn, EventFns, EventSerializeFn, UntypedEventFns},
+    event_fns::{DeserializeFn, EventFns, SerializeFn, UntypedEventFns},
     registry::RemoteEventRegistry,
 };
 use crate::{postcard_utils, prelude::*};
@@ -121,8 +121,8 @@ pub trait ServerEventAppExt {
     fn add_server_event_with<E: Message>(
         &mut self,
         channel: Channel,
-        serialize: EventSerializeFn<ServerSendCtx, E>,
-        deserialize: EventDeserializeFn<ClientReceiveCtx, E>,
+        serialize: SerializeFn<ServerSendCtx, E>,
+        deserialize: DeserializeFn<ClientReceiveCtx, E>,
     ) -> &mut Self;
 
     /// Marks the event `E` as an independent event.
@@ -157,8 +157,8 @@ impl ServerEventAppExt for App {
     fn add_server_event_with<E: Message>(
         &mut self,
         channel: Channel,
-        serialize: EventSerializeFn<ServerSendCtx, E>,
-        deserialize: EventDeserializeFn<ClientReceiveCtx, E>,
+        serialize: SerializeFn<ServerSendCtx, E>,
+        deserialize: DeserializeFn<ClientReceiveCtx, E>,
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
