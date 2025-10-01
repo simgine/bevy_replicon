@@ -43,7 +43,7 @@ Their data represented as components, such as [`ClientStats`]. Users can also at
 own metadata to them or even replicate these entiteis back to clients.
 
 These entities are automatically spawned and despawned by the messaging backend. You can
-also despawn them yourself to trigger a disconnect or use the [`DisconnectRequest`] event
+also despawn them yourself to trigger a disconnect or use the [`DisconnectRequest`] message
 to disconnect after sending messages.
 
 You can use [`On<Add, ConnectedClient>`] to react to new connections,
@@ -107,7 +107,7 @@ provides a high-level API to automate server-authoritative replication.
 
 Replication happens only from server to clients. It's necessary to prevent cheating.
 If you need to send information from clients to the server, use
-[events](#network-events-and-triggers).
+[messages](#network-messages-and-events).
 
 For implementation details see [`ServerChannel`](shared::backend::channels::ServerChannel).
 
@@ -275,9 +275,9 @@ network traffic.
 Use [`AppRuleExt::replicate_once`] to replicate only the initial value of a component.
 You can configure this per-component within a replication rule using [`AppRuleExt::replicate_with`].
 
-See also [server events](#from-server-to-client), which are also useful for DR.
+See also [server messages](#from-server-to-client), which are also useful for DR.
 
-## Network events and triggers
+## Network messages and events
 
 This replaces RPCs (remote procedure calls) in other engines and,
 unlike replication, can be sent both from server to clients and from clients to
@@ -285,14 +285,14 @@ server.
 
 ### From client to server
 
-To send specific events from client to server, you need to register the event
-with [`ClientMessageAppExt::add_client_message`] instead of [`App::add_event`].
+To write a message from client to server, you need to register the message
+with [`ClientMessageAppExt::add_client_message`] instead of [`App::add_message`].
 
-Events include [`Channel`] to configure delivery guarantees (reliability and
+Messages include [`Channel`] to configure delivery guarantees (reliability and
 ordering).
 
-These events will appear on server as [`FromClient`] wrapper event that
-contains sender ID and the sent event.
+These messages will appear on server as [`FromClient`] wrapper message that
+contains sender ID and the message.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -300,42 +300,42 @@ contains sender ID and the sent event.
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_client_message::<ExampleEvent>(Channel::Ordered)
+app.add_client_message::<Ping>(Channel::Ordered)
     .add_systems(
         PreUpdate,
-        receive_events
+        receive
             .after(ServerSystems::Receive)
             .run_if(in_state(ServerState::Running)),
     )
     .add_systems(
         PostUpdate,
-        send_events.before(ClientSystems::Send).run_if(in_state(ClientState::Connected)),
+        send.before(ClientSystems::Send).run_if(in_state(ClientState::Connected)),
     );
 
-fn send_events(mut events: EventWriter<ExampleEvent>) {
-    events.write_default();
+fn send(mut ping: MessageWriter<Ping>) {
+    ping.write(Ping);
 }
 
-fn receive_events(mut events: EventReader<FromClient<ExampleEvent>>) {
-    for FromClient { client_id, event } in events.read() {
-        info!("received event `{event:?}` from client `{client_id}`");
+fn receive(mut pings: MessageReader<FromClient<Ping>>) {
+    for ping in pings.read() {
+        info!("received ping from client `{}`", ping.client_id);
     }
 }
 
-#[derive(Event, Default, Debug, Deserialize, Serialize)]
-struct ExampleEvent;
+#[derive(Message, Deserialize, Serialize)]
+struct Ping;
 ```
 
-If an event contains an entity, implement
+If a message contains an entity, implement
 [`MapEntities`](bevy::ecs::entity::MapEntities) for it and use use
 [`ClientMessageAppExt::add_mapped_client_message`] instead.
 
-There is also [`ClientMessageAppExt::add_client_message_with`] to register an event with special serialization and
-deserialization functions. This could be used for sending events that contain [`Box<dyn PartialReflect>`], which
+There is also [`ClientMessageAppExt::add_client_message_with`] to register a message with special serialization and
+deserialization functions. This could be used for sending messages that contain [`Box<dyn PartialReflect>`], which
 require access to the [`AppTypeRegistry`] resource. Don't forget to validate the contents of every
 [`Box<dyn PartialReflect>`] from a client, it could be anything!
 
-Alternatively, you can use triggers with a similar API. First, you need to register the event
+Alternatively, you can use events with a similar API. First, you need to register the event
 using [`ClientEventAppExt::add_client_event`], and then use [`ClientTriggerExt::client_trigger`].
 
 ```
@@ -344,33 +344,30 @@ using [`ClientEventAppExt::add_client_event`], and then use [`ClientTriggerExt::
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_client_event::<Hello>(Channel::Ordered)
-    .add_observer(receive_hello)
-    .add_systems(Update, send_hello.run_if(in_state(ClientState::Connected)));
+app.add_client_event::<Ping>(Channel::Ordered)
+    .add_observer(receive)
+    .add_systems(Update, send.run_if(in_state(ClientState::Connected)));
 
-fn send_hello(mut commands: Commands) {
-    commands.client_trigger(Hello);
+fn send(mut commands: Commands) {
+    commands.client_trigger(Ping);
 }
 
-fn receive_hello(hello: On<FromClient<Hello>>) {
-    info!("received greetings from client `{}`", hello.client_id);
+fn receive(ping: On<FromClient<Ping>>) {
+    info!("received ping from client `{}`", ping.client_id);
 }
-# #[derive(Event, Debug, Deserialize, Serialize)]
-# struct Hello;
+# #[derive(Event, Deserialize, Serialize)]
+# struct Ping;
 ```
 
-Trigger targets are also supported via [`ClientTriggerExt::client_trigger_targets`], no change
-in registration needed. Target entities will be automatically mapped to server entities before sending.
-
-For event triggers with entities inside use [`ClientEventAppExt::add_mapped_client_event`].
-Similar to events, serialization can also be customized with [`ClientEventAppExt::add_client_event_with`].
+For events with entities inside use [`ClientEventAppExt::add_mapped_client_event`].
+Similar to messages, serialization can also be customized with [`ClientEventAppExt::add_client_event_with`].
 
 ### From server to client
 
-A similar technique is used to send events from server to clients. To do this,
-register the event with [`ServerMessageAppExt::add_server_message`]
+A similar technique is used to send messages from server to clients. To do this,
+register a message with [`ServerMessageAppExt::add_server_message`]
 and send it from server using [`ToClients`]. This wrapper contains send parameters
-and the event itself.
+and the message itself.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -378,40 +375,40 @@ and the event itself.
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_server_message::<ExampleEvent>(Channel::Ordered)
+app.add_server_message::<Pong>(Channel::Ordered)
     .add_systems(
         PreUpdate,
-        receive_events
+        receive
             .after(ClientSystems::Receive)
             .run_if(in_state(ClientState::Connected)),
     )
     .add_systems(
         PostUpdate,
-        send_events.before(ServerSystems::Send).run_if(in_state(ServerState::Running)),
+        send.before(ServerSystems::Send).run_if(in_state(ServerState::Running)),
     );
 
-fn send_events(mut events: EventWriter<ToClients<ExampleEvent>>) {
-    events.write(ToClients {
+fn send(mut pongs: MessageWriter<ToClients<Pong>>) {
+    pongs.write(ToClients {
         mode: SendMode::Broadcast,
-        event: ExampleEvent,
+        event: Pong,
     });
 }
 
-fn receive_events(mut events: EventReader<ExampleEvent>) {
-    for event in events.read() {
-        info!("received event {event:?} from server");
+fn receive(mut pongs: EventReader<Pong>) {
+    for pong in pongs.read() {
+        info!("received pong from the server");
     }
 }
 
-#[derive(Event, Debug, Default, Deserialize, Serialize, Clone, Copy)]
-struct ExampleEvent;
+#[derive(Event, Deserialize, Serialize)]
+struct Pong;
 ```
 
-Just like for client events, we provide [`ServerMessageAppExt::add_mapped_server_message`]
+Just like for client messages, we provide [`ServerMessageAppExt::add_mapped_server_message`]
 and [`ServerMessageAppExt::add_server_message_with`].
 
-Trigger-based API available for server events as well. First, you need to register the event
-with [`ServerEventAppExt::add_server_event`] and then use [`ServerTriggerExt::server_trigger`]:
+Event API is available. First, you need to register an event with [`ServerEventAppExt::add_server_event`]
+and then use [`ServerTriggerExt::server_trigger`]:
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -419,28 +416,28 @@ with [`ServerEventAppExt::add_server_event`] and then use [`ServerTriggerExt::se
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_server_event::<Hello>(Channel::Ordered)
-    .add_observer(receive_hello)
-    .add_systems(Update, send_hello.run_if(in_state(ServerState::Running)));
+app.add_server_event::<Pong>(Channel::Ordered)
+    .add_observer(receive)
+    .add_systems(Update, send.run_if(in_state(ServerState::Running)));
 
-fn send_hello(mut commands: Commands) {
+fn send(mut commands: Commands) {
     commands.server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: Hello,
+        event: Pong,
     });
 }
 
-fn receive_hello(_on: On<Hello>) {
-    info!("received greetings from server");
+fn receive(_on: On<Pong>) {
+    info!("received pong from the server");
 }
-# #[derive(Event, Debug, Deserialize, Serialize)]
-# struct Hello;
+# #[derive(Event, Deserialize, Serialize)]
+# struct Pong;
 ```
 
-And just like for client trigger, we provide [`ServerEventAppExt::add_mapped_server_event`]
+And just like for client events, we provide [`ServerEventAppExt::add_mapped_server_event`]
 and [`ServerEventAppExt::add_server_event_with`].
 
-We guarantee that clients will never receive events that point to an entity or require specific
+We guarantee that clients will never receive events or messages that point to an entity or require specific
 component to be presentt which client haven't received yet. For more details see the documentation on
 [`ServerMessageAppExt::make_message_independent`].
 
@@ -498,11 +495,11 @@ Internally we run replication sending system only in [`ServerState::Running`] an
 only in [`ClientState::Connected`]. This way for singleplayer replication systems won't run at all and
 for listen server replication will only be sending (server world is already in the correct state).
 
-For events, it's a bit trickier. For all client events, we internally drain events as `E` and re-emit
+For messages, it's a bit trickier. For all client messages, we internally drain messages as `E` and send
 them as [`FromClient<E>`] locally with [`ClientId::Server`] in [`ClientState::Disconnected`].
-For server events we drain [`ToClients<E>`] and, if the [`ClientId::Server`] is the recipient of the event,
-re-emit it as `E` locally. This emulates event receiving for both server and singleplayer without actually
-transmitting data over the network.
+For server messages we drain [`ToClients<E>`] and, if the [`ClientId::Server`] is the recipient of the message,
+re-emit it as `E` locally. The same applies to the event API. This emulates message receiving for both server
+and singleplayer without actually transmitting data over the network.
 
 We also provide [`ClientSystems`] and [`ServerSystems`] to schedule your system at specific time in the frame.
 For example, you can run your systems right after receive using [`ClientSystems::Receive`] or [`ServerSystems::Receive`].
@@ -519,7 +516,7 @@ You will need to disable similar features on your messaing backend crate too.
 
 <div class="warning">
 
-Make sure that the component and event registration order is the same on the client and server. Simply put all
+Make sure that the component, event and message registration order is the same on the client and server. Simply put all
 registration code in your "shared" crate.
 
 </div>
@@ -533,7 +530,7 @@ basis.
 ### Authorization
 
 Connected clients are considered authorized when they have the [`AuthorizedClient`] component. Without this
-component, clients can only receive events marked as independent via [`ServerMessageAppExt::make_message_independent`]
+component, clients can only receive events and messages marked as independent via [`ServerMessageAppExt::make_message_independent`]
 or [`ServerEventAppExt::make_event_independent`]. Additionally, some components on connected clients are only present
 after replication starts. See the required components for [`AuthorizedClient`] for details.
 
@@ -645,7 +642,7 @@ See the [`compact_entity`] module if you want to apply this optimization to enti
 
 # Eventual consistency
 
-All events, inserts, removals and despawns will be applied to clients in the same order as on the server.
+All events, messages, inserts, removals and despawns will be applied to clients in the same order as on the server.
 
 However, if you insert/mutate a component and immediately remove it, the client will only receive the removal because the component value
 won't exist in the [`World`] during the replication process. But removal followed by insertion will work as expected since we buffer removals.
@@ -657,7 +654,7 @@ then the client is guaranteed to see the spawns at the same tick, but the compon
 If a component is dependent on other data, mutations to the component will only be applied to the client when that data has arrived.
 So if your component references another entity, mutations to that component will only be applied when the referenced entity has been spawned on the client.
 
-Mutations for despawned entities will be discarded automatically, but events or components may reference despawned entities and should be handled with that in mind.
+Mutations for despawned entities will be discarded automatically, but events, messages or components may reference despawned entities and should be handled with that in mind.
 
 Clients should never assume their world state is the same as the server's on any given tick value-wise.
 World state on the client is only "eventually consistent" with the server's.
