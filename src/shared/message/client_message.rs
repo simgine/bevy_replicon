@@ -211,6 +211,10 @@ impl ClientMessage {
         self.reader_id
     }
 
+    #[allow(
+        clippy::wrong_self_convention,
+        reason = "`from` stands for `FromClients`"
+    )]
     pub(crate) fn from_messages_id(&self) -> ComponentId {
         self.from_messages_id
     }
