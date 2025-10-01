@@ -4,7 +4,8 @@ use bevy::prelude::*;
 
 /// Unique client ID for the current session.
 ///
-/// Used for [`ToClients`](super::event::server_event::ToClients) and [`FromClient`](super::event::client_event::FromClient) events.
+/// Used for [`ToClients`](super::message::server_message::ToClients) and
+/// [`FromClient`](super::message::client_message::FromClient).
 ///
 /// See also [`NetworkId`](super::backend::connected_client::NetworkId) for a persistent identifier.
 #[derive(Reflect, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]

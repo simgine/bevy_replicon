@@ -21,7 +21,7 @@ use log::debug;
 /// Channel IDs are represented by [`usize`], but backends may limit the number of channels.
 /// See [`ServerChannel`] and [`ClientChannel`] for channels that are always reserved.
 /// Other channels are used for events, with one channel per event. For more details, see
-/// [`RemoteEventRegistry`](crate::shared::event::registry::RemoteEventRegistry).
+/// [`RemoteMessageRegistry`](crate::shared::message::registry::RemoteMessageRegistry).
 ///
 /// The backend needs to provide an API for creating its own channels. This can be done
 /// by writing an extension trait for this struct. Created channels should have the defined
@@ -123,7 +123,7 @@ impl RepliconChannels {
 /// [`SyncRelatedAppExt::sync_related_entities`](crate::server::related_entities::SyncRelatedAppExt::sync_related_entities).
 ///
 /// Server events also have minimum required tick. For details, see the documentation on
-/// [`ServerMessageAppExt::make_message_independent`](crate::shared::event::server_event::ServerMessageAppExt::make_message_independent).
+/// [`ServerMessageAppExt::make_message_independent`](crate::shared::message::server_message::ServerMessageAppExt::make_message_independent).
 ///
 /// See also [`RepliconChannels`], [`Channel`] and [corresponding section](../index.html#eventual-consistency)
 /// from the quick start guide.

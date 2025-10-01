@@ -53,7 +53,7 @@ pub trait ClientEventAppExt {
 
     /// Same as [`Self::add_client_event`], but uses the specified functions for serialization and deserialization.
     ///
-    /// See also [`ClientMessageAppExt::add_client_event_with`].
+    /// See also [`ClientMessageAppExt::add_client_message_with`].
     fn add_client_event_with<E: Event>(
         &mut self,
         channel: Channel,
