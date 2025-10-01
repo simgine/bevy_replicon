@@ -9,7 +9,7 @@ use super::{
     client_event::{self, ClientEvent},
     ctx::{ClientSendCtx, ServerReceiveCtx},
     event_fns::{EventDeserializeFn, EventFns, EventSerializeFn},
-    remote_event_registry::RemoteEventRegistry,
+    registry::RemoteEventRegistry,
     remote_targets::RemoteTargets,
 };
 use crate::{postcard_utils, prelude::*};

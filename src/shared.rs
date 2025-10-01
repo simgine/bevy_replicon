@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
-use event::remote_event_registry::RemoteEventRegistry;
+use event::registry::RemoteEventRegistry;
 use replication::signature::SignatureMap;
 use replication::{
     command_markers::CommandMarkers, registry::ReplicationRegistry, rules::ReplicationRules,

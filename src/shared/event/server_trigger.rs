@@ -8,7 +8,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
     event_fns::{EventDeserializeFn, EventFns, EventSerializeFn},
-    remote_event_registry::RemoteEventRegistry,
+    registry::RemoteEventRegistry,
     remote_targets::RemoteTargets,
     server_event::{self, ServerEvent},
 };

@@ -6,9 +6,7 @@ use bevy::{
 };
 use bevy_replicon::{
     prelude::*,
-    shared::{
-        event::remote_event_registry::RemoteEventRegistry, server_entity_map::ServerEntityMap,
-    },
+    shared::{event::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};

@@ -12,7 +12,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use super::{
     ctx::{ClientSendCtx, ServerReceiveCtx},
     event_fns::{EventDeserializeFn, EventFns, EventSerializeFn, UntypedEventFns},
-    remote_event_registry::RemoteEventRegistry,
+    registry::RemoteEventRegistry,
 };
 use crate::{postcard_utils, prelude::*};
 

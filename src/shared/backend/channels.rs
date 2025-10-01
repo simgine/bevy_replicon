@@ -21,7 +21,7 @@ use log::debug;
 /// Channel IDs are represented by [`usize`], but backends may limit the number of channels.
 /// See [`ServerChannel`] and [`ClientChannel`] for channels that are always reserved.
 /// Other channels are used for events, with one channel per event. For more details, see
-/// [`RemoteEventRegistry`](crate::shared::event::remote_event_registry::RemoteEventRegistry).
+/// [`RemoteEventRegistry`](crate::shared::event::registry::RemoteEventRegistry).
 ///
 /// The backend needs to provide an API for creating its own channels. This can be done
 /// by writing an extension trait for this struct. Created channels should have the defined

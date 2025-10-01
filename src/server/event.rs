@@ -9,7 +9,7 @@ use crate::{
     shared::{
         event::{
             ctx::{ServerReceiveCtx, ServerSendCtx},
-            remote_event_registry::RemoteEventRegistry,
+            registry::RemoteEventRegistry,
             server_event::event_buffer::EventBuffer,
         },
         replication::client_ticks::ClientTicks,

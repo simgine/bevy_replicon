@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rename `client_event_registry` module into `registry`.
+
 ### Added
 
 - `Debug` derive for `FromClient`.
