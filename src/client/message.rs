@@ -7,7 +7,7 @@ use super::ServerUpdateTick;
 use crate::{
     prelude::*,
     shared::{
-        event::{
+        message::{
             ctx::{ClientReceiveCtx, ClientSendCtx},
             registry::RemoteEventRegistry,
         },

@@ -6,9 +6,9 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
-    event_fns::{DeserializeFn, EventFns, SerializeFn},
+    message_fns::{DeserializeFn, EventFns, SerializeFn},
     registry::RemoteEventRegistry,
-    server_event::{self, ServerEvent},
+    server_message::{self, ServerEvent},
 };
 use crate::prelude::*;
 
@@ -31,8 +31,8 @@ pub trait ServerTriggerAppExt {
     ) -> &mut Self {
         self.add_server_trigger_with(
             channel,
-            server_event::default_serialize::<E>,
-            server_event::default_deserialize::<E>,
+            server_message::default_serialize::<E>,
+            server_message::default_deserialize::<E>,
         )
     }
 
@@ -49,8 +49,8 @@ pub trait ServerTriggerAppExt {
     ) -> &mut Self {
         self.add_server_trigger_with(
             channel,
-            server_event::default_serialize::<E>,
-            server_event::default_deserialize_mapped::<E>,
+            server_message::default_serialize::<E>,
+            server_message::default_deserialize_mapped::<E>,
         )
     }
 

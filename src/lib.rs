@@ -715,10 +715,10 @@ pub mod prelude {
                 server_messages::ServerMessages,
             },
             client_id::ClientId,
-            event::{
-                client_event::{ClientEventAppExt, FromClient},
+            message::{
+                client_message::{ClientEventAppExt, FromClient},
                 client_trigger::{ClientTriggerAppExt, ClientTriggerExt},
-                server_event::{SendMode, ServerEventAppExt, ToClients},
+                server_message::{SendMode, ServerEventAppExt, ToClients},
                 server_trigger::{ServerTriggerAppExt, ServerTriggerExt},
             },
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
@@ -735,13 +735,13 @@ pub mod prelude {
 
     #[cfg(feature = "client")]
     pub use super::client::{
-        ClientPlugin, ClientReplicationStats, ClientSystems, event::ClientEventPlugin,
+        ClientPlugin, ClientReplicationStats, ClientSystems, message::ClientEventPlugin,
     };
 
     #[cfg(feature = "server")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, VisibilityPolicy,
-        client_visibility::ClientVisibility, event::ServerEventPlugin,
+        client_visibility::ClientVisibility, message::ServerEventPlugin,
         related_entities::SyncRelatedAppExt,
     };
 

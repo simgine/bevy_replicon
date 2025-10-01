@@ -1,5 +1,5 @@
-pub(crate) mod event_buffer;
-mod event_queue;
+pub(crate) mod message_buffer;
+mod message_queue;
 
 use core::any::{self, TypeId};
 
@@ -15,12 +15,12 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
     ctx::{ClientReceiveCtx, ServerSendCtx},
-    event_fns::{DeserializeFn, EventFns, SerializeFn, UntypedEventFns},
+    message_fns::{DeserializeFn, EventFns, SerializeFn, UntypedEventFns},
     registry::RemoteEventRegistry,
 };
 use crate::{postcard_utils, prelude::*};
-use event_buffer::{EventBuffer, SerializedMessage};
-use event_queue::EventQueue;
+use message_buffer::{EventBuffer, SerializedMessage};
+use message_queue::EventQueue;
 
 /// An extension trait for [`App`] for creating server events.
 ///

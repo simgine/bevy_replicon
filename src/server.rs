@@ -1,5 +1,5 @@
 pub mod client_visibility;
-pub mod event;
+pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
 pub(super) mod replication_messages;
@@ -29,7 +29,7 @@ use crate::{
     prelude::*,
     shared::{
         backend::channels::ClientChannel,
-        event::server_event::event_buffer::EventBuffer,
+        message::server_message::message_buffer::EventBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityBuffer},
             registry::{

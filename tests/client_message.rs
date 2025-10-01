@@ -1,7 +1,7 @@
 use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
     prelude::*,
-    shared::{event::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
+    shared::{message::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};

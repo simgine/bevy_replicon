@@ -3,7 +3,7 @@ use bevy_replicon::{
     client::ServerUpdateTick,
     prelude::*,
     server::server_tick::ServerTick,
-    shared::{event::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
+    shared::{message::registry::RemoteEventRegistry, server_entity_map::ServerEntityMap},
     test_app::{ServerTestAppExt, TestClientEntity},
 };
 use serde::{Deserialize, Serialize};

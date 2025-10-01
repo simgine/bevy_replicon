@@ -7,10 +7,10 @@ use super::server_tick::ServerTick;
 use crate::{
     prelude::*,
     shared::{
-        event::{
+        message::{
             ctx::{ServerReceiveCtx, ServerSendCtx},
             registry::RemoteEventRegistry,
-            server_event::event_buffer::EventBuffer,
+            server_message::message_buffer::EventBuffer,
         },
         replication::client_ticks::ClientTicks,
     },

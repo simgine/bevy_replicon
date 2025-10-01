@@ -1,6 +1,6 @@
 pub mod backend;
 pub mod client_id;
-pub mod event;
+pub mod message;
 pub mod protocol;
 pub mod replication;
 pub mod replicon_tick;
@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
-use event::registry::RemoteEventRegistry;
+use message::registry::RemoteEventRegistry;
 use replication::signature::SignatureMap;
 use replication::{
     command_markers::CommandMarkers, registry::ReplicationRegistry, rules::ReplicationRules,

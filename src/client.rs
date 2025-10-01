@@ -1,7 +1,7 @@
 pub mod confirm_history;
 #[cfg(feature = "client_diagnostics")]
 pub mod diagnostics;
-pub mod event;
+pub mod message;
 pub mod server_mutate_ticks;
 
 use bevy::prelude::*;

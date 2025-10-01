@@ -3,7 +3,7 @@ use core::any::TypeId;
 use bevy::prelude::*;
 
 use super::{
-    client_event::ClientEvent, client_trigger::ClientTrigger, server_event::ServerEvent,
+    client_message::ClientEvent, client_trigger::ClientTrigger, server_message::ServerEvent,
     server_trigger::ServerTrigger,
 };
 

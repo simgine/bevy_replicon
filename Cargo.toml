@@ -88,7 +88,7 @@ name = "mutations"
 required-features = ["client", "server"]
 
 [[test]]
-name = "client_event"
+name = "client_message"
 required-features = ["client", "server"]
 
 [[test]]
@@ -120,7 +120,7 @@ name = "scene"
 required-features = ["scene"]
 
 [[test]]
-name = "server_event"
+name = "server_message"
 required-features = ["client", "server"]
 
 [[test]]

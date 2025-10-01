@@ -1,7 +1,7 @@
-pub mod client_event;
+pub mod client_message;
 pub mod client_trigger;
 pub mod ctx;
-pub mod event_fns;
+pub mod message_fns;
 pub mod registry;
-pub mod server_event;
+pub mod server_message;
 pub mod server_trigger;
