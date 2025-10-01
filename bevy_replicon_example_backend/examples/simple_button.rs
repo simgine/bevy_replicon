@@ -4,7 +4,7 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 
-use bevy::prelude::*;
+use bevy::{ecs::entity::MapEntities, prelude::*};
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use clap::Parser;
@@ -21,7 +21,7 @@ fn main() {
         .replicate::<UiRoot>()
         .replicate::<ToggleButton>()
         .replicate_filtered::<ChildOf, With<ToggleButton>>() // Replicate parent only for `ToggleButton`.
-        .add_client_event::<RemoteToggle>(Channel::Unordered)
+        .add_mapped_client_event::<RemoteToggle>(Channel::Unordered)
         .add_observer(init_toggle_button)
         .add_observer(trigger_remote_toggle)
         .add_observer(apply_remote_toggle)
@@ -208,7 +208,8 @@ struct UiRoot;
 struct ToggleButton(bool);
 
 /// Toggles the buttons it targets.
-#[derive(EntityEvent, Serialize, Deserialize)]
+#[derive(EntityEvent, MapEntities, Serialize, Deserialize, Clone, Copy)]
 struct RemoteToggle {
+    #[entities]
     entity: Entity,
 }
