@@ -85,7 +85,7 @@ fn one_message() {
         .unwrap();
     component.0 = true;
 
-    // Clear previous events.
+    // Clear previous messages.
     client_app
         .world_mut()
         .resource_mut::<Messages<MutateTickReceived>>()

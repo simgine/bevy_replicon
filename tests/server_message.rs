@@ -17,13 +17,13 @@ fn channels() {
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
-    .add_message::<NonRemoteEvent>()
-    .add_server_message::<TestEvent>(Channel::Ordered)
+    .add_message::<NonRemote>()
+    .add_server_message::<Test>(Channel::Ordered)
     .finish();
 
     let registry = app.world().resource::<RemoteMessageRegistry>();
-    assert_eq!(registry.server_channel::<NonRemoteEvent>(), None);
-    assert_eq!(registry.server_channel::<TestEvent>(), Some(3));
+    assert_eq!(registry.server_channel::<NonRemote>(), None);
+    assert_eq!(registry.server_channel::<Test>(), Some(3));
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn regular() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -52,7 +52,7 @@ fn regular() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            message: TestEvent,
+            message: Test,
         });
 
         server_app.update();
@@ -60,7 +60,7 @@ fn regular() {
         client_app.update();
         server_app.exchange_with_client(&mut client_app);
 
-        let mut messages = client_app.world_mut().resource_mut::<Messages<TestEvent>>();
+        let mut messages = client_app.world_mut().resource_mut::<Messages<Test>>();
         assert_eq!(
             messages.drain().count(),
             messages_count,
@@ -79,7 +79,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_server_message::<EntityEvent>(Channel::Ordered)
+        .add_mapped_server_message::<WithEntity>(Channel::Ordered)
         .finish();
     }
 
@@ -89,7 +89,7 @@ fn mapped() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: EntityEvent(server_entity),
+        message: WithEntity(server_entity),
     });
 
     server_app.update();
@@ -105,9 +105,9 @@ fn mapped() {
 
     let mapped_entities: Vec<_> = client_app
         .world_mut()
-        .resource_mut::<Messages<EntityEvent>>()
+        .resource_mut::<Messages<WithEntity>>()
         .drain()
-        .map(|event| event.0)
+        .map(|m| m.0)
         .collect();
     assert_eq!(mapped_entities, [client_entity]);
 }
@@ -126,7 +126,7 @@ fn without_plugins() {
                 .disable::<ClientPlugin>()
                 .disable::<ClientMessagePlugin>(),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -137,13 +137,13 @@ fn without_plugins() {
                 .disable::<ServerPlugin>()
                 .disable::<ServerMessagePlugin>(),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
 
     server_app.connect_client(&mut client_app);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    for (mode, events_count) in [
+    for (mode, messages_count) in [
         (SendMode::Broadcast, 1),
         (SendMode::Direct(ClientId::Server), 0),
         (SendMode::Direct(client.into()), 1),
@@ -152,7 +152,7 @@ fn without_plugins() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            message: TestEvent,
+            message: Test,
         });
 
         server_app.update();
@@ -160,11 +160,11 @@ fn without_plugins() {
         client_app.update();
         server_app.exchange_with_client(&mut client_app);
 
-        let mut messages = client_app.world_mut().resource_mut::<Messages<TestEvent>>();
+        let mut messages = client_app.world_mut().resource_mut::<Messages<Test>>();
         assert_eq!(
             messages.drain().count(),
-            events_count,
-            "message should be received {events_count} times for {mode:?}"
+            messages_count,
+            "message should be received {messages_count} times for {mode:?}"
         );
     }
 }
@@ -177,7 +177,7 @@ fn local_resending() {
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
-    .add_server_message::<TestEvent>(Channel::Ordered)
+    .add_server_message::<Test>(Channel::Ordered)
     .finish();
 
     const CLIENT_ENTITY: Entity = Entity::from_raw_u32(1).unwrap();
@@ -191,15 +191,15 @@ fn local_resending() {
     ] {
         app.world_mut().write_message(ToClients {
             mode,
-            message: TestEvent,
+            message: Test,
         });
 
         app.update();
 
-        let server_messages = app.world().resource::<Messages<ToClients<TestEvent>>>();
+        let server_messages = app.world().resource::<Messages<ToClients<Test>>>();
         assert!(server_messages.is_empty());
 
-        let mut messages = app.world_mut().resource_mut::<Messages<TestEvent>>();
+        let mut messages = app.world_mut().resource_mut::<Messages<Test>>();
         assert_eq!(
             messages.drain().count(),
             messages_count,
@@ -214,7 +214,7 @@ fn server_buffering() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_server_message::<TestEvent>(Channel::Ordered)
+            .add_server_message::<Test>(Channel::Ordered)
             .finish();
     }
 
@@ -222,7 +222,7 @@ fn server_buffering() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
 
     server_app.update();
@@ -230,7 +230,7 @@ fn server_buffering() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty(), "message should be buffered on server");
 
     // Trigger replication.
@@ -244,7 +244,7 @@ fn server_buffering() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert_eq!(messages.len(), 1);
 }
 
@@ -258,7 +258,7 @@ fn client_queue() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -272,28 +272,28 @@ fn client_queue() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    // Artificially reset the update tick to force the next received event to be queued.
+    // Artificially reset the update tick to force the next received message to be queued.
     let mut update_tick = client_app.world_mut().resource_mut::<ServerUpdateTick>();
     let previous_tick = *update_tick;
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 
-    // Restore the update tick to receive the event.
+    // Restore the update tick to receive the message.
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = previous_tick;
 
     client_app.update();
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert_eq!(messages.len(), 1);
 }
 
@@ -307,7 +307,7 @@ fn client_queue_and_mapping() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_server_message::<EntityEvent>(Channel::Ordered)
+        .add_mapped_server_message::<WithEntity>(Channel::Ordered)
         .finish();
     }
 
@@ -321,23 +321,23 @@ fn client_queue_and_mapping() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    // Artificially reset the update tick to force the next received event to be queued.
+    // Artificially reset the update tick to force the next received message to be queued.
     let mut update_tick = client_app.world_mut().resource_mut::<ServerUpdateTick>();
     let previous_tick = *update_tick;
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: EntityEvent(server_entity),
+        message: WithEntity(server_entity),
     });
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let events = client_app.world().resource::<Messages<EntityEvent>>();
-    assert!(events.is_empty());
+    let messages = client_app.world().resource::<Messages<WithEntity>>();
+    assert!(messages.is_empty());
 
-    // Restore the update tick to receive the event.
+    // Restore the update tick to receive the message.
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = previous_tick;
 
     client_app.update();
@@ -351,9 +351,9 @@ fn client_queue_and_mapping() {
 
     let mapped_entities: Vec<_> = client_app
         .world_mut()
-        .resource_mut::<Messages<EntityEvent>>()
+        .resource_mut::<Messages<WithEntity>>()
         .drain()
-        .map(|event| event.0)
+        .map(|m| m.0)
         .collect();
     assert_eq!(mapped_entities, [client_entity]);
 }
@@ -368,8 +368,8 @@ fn multiple_client_queues() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
-        .add_server_message::<EntityEvent>(Channel::Ordered) // Use as a regular event with a different serialization size.
+        .add_server_message::<Test>(Channel::Ordered)
+        .add_server_message::<WithEntity>(Channel::Ordered) // Use as a regular message with a different serialization size.
         .finish();
     }
 
@@ -383,38 +383,38 @@ fn multiple_client_queues() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    // Artificially reset the update tick to force the next received event to be queued.
+    // Artificially reset the update tick to force the next received message to be queued.
     let mut update_tick = client_app.world_mut().resource_mut::<ServerUpdateTick>();
     let previous_tick = *update_tick;
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: EntityEvent(Entity::PLACEHOLDER),
+        message: WithEntity(Entity::PLACEHOLDER),
     });
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 
-    let mapped_messages = client_app.world().resource::<Messages<EntityEvent>>();
+    let mapped_messages = client_app.world().resource::<Messages<WithEntity>>();
     assert!(mapped_messages.is_empty());
 
-    // Restore the update tick to receive the event.
+    // Restore the update tick to receive the message.
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = previous_tick;
 
     client_app.update();
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert_eq!(messages.len(), 1);
 
-    let mapped_messages = client_app.world().resource::<Messages<EntityEvent>>();
+    let mapped_messages = client_app.world().resource::<Messages<WithEntity>>();
     assert_eq!(mapped_messages.len(), 1);
 }
 
@@ -428,9 +428,9 @@ fn independent() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
-        .add_server_message::<IndependentEvent>(Channel::Ordered)
-        .make_message_independent::<IndependentEvent>()
+        .add_server_message::<Test>(Channel::Ordered)
+        .add_server_message::<Independent>(Channel::Ordered)
+        .make_message_independent::<Independent>()
         .finish();
     }
 
@@ -445,8 +445,8 @@ fn independent() {
     server_app.exchange_with_client(&mut client_app);
 
     // Artificially reset the update tick.
-    // Normal events would be queued and not triggered yet,
-    // but our independent event should be triggered immediately.
+    // Normal messages would be queued and not triggered yet,
+    // but our independent message should be triggered immediately.
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = Default::default();
 
     let client = **client_app.world().resource::<TestClientEntity>();
@@ -459,11 +459,11 @@ fn independent() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            message: TestEvent,
+            message: Test,
         });
         server_app.world_mut().write_message(ToClients {
             mode,
-            message: IndependentEvent,
+            message: Independent,
         });
 
         server_app.update();
@@ -471,14 +471,14 @@ fn independent() {
         client_app.update();
         server_app.exchange_with_client(&mut client_app);
 
-        let messages = client_app.world().resource::<Messages<TestEvent>>();
+        let messages = client_app.world().resource::<Messages<Test>>();
         assert!(messages.is_empty());
 
         // Message should have already been triggered, even without resetting the tick,
         // since it's independent.
         let mut independent_messages = client_app
             .world_mut()
-            .resource_mut::<Messages<IndependentEvent>>();
+            .resource_mut::<Messages<Independent>>();
         assert_eq!(
             independent_messages.drain().count(),
             messages_count,
@@ -501,7 +501,7 @@ fn before_started_replication() {
                     auth_method: AuthMethod::Custom,
                 }),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -515,7 +515,7 @@ fn before_started_replication() {
     ] {
         server_app.world_mut().write_message(ToClients {
             mode,
-            message: TestEvent,
+            message: Test,
         });
     }
 
@@ -524,7 +524,7 @@ fn before_started_replication() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 }
 
@@ -542,9 +542,9 @@ fn independent_before_started_replication() {
                     auth_method: AuthMethod::Custom,
                 }),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
-        .add_server_message::<IndependentEvent>(Channel::Ordered)
-        .make_message_independent::<IndependentEvent>()
+        .add_server_message::<Test>(Channel::Ordered)
+        .add_server_message::<Independent>(Channel::Ordered)
+        .make_message_independent::<Independent>()
         .finish();
     }
 
@@ -555,11 +555,11 @@ fn independent_before_started_replication() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: IndependentEvent,
+        message: Independent,
     });
 
     server_app.update();
@@ -567,10 +567,10 @@ fn independent_before_started_replication() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 
-    let independent_messages = client_app.world().resource::<Messages<IndependentEvent>>();
+    let independent_messages = client_app.world().resource::<Messages<Independent>>();
     assert_eq!(independent_messages.len(), 1);
 }
 
@@ -585,7 +585,7 @@ fn different_ticks() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -607,32 +607,32 @@ fn different_ticks() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
 
-    // If any client does not have a replicon tick >= the update tick associated with this event,
-    // then they will not receive the event until their replicon tick is updated.
+    // If any client does not have a replicon tick >= the update tick associated with this message,
+    // then they will not receive the message until their replicon tick is updated.
     server_app.update();
     server_app.exchange_with_client(&mut client_app1);
     server_app.exchange_with_client(&mut client_app2);
     client_app1.update();
     client_app2.update();
 
-    let messages1 = client_app1.world().resource::<Messages<TestEvent>>();
+    let messages1 = client_app1.world().resource::<Messages<Test>>();
     assert_eq!(messages1.len(), 1);
 
-    let messages2 = client_app2.world().resource::<Messages<TestEvent>>();
+    let messages2 = client_app2.world().resource::<Messages<Test>>();
     assert_eq!(messages2.len(), 1);
 }
 
 #[derive(Message)]
-struct NonRemoteEvent;
+struct NonRemote;
 
 #[derive(Message, Serialize, Deserialize)]
-struct TestEvent;
+struct Test;
 
 #[derive(Message, Serialize, Deserialize)]
-struct IndependentEvent;
+struct Independent;
 
 #[derive(Message, Serialize, Deserialize, MapEntities)]
-struct EntityEvent(#[entities] Entity);
+struct WithEntity(#[entities] Entity);

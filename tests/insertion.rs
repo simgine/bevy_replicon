@@ -589,7 +589,7 @@ fn confirm_history() {
 
     server_app.world_mut().entity_mut(server_entity).insert(A);
 
-    // Clear previous events.
+    // Clear previous messages.
     client_app
         .world_mut()
         .resource_mut::<Messages<EntityReplicated>>()

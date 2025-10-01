@@ -416,7 +416,7 @@ fn confirm_history() {
         .entity_mut(server_entity)
         .remove::<A>();
 
-    // Clear previous events.
+    // Clear previous messages.
     client_app
         .world_mut()
         .resource_mut::<Messages<EntityReplicated>>()
@@ -434,16 +434,12 @@ fn confirm_history() {
         .unwrap();
     assert!(confirm_history.contains(tick));
 
-    let mut replicated_events = client_app
+    let mut replicated = client_app
         .world_mut()
         .resource_mut::<Messages<EntityReplicated>>();
-    let [event] = replicated_events
-        .drain()
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
-    assert_eq!(event.entity, client_entity);
-    assert_eq!(event.tick, tick);
+    let [replicated] = replicated.drain().collect::<Vec<_>>().try_into().unwrap();
+    assert_eq!(replicated.entity, client_entity);
+    assert_eq!(replicated.tick, tick);
 }
 
 #[test]

@@ -11,20 +11,20 @@ fn regular() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_client_event::<TestEvent>(Channel::Ordered)
+            .add_client_event::<Test>(Channel::Ordered)
             .finish();
     }
-    server_app.init_resource::<TriggerReader<TestEvent>>();
+    server_app.init_resource::<EventReader<Test>>();
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().client_trigger(TestEvent);
+    client_app.world_mut().client_trigger(Test);
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let reader = server_app.world().resource::<TriggerReader<TestEvent>>();
+    let reader = server_app.world().resource::<EventReader<Test>>();
     assert_eq!(reader.events.len(), 1);
 }
 
@@ -38,10 +38,10 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_client_event::<EntityEvent>(Channel::Ordered)
+        .add_mapped_client_event::<WithEntity>(Channel::Ordered)
         .finish();
     }
-    server_app.init_resource::<TriggerReader<EntityEvent>>();
+    server_app.init_resource::<EventReader<WithEntity>>();
 
     server_app.connect_client(&mut client_app);
 
@@ -60,13 +60,13 @@ fn mapped() {
 
     client_app
         .world_mut()
-        .client_trigger(EntityEvent(client_entity));
+        .client_trigger(WithEntity(client_entity));
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let reader = server_app.world().resource::<TriggerReader<EntityEvent>>();
+    let reader = server_app.world().resource::<EventReader<WithEntity>>();
     let mapped_entities: Vec<_> = reader.events.iter().map(|event| event.0).collect();
     assert_eq!(mapped_entities, [server_entity]);
 }
@@ -84,7 +84,7 @@ fn without_plugins() {
                 .disable::<ClientPlugin>()
                 .disable::<ClientMessagePlugin>(),
         ))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_event::<Test>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -95,19 +95,19 @@ fn without_plugins() {
                 .disable::<ServerPlugin>()
                 .disable::<ServerMessagePlugin>(),
         ))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_event::<Test>(Channel::Ordered)
         .finish();
-    server_app.init_resource::<TriggerReader<TestEvent>>();
+    server_app.init_resource::<EventReader<Test>>();
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().client_trigger(TestEvent);
+    client_app.world_mut().client_trigger(Test);
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let reader = server_app.world().resource::<TriggerReader<TestEvent>>();
+    let reader = server_app.world().resource::<EventReader<Test>>();
     assert_eq!(reader.events.len(), 1);
 }
 
@@ -115,33 +115,33 @@ fn without_plugins() {
 fn local_resending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_event::<Test>(Channel::Ordered)
         .finish();
-    app.init_resource::<TriggerReader<TestEvent>>();
+    app.init_resource::<EventReader<Test>>();
 
-    app.world_mut().client_trigger(TestEvent);
+    app.world_mut().client_trigger(Test);
 
     // Requires 2 updates because local resending runs
     // in `PostUpdate` and triggering runs in `PreUpdate`.
     app.update();
     app.update();
 
-    let reader = app.world().resource::<TriggerReader<TestEvent>>();
+    let reader = app.world().resource::<EventReader<Test>>();
     assert_eq!(reader.events.len(), 1);
 }
 
 #[derive(Deserialize, Event, Serialize, Clone)]
-struct TestEvent;
+struct Test;
 
 #[derive(Deserialize, Event, Serialize, Clone, MapEntities)]
-struct EntityEvent(#[entities] Entity);
+struct WithEntity(#[entities] Entity);
 
 #[derive(Resource)]
-struct TriggerReader<E: Event> {
+struct EventReader<E: Event> {
     events: Vec<FromClient<E>>,
 }
 
-impl<E: Event + Clone> FromWorld for TriggerReader<E> {
+impl<E: Event + Clone> FromWorld for EventReader<E> {
     fn from_world(world: &mut World) -> Self {
         world.add_observer(|on: On<FromClient<E>>, mut reader: ResMut<Self>| {
             reader.events.push(on.event().clone());
