@@ -126,7 +126,7 @@ impl ConfirmHistory {
     }
 }
 
-/// Sent for an entity when it receives updates for a tick.
+/// A message that indicates that an entity received update for a tick.
 ///
 /// See also [`ConfirmHistory`].
 #[derive(Message, Debug, Clone, Copy)]

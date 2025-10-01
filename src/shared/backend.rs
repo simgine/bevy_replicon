@@ -7,7 +7,7 @@
 //! - Manage the [`ClientState`] and [`ServerState`] states.
 //! - Update the [`ServerMessages`](server_messages::ServerMessages) and [`ClientMessages`](client_messages::ClientMessages) resources.
 //! - Spawn and despawn entities with [`ConnectedClient`](connected_client::ConnectedClient) component.
-//! - React on [`DisconnectRequest`] event.
+//! - React on [`DisconnectRequest`] message.
 //! - Optionally update statistic in [`ClientStats`] resource and components.
 //!
 //! This way, integrations can be provided as separate crates without requiring us or crate authors to maintain them under a feature.
@@ -65,7 +65,7 @@ pub enum ServerState {
     Running,
 }
 
-/// An event for the messaging backend to queue a disconnection
+/// A request for the messaging backend to queue a disconnection
 /// for a specific client on the server.
 ///
 /// The disconnection should occur **after** all pending messages

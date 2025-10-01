@@ -189,7 +189,7 @@ impl TickMessages {
     }
 }
 
-/// Sent when all mutate messages are received for a tick.
+/// A message that indicates that all mutate messages are received for a tick.
 ///
 /// See also [`ServerMutateTicks`].
 #[derive(Message, Debug, Clone, Copy)]
