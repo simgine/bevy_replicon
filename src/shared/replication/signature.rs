@@ -201,7 +201,7 @@ impl Signature {
         }
     }
 
-    /// Trigger to ask server to spawn a projectile.
+    /// Request to spawn a projectile.
     #[derive(Event, Serialize, Deserialize)]
     struct SpawnFireball;
 

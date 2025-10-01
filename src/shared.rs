@@ -87,7 +87,7 @@ pub struct RepliconSharedPlugin {
         commands.entity(client).insert(AuthorizedClient);
     }
 
-    /// A client trigger for custom authorization.
+    /// A client event for custom authorization.
     #[derive(Event, Serialize, Deserialize)]
     struct ClientInfo {
         protocol: ProtocolHash,

@@ -34,7 +34,7 @@ fn main() {
         .init_resource::<SymbolFont>()
         .init_resource::<TurnSymbol>()
         .replicate::<Symbol>()
-        .add_client_event::<CellPick>(Channel::Ordered)
+        .add_client_event::<PickCell>(Channel::Ordered)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_observer(disconnect_by_client)
         .add_observer(init_client)
@@ -235,14 +235,14 @@ fn pick_cell(
     // We don't check if a cell can't be picked on client on purpose
     // just to demonstrate how server can receive invalid requests from a client.
     info!("picking cell {}", cell.index);
-    commands.client_trigger(CellPick { index: cell.index });
+    commands.client_trigger(PickCell { index: cell.index });
 }
 
 /// Handles cell pick events.
 ///
 /// Used only for single-player and server.
 fn apply_pick(
-    pick: On<FromClient<CellPick>>,
+    pick: On<FromClient<PickCell>>,
     mut commands: Commands,
     cells: Query<(Entity, &Cell), Without<Symbol>>,
     turn_symbol: Res<TurnSymbol>,
@@ -586,11 +586,11 @@ struct LocalPlayer;
 #[require(Replicated, Signature::of::<ClientPlayer>())]
 struct ClientPlayer;
 
-/// A trigger that indicates a symbol pick.
+/// A symbol pick.
 ///
 /// We don't replicate the whole UI, so we can't just send the picked entity because on server it may be different.
 /// So we send the cell location in grid and calculate the entity on server based on this.
-#[derive(Clone, Copy, Deserialize, Event, Serialize)]
-struct CellPick {
+#[derive(Event, Deserialize, Serialize, Clone, Copy)]
+struct PickCell {
     index: usize,
 }

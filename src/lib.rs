@@ -322,7 +322,7 @@ fn receive_events(mut events: EventReader<FromClient<ExampleEvent>>) {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Event, Serialize)]
+#[derive(Event, Default, Debug, Deserialize, Serialize)]
 struct ExampleEvent;
 ```
 
@@ -403,7 +403,7 @@ fn receive_events(mut events: EventReader<ExampleEvent>) {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Event, Serialize)]
+#[derive(Event, Debug, Default, Deserialize, Serialize, Clone, Copy)]
 struct ExampleEvent;
 ```
 

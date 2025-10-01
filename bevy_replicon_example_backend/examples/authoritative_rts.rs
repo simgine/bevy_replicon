@@ -647,13 +647,13 @@ impl FromWorld for UnitMaterials {
     }
 }
 
-/// A trigger to join a specific team for a client.
+/// Request to join a team.
 #[derive(Event, Serialize, Deserialize)]
 struct TeamRequest {
     team: Team,
 }
 
-/// A trigger that spawns a unit at a location.
+/// Request to spawn a unit at a location.
 #[derive(Event, Serialize, Deserialize)]
 struct UnitSpawn {
     position: Vec2,

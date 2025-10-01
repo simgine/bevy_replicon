@@ -137,7 +137,7 @@ enum ProtocolPart {
 #[derive(Resource, Event, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProtocolHash(u64);
 
-/// A server trigger to notify client for the protocol mismatch.
+/// A server event to notify client for the protocol mismatch.
 ///
 /// Registered and sent only if [`RepliconSharedPlugin::auth_method`](super::RepliconSharedPlugin::auth_method)
 /// set to [`AuthMethod::ProtocolCheck`](super::AuthMethod::ProtocolCheck). The server will immediately
