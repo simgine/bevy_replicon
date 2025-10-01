@@ -61,7 +61,7 @@ pub struct RepliconSharedPlugin {
     fn start_game(
         client_info: On<FromClient<ClientInfo>>,
         mut commands: Commands,
-        mut events: EventWriter<DisconnectRequest>,
+        mut disconnects: MessageWriter<DisconnectRequest>,
         protocol: Res<ProtocolHash>,
     ) {
         let client = client_info
@@ -76,9 +76,9 @@ pub struct RepliconSharedPlugin {
             // guarantee, since we disconnect after sending.
             commands.server_trigger(ToClients {
                 mode: SendMode::Direct(client_info.client_id),
-                event: ProtocolMismatch,
+                message: ProtocolMismatch,
             });
-            events.write(DisconnectRequest { client });
+            disconnects.write(DisconnectRequest { client });
         }
 
         // Validate player name, run the necessary game logic...

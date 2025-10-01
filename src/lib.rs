@@ -390,17 +390,17 @@ app.add_server_message::<Pong>(Channel::Ordered)
 fn send(mut pongs: MessageWriter<ToClients<Pong>>) {
     pongs.write(ToClients {
         mode: SendMode::Broadcast,
-        event: Pong,
+        message: Pong,
     });
 }
 
-fn receive(mut pongs: EventReader<Pong>) {
+fn receive(mut pongs: MessageReader<Pong>) {
     for pong in pongs.read() {
         info!("received pong from the server");
     }
 }
 
-#[derive(Event, Deserialize, Serialize)]
+#[derive(Message, Deserialize, Serialize)]
 struct Pong;
 ```
 
@@ -423,7 +423,7 @@ app.add_server_event::<Pong>(Channel::Ordered)
 fn send(mut commands: Commands) {
     commands.server_trigger(ToClients {
         mode: SendMode::Broadcast,
-        event: Pong,
+        message: Pong,
     });
 }
 
