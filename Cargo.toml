@@ -92,7 +92,7 @@ name = "client_message"
 required-features = ["client", "server"]
 
 [[test]]
-name = "client_trigger"
+name = "client_event"
 required-features = ["client", "server"]
 
 [[test]]
@@ -124,7 +124,7 @@ name = "server_message"
 required-features = ["client", "server"]
 
 [[test]]
-name = "server_trigger"
+name = "server_event"
 required-features = ["client", "server"]
 
 [[test]]

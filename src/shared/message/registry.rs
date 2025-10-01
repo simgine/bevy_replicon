@@ -3,8 +3,8 @@ use core::any::TypeId;
 use bevy::prelude::*;
 
 use super::{
-    client_message::ClientEvent, client_trigger::ClientTrigger, server_message::ServerEvent,
-    server_trigger::ServerTrigger,
+    client_event::ClientTrigger, client_message::ClientEvent, server_event::ServerTrigger,
+    server_message::ServerEvent,
 };
 
 /// Registered server and client events.
