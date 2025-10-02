@@ -274,6 +274,45 @@ fn multiple_components() {
 }
 
 #[test]
+fn with_old_component() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // Spawn an entity with replicated component.
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    // Insert another replicated component.
+    server_app.world_mut().entity_mut(server_entity).insert(B);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<(&Replicated, &A, &B)>();
+    assert_eq!(components.iter(client_app.world()).count(), 1);
+}
+
+#[test]
 fn command_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();

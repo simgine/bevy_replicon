@@ -65,11 +65,6 @@ impl<'w> ServerWorld<'w, '_> {
         }
     }
 
-    /// ID of the [`Replicated`] component.
-    pub(super) fn marker_id(&self) -> ComponentId {
-        self.state.marker_id
-    }
-
     /// Return iterator over replicated archetypes.
     pub(super) fn iter_archetypes(
         &self,
