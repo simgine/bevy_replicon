@@ -1,28 +1,9 @@
 use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
-    prelude::*,
-    shared::{message::registry::RemoteMessageRegistry, server_entity_map::ServerEntityMap},
-    test_app::ServerTestAppExt,
+    prelude::*, shared::server_entity_map::ServerEntityMap, test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};
 use test_log::test;
-
-#[test]
-fn channels() {
-    let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        StatesPlugin,
-        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-    ))
-    .add_message::<NonRemote>()
-    .add_client_message::<Test>(Channel::Ordered)
-    .finish();
-
-    let registry = app.world().resource::<RemoteMessageRegistry>();
-    assert_eq!(registry.client_channel::<NonRemote>(), None);
-    assert_eq!(registry.client_channel::<Test>(), Some(2));
-}
 
 #[test]
 fn regular() {
@@ -148,9 +129,6 @@ fn local_sending() {
     let client_messages = app.world().resource::<Messages<FromClient<Test>>>();
     assert_eq!(client_messages.len(), 1);
 }
-
-#[derive(Message)]
-struct NonRemote;
 
 #[derive(Deserialize, Message, Serialize)]
 struct Test;

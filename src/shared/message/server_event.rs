@@ -1,4 +1,4 @@
-use core::any;
+use core::any::{self, TypeId};
 
 use bevy::{ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
 use log::debug;
@@ -119,6 +119,7 @@ impl ServerEventAppExt for App {
 
 /// Small abstraction on top of [`ServerEvent`] that stores a function to trigger them.
 pub(crate) struct ServerEvent {
+    type_id: TypeId,
     message: ServerMessage,
     trigger: TriggerFn,
 }
@@ -130,6 +131,7 @@ impl ServerEvent {
         fns: MessageFns<ServerSendCtx, ClientReceiveCtx, ServerTriggerEvent<E>, E>,
     ) -> Self {
         Self {
+            type_id: TypeId::of::<E>(),
             message: ServerMessage::new(app, channel, fns),
             trigger: Self::trigger_typed::<E>,
         }
@@ -159,6 +161,10 @@ impl ServerEvent {
             debug!("triggering `{}`", any::type_name::<E>());
             commands.trigger(message.event);
         }
+    }
+
+    pub(super) fn type_id(&self) -> TypeId {
+        self.type_id
     }
 
     pub(crate) fn message(&self) -> &ServerMessage {

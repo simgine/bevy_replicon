@@ -3,28 +3,11 @@ use bevy_replicon::{
     client::ServerUpdateTick,
     prelude::*,
     server::server_tick::ServerTick,
-    shared::{message::registry::RemoteMessageRegistry, server_entity_map::ServerEntityMap},
+    shared::server_entity_map::ServerEntityMap,
     test_app::{ServerTestAppExt, TestClientEntity},
 };
 use serde::{Deserialize, Serialize};
 use test_log::test;
-
-#[test]
-fn channels() {
-    let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        StatesPlugin,
-        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-    ))
-    .add_message::<NonRemote>()
-    .add_server_message::<Test>(Channel::Ordered)
-    .finish();
-
-    let registry = app.world().resource::<RemoteMessageRegistry>();
-    assert_eq!(registry.server_channel::<NonRemote>(), None);
-    assert_eq!(registry.server_channel::<Test>(), Some(3));
-}
 
 #[test]
 fn regular() {
@@ -624,9 +607,6 @@ fn different_ticks() {
     let messages2 = client_app2.world().resource::<Messages<Test>>();
     assert_eq!(messages2.len(), 1);
 }
-
-#[derive(Message)]
-struct NonRemote;
 
 #[derive(Message, Serialize, Deserialize)]
 struct Test;

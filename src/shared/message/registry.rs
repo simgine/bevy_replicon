@@ -63,25 +63,43 @@ impl RemoteMessageRegistry {
         self.client_events.iter()
     }
 
-    /// Returns registered channel ID for server message or event `E`.
+    /// Returns registered channel ID for server message `M`.
     ///
-    /// See also [`ServerMessageAppExt::add_server_message`](super::server_message::ServerMessageAppExt::add_server_message)
-    /// and [`ServerEventAppExt::add_server_event`](super::server_event::ServerEventAppExt::add_server_event).
-    // TODO: typing
-    pub fn server_channel<E: 'static>(&self) -> Option<usize> {
-        self.iter_all_server()
-            .find(|m| m.type_id() == TypeId::of::<E>())
+    /// See also [`ServerMessageAppExt::add_server_message`](super::server_message::ServerMessageAppExt::add_server_message).
+    pub fn server_message_channel<M: Message>(&self) -> Option<usize> {
+        self.server_messages
+            .iter()
+            .find(|m| m.type_id() == TypeId::of::<M>())
             .map(|m| m.channel_id())
     }
 
-    /// Returns registered channel ID for client message or event `E`.
+    /// Returns registered channel ID for server event `E`.
     ///
-    /// See also [`ClientMessageAppExt::add_client_message`](super::client_message::ClientMessageAppExt::add_client_message)
-    /// and [`ClientEventAppExt::add_client_event`](super::client_event::ClientEventAppExt::add_client_event).
-    // TODO: typing
-    pub fn client_channel<E: 'static>(&self) -> Option<usize> {
-        self.iter_all_client()
-            .find(|event| event.type_id() == TypeId::of::<E>())
-            .map(|event| event.channel_id())
+    /// See also [`ServerEventAppExt::add_server_event`](super::server_event::ServerEventAppExt::add_server_event).
+    pub fn server_event_channel<E: Event>(&self) -> Option<usize> {
+        self.server_events
+            .iter()
+            .find(|e| e.type_id() == TypeId::of::<E>())
+            .map(|e| e.message().channel_id())
+    }
+
+    /// Returns registered channel ID for client message `M`.
+    ///
+    /// See also [`ClientMessageAppExt::add_client_message`](super::client_message::ClientMessageAppExt::add_client_message).
+    pub fn client_message_channel<M: Message>(&self) -> Option<usize> {
+        self.client_messages
+            .iter()
+            .find(|m| m.type_id() == TypeId::of::<M>())
+            .map(|m| m.channel_id())
+    }
+
+    /// Returns registered channel ID for client event `E`.
+    ///
+    /// See also [`ClientEventAppExt::add_client_event`](super::client_event::ClientEventAppExt::add_client_event).
+    pub fn client_event_channel<E: Event>(&self) -> Option<usize> {
+        self.client_events
+            .iter()
+            .find(|e| e.type_id() == TypeId::of::<E>())
+            .map(|e| e.message().channel_id())
     }
 }

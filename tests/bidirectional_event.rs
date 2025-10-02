@@ -1,5 +1,7 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
+use bevy_replicon::{
+    prelude::*, shared::message::registry::RemoteMessageRegistry, test_app::ServerTestAppExt,
+};
 use serde::{Deserialize, Serialize};
 use test_log::test;
 
@@ -13,6 +15,12 @@ fn message() {
             .add_server_message::<Test>(Channel::Ordered)
             .finish();
     }
+
+    let registry = server_app.world().resource::<RemoteMessageRegistry>();
+    assert_eq!(registry.client_message_channel::<Test>(), Some(2));
+    assert_eq!(registry.server_message_channel::<Test>(), Some(3));
+    assert_eq!(registry.client_event_channel::<Test>(), None);
+    assert_eq!(registry.server_event_channel::<Test>(), None);
 
     server_app.connect_client(&mut client_app);
 
@@ -53,6 +61,12 @@ fn event() {
     }
     server_app.init_resource::<EventReader<FromClient<Test>>>();
     client_app.init_resource::<EventReader<Test>>();
+
+    let registry = server_app.world().resource::<RemoteMessageRegistry>();
+    assert_eq!(registry.client_message_channel::<Test>(), None);
+    assert_eq!(registry.server_message_channel::<Test>(), None);
+    assert_eq!(registry.client_event_channel::<Test>(), Some(2));
+    assert_eq!(registry.server_event_channel::<Test>(), Some(3));
 
     server_app.connect_client(&mut client_app);
 

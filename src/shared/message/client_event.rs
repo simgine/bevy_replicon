@@ -1,4 +1,4 @@
-use core::any;
+use core::any::{self, TypeId};
 
 use bevy::{ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
 use log::debug;
@@ -84,6 +84,7 @@ impl ClientEventAppExt for App {
 
 /// Small abstraction on top of [`ClientEvent`] that stores a function to trigger them.
 pub(crate) struct ClientEvent {
+    type_id: TypeId,
     message: ClientMessage,
     trigger: TriggerFn,
 }
@@ -95,6 +96,7 @@ impl ClientEvent {
         fns: MessageFns<ClientSendCtx, ServerReceiveCtx, ClientMessageEvent<E>, E>,
     ) -> Self {
         Self {
+            type_id: TypeId::of::<E>(),
             message: ClientMessage::new(app, channel, fns),
             trigger: Self::trigger_typed::<E>,
         }
@@ -128,6 +130,10 @@ impl ClientEvent {
                 message: message.event,
             });
         }
+    }
+
+    pub(super) fn type_id(&self) -> TypeId {
+        self.type_id
     }
 
     pub(crate) fn message(&self) -> &ClientMessage {
