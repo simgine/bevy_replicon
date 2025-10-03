@@ -10,7 +10,7 @@ use bevy_replicon::{
         },
         server_entity_map::ServerEntityMap,
     },
-    test_app::{ServerTestAppExt, TestClientEntity},
+    test_app::ServerTestAppExt,
 };
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -472,96 +472,6 @@ fn after_removal() {
         1,
         "removal for the old value should also be triggered"
     );
-}
-
-#[test]
-fn before_started_replication() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins
-                .set(RepliconSharedPlugin {
-                    auth_method: AuthMethod::Custom,
-                })
-                .set(ServerPlugin::new(PostUpdate)),
-        ))
-        .replicate::<A>()
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    server_app.world_mut().spawn((Replicated, A));
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(
-        components.iter(client_app.world()).count(),
-        0,
-        "no entities should have been sent to the client"
-    );
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    server_app
-        .world_mut()
-        .entity_mut(client)
-        .insert(AuthorizedClient);
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    assert_eq!(components.iter(client_app.world()).count(), 1);
-}
-
-#[test]
-fn after_started_replication() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins
-                .set(RepliconSharedPlugin {
-                    auth_method: AuthMethod::Custom,
-                })
-                .set(ServerPlugin::new(PostUpdate)),
-        ))
-        .replicate::<A>()
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    let client = **client_app.world().resource::<TestClientEntity>();
-    server_app
-        .world_mut()
-        .entity_mut(client)
-        .insert(AuthorizedClient);
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    server_app.world_mut().spawn((Replicated, A));
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
 #[test]
