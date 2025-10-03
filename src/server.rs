@@ -22,7 +22,7 @@ use bevy::{
     time::common_conditions::on_timer,
 };
 use bytes::Buf;
-use log::{debug, trace};
+use log::{Level, debug, log_enabled, trace};
 
 use crate::{
     postcard_utils,
@@ -186,6 +186,11 @@ impl Plugin for ServerPlugin {
                 app.register_required_components::<ConnectedClient, AuthorizedClient>();
             }
             AuthMethod::Custom => (),
+        }
+
+        if log_enabled!(Level::Debug) {
+            app.add_systems(OnEnter(ServerState::Running), || debug!("running"))
+                .add_systems(OnEnter(ServerState::Stopped), || debug!("stopped"));
         }
     }
 
