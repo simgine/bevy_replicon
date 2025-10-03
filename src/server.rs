@@ -715,7 +715,9 @@ fn collect_changes(
                     continue;
                 }
 
-                if entity_cache.mutation_tick.is_none()
+                let new_entity = entity_cache.mutation_tick.is_none()
+                    || entity_cache.visibility == Visibility::Gained;
+                if new_entity
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
                 {
@@ -731,7 +733,7 @@ fn collect_changes(
                     ticks.set_mutation_tick(entity.id(), change_tick.this_run(), server_tick);
                 }
 
-                if entity_cache.mutation_tick.is_none() && !updates.changed_entity_added() {
+                if new_entity && !updates.changed_entity_added() {
                     trace!(
                         "writing empty `{}` for client `{client_entity}`",
                         entity.id()
@@ -760,7 +762,9 @@ fn should_send_mapping(
         return false;
     }
 
-    signature.is_added() || ticks.mutation_tick(entity).is_none()
+    visibility_state == Visibility::Gained
+        || signature.is_added()
+        || ticks.mutation_tick(entity).is_none()
 }
 
 /// Writes a mapping or re-uses previously written range if exists.
