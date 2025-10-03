@@ -64,7 +64,7 @@ fn with_component() {
 
     server_app.connect_client(&mut client_app);
 
-    server_app.world_mut().spawn((Replicated, A));
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -72,6 +72,32 @@ fn with_component() {
 
     let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<Replicated>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).count(), 0);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(
+        components.iter(client_app.world()).count(),
+        1,
+        "entity should be spawned again"
+    );
 }
 
 #[test]
@@ -146,6 +172,34 @@ fn with_old_component() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    assert_eq!(components.iter(client_app.world()).count(), 1);
+}
+
+#[test]
+fn empty_before_connection() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .finish();
+    }
+
+    // Spawn an entity before client connected.
+    server_app.world_mut().spawn(Replicated);
+
+    server_app.update();
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<&Replicated>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 

@@ -11,7 +11,7 @@ use core::{ops::Range, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::{StorageType, Tick},
+        component::Tick,
         entity::{Entities, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -621,21 +621,6 @@ fn collect_changes(
                 mutations.start_entity();
             }
 
-            // SAFETY: all replicated archetypes have marker component with table storage.
-            let (_, marker_ticks) = unsafe {
-                world.get_component_unchecked(
-                    entity,
-                    archetype.table_id(),
-                    StorageType::Table,
-                    world.marker_id(),
-                )
-            };
-            // If the marker was added in this tick, the entity just started replicating.
-            // It could be a newly spawned entity or an old entity with just-enabled replication,
-            // so we need to include even old components that were registered for replication.
-            let marker_added =
-                marker_ticks.is_added(change_tick.last_run(), change_tick.this_run());
-
             for &(component_rule, storage) in &replicated_archetype.components {
                 let (component_id, component_fns, rule_fns) = registry.get(component_rule.fns_id);
 
@@ -663,7 +648,6 @@ fn collect_changes(
                     }
 
                     if let Some((last_system_tick, last_server_tick)) = entity_cache.mutation_tick
-                        && !marker_added
                         && entity_cache.visibility != Visibility::Gained
                         && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
                     {
@@ -731,7 +715,8 @@ fn collect_changes(
                     continue;
                 }
 
-                let new_entity = marker_added || entity_cache.visibility == Visibility::Gained;
+                let new_entity = entity_cache.mutation_tick.is_none()
+                    || entity_cache.visibility == Visibility::Gained;
                 if new_entity
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
