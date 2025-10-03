@@ -7,27 +7,27 @@ use postcard::experimental::{max_size::MaxSize, serialized_size};
 
 use crate::{postcard_utils, prelude::*, shared::replication::client_ticks::ClientTicks};
 
-/// Caches synchronization-dependent server events until they can be sent with an accurate update tick.
+/// Caches synchronization-dependent server messages until they can be sent with an accurate update tick.
 ///
-/// This exists because replication does not scan the world every tick. If a server event is sent in the same
-/// tick as a spawn and the event references that spawn, then the server event's update tick needs to be synchronized
-/// with that spawn on the client. We buffer the event until the spawn can be detected.
+/// This exists because replication does not scan the world every tick. If a server message is sent in the same
+/// tick as a spawn and the message references that spawn, then the server message's update tick needs to be synchronized
+/// with that spawn on the client. We buffer the message until the spawn can be detected.
 #[derive(Resource, Default)]
-pub(crate) struct EventBuffer {
-    ticks: Vec<TickEvents>,
+pub(crate) struct MessageBuffer {
+    ticks: Vec<TickMessages>,
 
     /// Cached unused sets to avoid reallocations when pushing into the buffer.
     ///
     /// These are cleared before insertion.
-    buffer: Vec<TickEvents>,
+    buffer: Vec<TickMessages>,
 }
 
-impl EventBuffer {
+impl MessageBuffer {
     pub(crate) fn start_tick(&mut self) {
         self.ticks.push(self.buffer.pop().unwrap_or_default());
     }
 
-    fn active_tick(&mut self) -> Option<&mut TickEvents> {
+    fn active_tick(&mut self) -> Option<&mut TickMessages> {
         self.ticks.last_mut()
     }
 
@@ -36,14 +36,14 @@ impl EventBuffer {
             .active_tick()
             .expect("`start_tick` should be called before buffering");
 
-        buffer.events.push(BufferedEvent {
+        buffer.messages.push(BufferedMessage {
             mode,
             channel_id,
             message,
         });
     }
 
-    /// Used to prevent newly-connected clients from receiving old events.
+    /// Used to prevent newly-connected clients from receiving old messages.
     pub(crate) fn exclude_client(&mut self, client: Entity) {
         for set in self.ticks.iter_mut() {
             set.excluded.insert(client);
@@ -56,18 +56,18 @@ impl EventBuffer {
         clients: &Query<(Entity, Option<&ClientTicks>), With<ConnectedClient>>,
     ) -> Result<()> {
         for mut tick in self.ticks.drain(..) {
-            for mut event in tick.events.drain(..) {
-                match event.mode {
+            for mut message in tick.messages.drain(..) {
+                match message.mode {
                     SendMode::Broadcast => {
                         for (client, ticks) in
                             clients.iter().filter(|(e, _)| !tick.excluded.contains(e))
                         {
                             if let Some(ticks) = ticks {
-                                event.send(messages, client, ticks)?;
+                                message.send(messages, client, ticks)?;
                             } else {
                                 debug!(
                                     "ignoring broadcast for channel {} for non-authorized client `{client}`",
-                                    event.channel_id
+                                    message.channel_id
                                 );
                             }
                         }
@@ -81,11 +81,11 @@ impl EventBuffer {
                             }
 
                             if let Some(ticks) = ticks {
-                                event.send(messages, client, ticks)?;
+                                message.send(messages, client, ticks)?;
                             } else {
                                 debug!(
                                     "ignoring broadcast except `{ignored_id}` for channel {} for non-authorized client `{client}`",
-                                    event.channel_id
+                                    message.channel_id
                                 );
                             }
                         }
@@ -96,10 +96,10 @@ impl EventBuffer {
                             && !tick.excluded.contains(&client)
                         {
                             if let Some(ticks) = ticks {
-                                event.send(messages, client, ticks)?;
+                                message.send(messages, client, ticks)?;
                             } else {
                                 error!(
-                                    "ignoring direct event for non-authorized client `{client}`, \
+                                    "ignoring direct message for non-authorized client `{client}`, \
                                          mark it as independent to allow this"
                                 );
                             }
@@ -122,26 +122,26 @@ impl EventBuffer {
 }
 
 #[derive(Default)]
-struct TickEvents {
-    events: Vec<BufferedEvent>,
-    /// Client entities excluded from receiving events in this set because they connected after the events were sent.
+struct TickMessages {
+    messages: Vec<BufferedMessage>,
+    /// Client entities excluded from receiving messages in this set because they connected after the messages were sent.
     excluded: EntityHashSet,
 }
 
-impl TickEvents {
+impl TickMessages {
     fn clear(&mut self) {
-        self.events.clear();
+        self.messages.clear();
         self.excluded.clear();
     }
 }
 
-struct BufferedEvent {
+struct BufferedMessage {
     mode: SendMode,
     channel_id: usize,
     message: SerializedMessage,
 }
 
-impl BufferedEvent {
+impl BufferedMessage {
     fn send(
         &mut self,
         messages: &mut ServerMessages,
@@ -154,7 +154,7 @@ impl BufferedEvent {
     }
 }
 
-/// Cached message for use in [`BufferedEvents`].
+/// Cached message for use in [`MessageBuffer`].
 pub(super) enum SerializedMessage {
     /// A message without serialized tick.
     ///

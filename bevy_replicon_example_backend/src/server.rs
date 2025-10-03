@@ -123,7 +123,7 @@ fn receive_packets(
 
 fn send_packets(
     mut commands: Commands,
-    mut disconnect_events: EventReader<DisconnectRequest>,
+    mut disconnects: MessageReader<DisconnectRequest>,
     mut messages: ResMut<ServerMessages>,
     mut clients: Query<&mut ExampleConnection>,
 ) {
@@ -137,9 +137,9 @@ fn send_packets(
         }
     }
 
-    for event in disconnect_events.read() {
-        debug!("disconnecting client `{}` by request", event.client);
-        commands.entity(event.client).despawn();
+    for disconnect in disconnects.read() {
+        debug!("disconnecting client `{}` by request", disconnect.client);
+        commands.entity(disconnect.client).despawn();
     }
 }
 

@@ -212,11 +212,13 @@ impl<'a, T: Buf> DeFlavor<'a> for BufFlavor<'a, T> {
 
 #[cfg(test)]
 mod tests {
+    use bevy::ecs::entity::{EntityGeneration, EntityRow};
+
     use super::*;
 
     #[test]
     fn entity_without_generation() {
-        let expected_entity = Entity::from_raw(1);
+        let expected_entity = Entity::from_raw_u32(1).unwrap();
         let mut buffer = Vec::new();
         entity_to_extend_mut(&expected_entity, &mut buffer).unwrap();
         assert_eq!(buffer.len(), 1);
@@ -227,7 +229,10 @@ mod tests {
 
     #[test]
     fn entity_with_generation() {
-        let expected_entity = Entity::from_bits(1 | (2 << 32));
+        let expected_entity = Entity::from_row_and_generation(
+            EntityRow::from_raw_u32(1).unwrap(),
+            EntityGeneration::from_bits(1),
+        );
         let mut buffer = Vec::new();
         entity_to_extend_mut(&expected_entity, &mut buffer).unwrap();
         assert_eq!(buffer.len(), 2);

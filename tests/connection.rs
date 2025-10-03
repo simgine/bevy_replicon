@@ -73,10 +73,10 @@ fn protocol_mismatch() {
     let mut client_app = App::new();
     server_app
         .add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-        .add_client_event::<TestEvent>(Channel::Ordered)
+        .add_client_message::<Test>(Channel::Ordered)
         .finish();
     client_app
-        .init_resource::<TriggerCounter<ProtocolMismatch>>()
+        .init_resource::<EventCounter<ProtocolMismatch>>()
         .add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .finish();
 
@@ -89,8 +89,8 @@ fn protocol_mismatch() {
 
     let counter = client_app
         .world()
-        .resource::<TriggerCounter<ProtocolMismatch>>();
-    assert_eq!(counter.triggers, 1);
+        .resource::<EventCounter<ProtocolMismatch>>();
+    assert_eq!(counter.events, 1);
 }
 
 #[test]
@@ -145,23 +145,23 @@ fn network_id_map() {
     assert!(app.world().resource::<NetworkIdMap>().is_empty());
 }
 
-#[derive(Event, Serialize, Deserialize)]
-struct TestEvent;
+#[derive(Message, Serialize, Deserialize)]
+struct Test;
 
 #[derive(Resource)]
-struct TriggerCounter<E: Event> {
-    triggers: usize,
+struct EventCounter<E: Event> {
+    events: usize,
     marker: PhantomData<E>,
 }
 
-impl<E: Event> FromWorld for TriggerCounter<E> {
+impl<E: Event> FromWorld for EventCounter<E> {
     fn from_world(world: &mut World) -> Self {
-        world.add_observer(|_trigger: Trigger<E>, mut counter: ResMut<Self>| {
-            counter.triggers += 1;
+        world.add_observer(|_on: On<E>, mut counter: ResMut<Self>| {
+            counter.events += 1;
         });
 
         Self {
-            triggers: 0,
+            events: 0,
             marker: PhantomData,
         }
     }

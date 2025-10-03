@@ -1,7 +1,7 @@
 pub mod confirm_history;
 #[cfg(feature = "client_diagnostics")]
 pub mod diagnostics;
-pub mod event;
+pub mod message;
 pub mod server_mutate_ticks;
 
 use bevy::prelude::*;
@@ -44,8 +44,8 @@ impl Plugin for ClientPlugin {
             .init_resource::<ServerEntityMap>()
             .init_resource::<ServerUpdateTick>()
             .init_resource::<BufferedMutations>()
-            .add_event::<EntityReplicated>()
-            .add_event::<MutateTickReceived>()
+            .add_message::<EntityReplicated>()
+            .add_message::<MutateTickReceived>()
             .configure_sets(
                 PreUpdate,
                 (
@@ -134,7 +134,7 @@ pub(super) fn receive_replication(
                     world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
                         world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
                             world.resource_scope(
-                                |world, mut replicated_events: Mut<Events<EntityReplicated>>| {
+                                |world, mut replicated: Mut<Messages<EntityReplicated>>| {
                                     let type_registry = world.resource::<AppTypeRegistry>().clone();
                                     let mut stats =
                                         world.remove_resource::<ClientReplicationStats>();
@@ -145,7 +145,7 @@ pub(super) fn receive_replication(
                                         entity_markers: &mut entity_markers,
                                         entity_map: &mut entity_map,
                                         signature_map: &mut signature_map,
-                                        replicated_events: &mut replicated_events,
+                                        replicated: &mut replicated,
                                         mutate_ticks: mutate_ticks.as_mut(),
                                         stats: stats.as_mut(),
                                         command_markers: &command_markers,
@@ -203,7 +203,7 @@ fn send_protocol_hash(mut commands: Commands, protocol: Res<ProtocolHash>) {
     commands.client_trigger(*protocol);
 }
 
-fn log_protocol_error(_trigger: Trigger<ProtocolMismatch>) {
+fn log_protocol_error(_on: On<ProtocolMismatch>) {
     error!(
         "server reported protocol mismatch; make sure replication rules and events registration order match with the server"
     );
@@ -390,7 +390,7 @@ fn apply_mutate_messages(
         if let Some(mutate_ticks) = &mut params.mutate_ticks
             && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
         {
-            world.send_event(MutateTickReceived {
+            world.write_message(MutateTickReceived {
                 tick: mutate.message_tick,
             });
         }
@@ -477,7 +477,7 @@ fn apply_removals(
         .entity_markers
         .read(params.command_markers, &*client_entity);
 
-    confirm_tick(&mut client_entity, params.replicated_events, message_tick);
+    confirm_tick(&mut client_entity, params.replicated, message_tick);
 
     let len = apply_array(ArrayKind::Sized, message, |message| {
         let fns_id = postcard_utils::from_buf(message)?;
@@ -536,7 +536,7 @@ fn apply_changes(
         .entity_markers
         .read(params.command_markers, &*client_entity);
 
-    confirm_tick(&mut client_entity, params.replicated_events, message_tick);
+    confirm_tick(&mut client_entity, params.replicated, message_tick);
 
     let len = apply_array(ArrayKind::Sized, message, |message| {
         let fns_id = postcard_utils::from_buf(message)?;
@@ -614,7 +614,7 @@ enum ArrayKind {
 
 fn confirm_tick(
     entity: &mut DeferredEntity,
-    replicated_events: &mut Events<EntityReplicated>,
+    replicated: &mut Messages<EntityReplicated>,
     tick: RepliconTick,
 ) {
     if let Some(mut history) = entity.get_mut::<ConfirmHistory>() {
@@ -622,7 +622,7 @@ fn confirm_tick(
     } else {
         entity.insert(ConfirmHistory::new(tick));
     }
-    replicated_events.send(EntityReplicated {
+    replicated.write(EntityReplicated {
         entity: entity.id(),
         tick,
     });
@@ -687,7 +687,7 @@ fn apply_mutations(
 
         history.set(ago);
     }
-    params.replicated_events.send(EntityReplicated {
+    params.replicated.write(EntityReplicated {
         entity: client_entity.id(),
         tick: message_tick,
     });
@@ -752,7 +752,7 @@ struct ReceiveParams<'a> {
     entity_markers: &'a mut EntityMarkers,
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,
-    replicated_events: &'a mut Events<EntityReplicated>,
+    replicated: &'a mut Messages<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
     command_markers: &'a CommandMarkers,

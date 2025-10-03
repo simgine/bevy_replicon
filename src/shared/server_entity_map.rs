@@ -155,8 +155,8 @@ mod tests {
 
     #[test]
     fn mapping() {
-        const SERVER_ENTITY: Entity = Entity::from_raw(0);
-        const CLIENT_ENTITY: Entity = Entity::from_raw(1);
+        const SERVER_ENTITY: Entity = Entity::from_raw_u32(0).unwrap();
+        const CLIENT_ENTITY: Entity = Entity::from_raw_u32(1).unwrap();
 
         let mut map = ServerEntityMap::default();
         assert_eq!(map.server_entry(SERVER_ENTITY).get(), None);

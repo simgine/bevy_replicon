@@ -126,10 +126,10 @@ impl ConfirmHistory {
     }
 }
 
-/// Triggered for an entity when it receives updates for a tick.
+/// A message that indicates that an entity received update for a tick.
 ///
 /// See also [`ConfirmHistory`].
-#[derive(Debug, Event, Clone, Copy)]
+#[derive(Message, Debug, Clone, Copy)]
 pub struct EntityReplicated {
     /// Entity that received an update.
     pub entity: Entity,

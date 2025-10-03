@@ -4,7 +4,7 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 
-use bevy::prelude::*;
+use bevy::{ecs::entity::MapEntities, prelude::*};
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use clap::Parser;
@@ -21,7 +21,7 @@ fn main() {
         .replicate::<UiRoot>()
         .replicate::<ToggleButton>()
         .replicate_filtered::<ChildOf, With<ToggleButton>>() // Replicate parent only for `ToggleButton`.
-        .add_client_trigger::<RemoteToggle>(Channel::Unordered)
+        .add_mapped_client_event::<RemoteToggle>(Channel::Unordered)
         .add_observer(init_toggle_button)
         .add_observer(trigger_remote_toggle)
         .add_observer(apply_remote_toggle)
@@ -64,8 +64,8 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
 }
 
 /// Since we can't include hierarchy into required components, initialize it on insertion.
-fn init_toggle_button(trigger: Trigger<OnAdd, ToggleButton>, mut commands: Commands) {
-    commands.entity(trigger.target()).with_child((
+fn init_toggle_button(add: On<Add, ToggleButton>, mut commands: Commands) {
+    commands.entity(add.entity).with_child((
         Text::default(),
         TextShadow::default(),
         TextFont {
@@ -81,12 +81,14 @@ fn init_toggle_button(trigger: Trigger<OnAdd, ToggleButton>, mut commands: Comma
 /// Used on both the server and the clients.
 /// Triggering this on the server will emit [`FromClient`] with [`ClientId::Server`].
 fn trigger_remote_toggle(
-    trigger: Trigger<Pointer<Click>>,
+    click: On<Pointer<Click>>,
     mut commands: Commands,
     buttons: Query<(), With<ToggleButton>>,
 ) {
-    if buttons.get(trigger.target()).is_ok() {
-        commands.client_trigger_targets(RemoteToggle, trigger.target());
+    if buttons.get(click.entity).is_ok() {
+        commands.client_trigger(RemoteToggle {
+            entity: click.entity,
+        });
     }
 }
 
@@ -95,10 +97,10 @@ fn trigger_remote_toggle(
 /// Executed on server and singleplayer.
 /// The state will be replicated back to clients.
 fn apply_remote_toggle(
-    trigger: Trigger<FromClient<RemoteToggle>>,
+    toggle: On<FromClient<RemoteToggle>>,
     mut buttons: Query<&mut ToggleButton>,
 ) {
-    if let Ok(mut toggle) = buttons.get_mut(trigger.target()) {
+    if let Ok(mut toggle) = buttons.get_mut(toggle.entity) {
         **toggle = !**toggle
     }
 }
@@ -200,11 +202,14 @@ struct UiRoot;
         align_items: AlignItems::Center,
         ..Default::default()
     },
-    BorderColor(Color::WHITE),
+    BorderColor::all(Color::WHITE),
     BorderRadius::MAX,
 )]
 struct ToggleButton(bool);
 
-/// A client trigger that toggles the buttons it targets.
-#[derive(Event, Serialize, Deserialize)]
-struct RemoteToggle;
+/// Toggles the buttons it targets.
+#[derive(EntityEvent, MapEntities, Serialize, Deserialize, Clone, Copy)]
+struct RemoteToggle {
+    #[entities]
+    entity: Entity,
+}

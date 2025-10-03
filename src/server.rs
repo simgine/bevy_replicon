@@ -1,5 +1,5 @@
 pub mod client_visibility;
-pub mod event;
+pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
 pub(super) mod replication_messages;
@@ -29,7 +29,7 @@ use crate::{
     prelude::*,
     shared::{
         backend::channels::ClientChannel,
-        event::server_event::event_buffer::EventBuffer,
+        message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityBuffer},
             registry::{
@@ -114,7 +114,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<EntityBuffer>()
-            .init_resource::<EventBuffer>()
+            .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .configure_sets(
                 PreUpdate,
@@ -204,46 +204,40 @@ fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     trace!("incremented {server_tick:?}");
 }
 
-fn handle_connects(
-    trigger: Trigger<OnAdd, ConnectedClient>,
-    mut event_buffer: ResMut<EventBuffer>,
-) {
-    debug!("client `{}` connected", trigger.target());
-    event_buffer.exclude_client(trigger.target());
+fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
+    debug!("client `{}` connected", add.entity);
+    message_buffer.exclude_client(add.entity);
 }
 
-fn handle_disconnects(
-    trigger: Trigger<OnRemove, ConnectedClient>,
-    mut messages: ResMut<ServerMessages>,
-) {
-    debug!("client `{}` disconnected", trigger.target());
-    messages.remove_client(trigger.target());
+fn handle_disconnects(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
+    debug!("client `{}` disconnected", remove.entity);
+    messages.remove_client(remove.entity);
 }
 
 fn check_protocol(
-    trigger: Trigger<FromClient<ProtocolHash>>,
+    client_protocol: On<FromClient<ProtocolHash>>,
     mut commands: Commands,
-    mut events: EventWriter<DisconnectRequest>,
+    mut disconnects: MessageWriter<DisconnectRequest>,
     protocol: Res<ProtocolHash>,
 ) {
-    let client = trigger
+    let client = client_protocol
         .client_id
         .entity()
         .expect("protocol hash sent only from clients");
 
-    if **trigger == *protocol {
+    if **client_protocol == *protocol {
         debug!("marking client `{client}` as authorized");
         commands.entity(client).insert(AuthorizedClient);
     } else {
         debug!(
             "disconnecting client `{client}` due to protocol mismatch (client: `{:?}`, server: `{:?}`)",
-            **trigger, *protocol
+            **client_protocol, *protocol
         );
         commands.server_trigger(ToClients {
-            mode: SendMode::Direct(trigger.client_id),
-            event: ProtocolMismatch,
+            mode: SendMode::Direct(client_protocol.client_id),
+            message: ProtocolMismatch,
         });
-        events.write(DisconnectRequest { client });
+        disconnects.write(DisconnectRequest { client });
     }
 }
 
@@ -290,12 +284,12 @@ fn receive_acks(
 }
 
 fn buffer_despawns(
-    trigger: Trigger<OnRemove, Replicated>,
+    remove: On<Remove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     state: Res<State<ServerState>>,
 ) {
     if *state == ServerState::Running {
-        despawn_buffer.push(trigger.target());
+        despawn_buffer.push(remove.entity);
     }
 }
 
@@ -388,11 +382,11 @@ fn reset(
     mut server_tick: ResMut<ServerTick>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
-    mut event_buffer: ResMut<EventBuffer>,
+    mut message_buffer: ResMut<MessageBuffer>,
 ) {
     messages.clear();
     *server_tick = Default::default();
-    event_buffer.clear();
+    message_buffer.clear();
     related_entities.clear();
     for entity in &clients {
         commands.entity(entity).despawn();
@@ -915,7 +909,7 @@ struct DespawnBuffer(Vec<Entity>);
 /// Marker that enables replication and all events for a client.
 ///
 /// Until authorization happened, the client and server can still exchange network events that are marked as
-/// independent via [`ServerEventAppExt::make_event_independent`] or [`ServerTriggerAppExt::make_trigger_independent`].
+/// independent via [`ServerMessageAppExt::make_message_independent`] or [`ServerEventAppExt::make_event_independent`].
 /// **All other events will be ignored**.
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].

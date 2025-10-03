@@ -1,8 +1,10 @@
+use core::mem;
+
 use bevy::{
     ecs::{
-        archetype::{Archetype, ArchetypeEntity, ArchetypeId},
+        archetype::{Archetype, ArchetypeEntity, ArchetypeGeneration, ArchetypeId},
         component::{ComponentId, ComponentTicks, StorageType, Tick},
-        query::{Access, FilteredAccess},
+        query::{FilteredAccess, FilteredAccessSet},
         storage::TableId,
         system::{ReadOnlySystemParam, SystemMeta, SystemParam},
         world::unsafe_world_cell::UnsafeWorldCell,
@@ -39,7 +41,12 @@ impl<'w> ServerWorld<'w, '_> {
         storage: StorageType,
         component_id: ComponentId,
     ) -> (Ptr<'w>, ComponentTicks) {
-        debug_assert!(self.state.access.has_component_read(component_id));
+        debug_assert!(
+            self.state
+                .component_access
+                .access()
+                .has_component_read(component_id)
+        );
 
         let storages = unsafe { self.world.storages() };
         match storage {
@@ -90,90 +97,45 @@ impl<'w> ServerWorld<'w, '_> {
 
 unsafe impl SystemParam for ServerWorld<'_, '_> {
     type State = ReplicationReadState;
-    type Item<'world, 'state> = ServerWorld<'world, 'state>;
+    type Item<'w, 's> = ServerWorld<'w, 's>;
 
-    fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
-        let mut filtered_access = FilteredAccess::default();
+    fn init_state(world: &mut World) -> Self::State {
+        let mut component_access = FilteredAccess::default();
 
         let marker_id = world.register_component::<Replicated>();
-        filtered_access.add_component_read(marker_id);
+        component_access.add_component_read(marker_id);
 
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
-        let combined_access = system_meta.component_access_set().combined_access();
         for rule in rules.iter() {
             for component in &rule.components {
-                filtered_access.add_component_read(component.id);
-                assert!(
-                    !combined_access.has_component_write(component.id),
-                    "replicated component `{}` in system `{}` shouldn't be in conflict with other system parameters",
-                    world.components().get_name(component.id).unwrap(),
-                    system_meta.name(),
-                );
+                component_access.add_component_read(component.id);
             }
         }
 
-        let access = filtered_access.access().clone();
-
-        // SAFETY: used only to extend access.
-        unsafe {
-            system_meta.component_access_set_mut().add(filtered_access);
-        }
-
-        ReplicationReadState {
-            access,
+        Self::State {
+            component_access,
             marker_id,
             archetypes: Default::default(),
-            // Needs to be cloned because `new_archetype` only accepts the state.
-            rules: world.resource::<ReplicationRules>().clone(),
+            generation: ArchetypeGeneration::initial(),
         }
     }
 
-    unsafe fn new_archetype(
-        state: &mut Self::State,
-        archetype: &Archetype,
+    fn init_access(
+        state: &Self::State,
         system_meta: &mut SystemMeta,
+        component_access_set: &mut FilteredAccessSet,
+        _world: &mut World,
     ) {
-        if !archetype.contains(state.marker_id) {
-            return;
+        let conflicts = component_access_set.get_conflicts_single(&state.component_access);
+        if !conflicts.is_empty() {
+            panic!(
+                "replicated components in system `{}` shouldn't be in conflict with other system parameters",
+                system_meta.name(),
+            );
         }
 
-        trace!("marking `{:?}` as replicated", archetype.id());
-        let mut replicated_archetype = ReplicatedArchetype::new(archetype.id());
-        for rule in state.rules.iter().filter(|rule| rule.matches(archetype)) {
-            for &component in &rule.components {
-                // Since rules are sorted by priority,
-                // we are inserting only new components that aren't present.
-                if replicated_archetype
-                    .components
-                    .iter()
-                    .any(|(existing, _)| existing.id == component.id)
-                {
-                    continue;
-                }
-
-                // SAFETY: archetype matches the rule, so the component is present.
-                let storage =
-                    unsafe { archetype.get_storage_type(component.id).unwrap_unchecked() };
-                replicated_archetype.components.push((component, storage));
-            }
-        }
-
-        // Update system access for proper parallelization.
-        for (component, _) in &replicated_archetype.components {
-            // SAFETY: archetype contains this component and we don't remove access from system meta.
-            unsafe {
-                let archetype_id = archetype
-                    .get_archetype_component_id(component.id)
-                    .unwrap_unchecked();
-                system_meta
-                    .archetype_component_access_mut()
-                    .add_component_read(archetype_id)
-            }
-        }
-
-        // Store for future iteration.
-        state.archetypes.push(replicated_archetype);
+        component_access_set.add(state.component_access.clone());
     }
 
     unsafe fn get_param<'world, 'state>(
@@ -182,6 +144,43 @@ unsafe impl SystemParam for ServerWorld<'_, '_> {
         world: UnsafeWorldCell<'world>,
         _change_tick: Tick,
     ) -> Self::Item<'world, 'state> {
+        let archetypes = world.archetypes();
+        let old_generation = mem::replace(&mut state.generation, archetypes.generation());
+
+        // SAFETY: Has access to this resource and the access is unique.
+        let rules = unsafe {
+            world
+                .get_resource::<ReplicationRules>()
+                .expect("replication rules should've been initialized in the plugin")
+        };
+        for archetype in archetypes[old_generation..]
+            .iter()
+            .filter(|archetype| archetype.contains(state.marker_id))
+        {
+            trace!("marking `{:?}` as replicated", archetype.id());
+            let mut replicated_archetype = ReplicatedArchetype::new(archetype.id());
+            for rule in rules.iter().filter(|rule| rule.matches(archetype)) {
+                for &component in &rule.components {
+                    // Since rules are sorted by priority,
+                    // we are inserting only new components that aren't present.
+                    if replicated_archetype
+                        .components
+                        .iter()
+                        .any(|(existing, _)| existing.id == component.id)
+                    {
+                        continue;
+                    }
+
+                    // SAFETY: archetype matches the rule, so the component is present.
+                    let storage =
+                        unsafe { archetype.get_storage_type(component.id).unwrap_unchecked() };
+                    replicated_archetype.components.push((component, storage));
+                }
+            }
+
+            state.archetypes.push(replicated_archetype);
+        }
+
         ServerWorld { world, state }
     }
 }
@@ -192,15 +191,16 @@ pub(crate) struct ReplicationReadState {
     /// All replicated components.
     ///
     /// Used only in debug to check component access.
-    access: Access<ComponentId>,
+    component_access: FilteredAccess,
 
     /// ID of [`Replicated`] component.
     marker_id: ComponentId,
 
+    /// Highest processed archetype ID.
+    generation: ArchetypeGeneration,
+
     /// Archetypes marked as replicated.
     archetypes: Vec<ReplicatedArchetype>,
-
-    rules: ReplicationRules,
 }
 
 /// An archetype that can be stored in [`ReplicatedArchetypes`].
@@ -264,20 +264,6 @@ mod tests {
             .init_resource::<ReplicationRegistry>()
             .replicate::<Transform>()
             .add_systems(Update, |_: ServerWorld, _: Query<&Transform>| {});
-
-        app.update();
-    }
-
-    #[test]
-    fn replicate_after_system() {
-        let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .add_systems(Update, |world: ServerWorld| {
-                assert_eq!(world.state.rules.len(), 1);
-            })
-            .replicate::<Transform>();
 
         app.update();
     }

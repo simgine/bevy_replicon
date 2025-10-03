@@ -21,20 +21,21 @@ license = "MIT OR Apache-2.0"
 include = ["/src", "../LICENSE*"]
 
 [dependencies]
-bevy = { version = "0.16.0", default-features = false, features = ["bevy_log"] }
+bevy = { version = "0.17", default-features = false, features = ["bevy_log"] }
 bevy_replicon = { path = "..", version = "0.35.0", default-features = false }
 fastrand = "2.3"
 
 [dev-dependencies]
-bevy = { version = "0.16.0", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
   "bevy_gizmos",
   "bevy_text",
   "bevy_ui_picking_backend",
-  "bevy_ui",
+  "bevy_ui_render",
   "bevy_window",
   "default_font",
   "serialize",
   "x11",
+  "zstd_rust",
 ] }
 clap = { version = "4.1", features = ["derive"] }
 fastrand-contrib = "0.1"

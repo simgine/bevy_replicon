@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Rename `client_event_registry` module into `registry`.
+- Replace "event" with "message" and "trigger" with "event" in types, methods and modules according to the new naming in Bevy.
+- Split `RemoteMessageRegistry::*_channel` methods for messages and events into dedicated methods for each type.
+
+### Removed
+
+- `trigger_*_targets`. Targets in Bevy now stored inside events. When you move entities to your events, dont't forget to use `register_*_event_mapped` in order to properly map them.
 
 ### Added
 

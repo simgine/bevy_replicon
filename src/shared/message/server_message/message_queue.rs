@@ -6,12 +6,12 @@ use bytes::Bytes;
 
 use crate::prelude::*;
 
-/// Stores all received events from server that arrived earlier then replication message with their tick.
+/// Stores all received messages from server that arrived earlier then replication message with their tick.
 ///
 /// Stores data sorted by ticks and maintains order of arrival.
-/// Needed to ensure that when an event is triggered, all the data that it affects or references already exists.
+/// Needed to ensure that when an message is triggered, all the data that it affects or references already exists.
 #[derive(Resource)]
-pub(super) struct EventQueue<E> {
+pub(super) struct MessageQueue<E> {
     map: BTreeMap<RepliconTick, Vec<Bytes>>,
     /// [`Vec`]s from removals.
     ///
@@ -21,7 +21,7 @@ pub(super) struct EventQueue<E> {
     marker: PhantomData<E>,
 }
 
-impl<E> EventQueue<E> {
+impl<E> MessageQueue<E> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
         self.map
             .entry(tick)
@@ -29,7 +29,7 @@ impl<E> EventQueue<E> {
             .push(message);
     }
 
-    /// Pops the next event that is at least as old as the specified replicon tick.
+    /// Pops the next message that is at least as old as the specified replicon tick.
     pub(super) fn pop_if_le(
         &mut self,
         update_tick: RepliconTick,
@@ -60,7 +60,7 @@ impl<E> EventQueue<E> {
     }
 }
 
-impl<E> Default for EventQueue<E> {
+impl<E> Default for MessageQueue<E> {
     fn default() -> Self {
         Self {
             map: Default::default(),
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn lower_tick() {
-        let mut queue = EventQueue::<TestEvent>::default();
+        let mut queue = MessageQueue::<Test>::default();
         queue.insert(RepliconTick::new(1), Default::default());
 
         assert_eq!(queue.len(), 1);
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn bigger_tick() {
-        let mut queue = EventQueue::<TestEvent>::default();
+        let mut queue = MessageQueue::<Test>::default();
         queue.insert(RepliconTick::new(1), Default::default());
 
         assert!(queue.pop_if_le(RepliconTick::new(2)).is_some());
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn ticks_ordering() {
-        let mut queue = EventQueue::<TestEvent>::default();
+        let mut queue = MessageQueue::<Test>::default();
         queue.insert(RepliconTick::new(0), Default::default());
         queue.insert(RepliconTick::new(1), Default::default());
         queue.insert(RepliconTick::new(2), Default::default());
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn messages_ordering() {
-        let mut queue = EventQueue::<TestEvent>::default();
+        let mut queue = MessageQueue::<Test>::default();
         queue.insert(RepliconTick::new(0), Bytes::from_static(&[0]));
         queue.insert(RepliconTick::new(0), Bytes::from_static(&[1]));
 
@@ -121,5 +121,5 @@ mod tests {
         assert!(queue.is_empty());
     }
 
-    struct TestEvent;
+    struct Test;
 }
