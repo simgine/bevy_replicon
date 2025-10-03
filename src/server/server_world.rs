@@ -115,7 +115,7 @@ unsafe impl SystemParam for ServerWorld<'_, '_> {
 
         Self::State {
             component_access,
-            marker_id: world.register_component::<Replicated>(),
+            marker_id,
             archetypes: Default::default(),
             generation: ArchetypeGeneration::initial(),
         }
