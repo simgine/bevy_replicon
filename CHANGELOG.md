@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Debug` derive for `FromClient`.
+
+### Fixed
+
+- Replication of entities spawned without components before connection.
+
 ### Changed
 
 - Rename `client_event_registry` module into `registry`.
@@ -16,14 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `trigger_*_targets`. Targets in Bevy now stored inside events. When you move entities to your events, dont't forget to use `register_*_event_mapped` in order to properly map them.
-
-### Added
-
-- `Debug` derive for `FromClient`.
-
-### Fixed
-
-- Replication of entities without components before connection.
 
 ## [0.35.1] - 2025-10-03
 
