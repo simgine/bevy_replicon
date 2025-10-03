@@ -6,7 +6,7 @@ pub mod server_mutate_ticks;
 
 use bevy::prelude::*;
 use bytes::{Buf, Bytes};
-use log::{debug, error, trace};
+use log::{Level, debug, error, log_enabled, trace};
 use postcard::experimental::max_size::MaxSize;
 
 use crate::{
@@ -90,6 +90,14 @@ impl Plugin for ClientPlugin {
                 OnEnter(ClientState::Connected),
                 send_protocol_hash.in_set(ClientSystems::SendHash),
             );
+        }
+
+        if log_enabled!(Level::Debug) {
+            app.add_systems(OnEnter(ClientState::Disconnected), || {
+                debug!("disconnected")
+            })
+            .add_systems(OnEnter(ClientState::Connecting), || debug!("connecting"))
+            .add_systems(OnEnter(ClientState::Connected), || debug!("connected"));
         }
     }
 
