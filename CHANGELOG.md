@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Rename `client_event_registry` module into `registry`.
+- Replace "event" with "message" and "trigger" with "event" in types, methods and modules according to the new naming in Bevy.
+- Split `RemoteMessageRegistry::*_channel` methods for messages and events into dedicated methods for each type.
+
+### Removed
+
+- `trigger_*_targets`. Targets in Bevy now stored inside events. When you move entities to your events, dont't forget to use `register_*_event_mapped` in order to properly map them.
 
 ### Added
 
@@ -18,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Replication of entities without components before connection.
+
+## [0.35.1] - 2025-10-03
+
+### Added
+
+- Log state changes.
 
 ## [0.35.0] - 2025-09-26
 
@@ -919,7 +931,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.35.0...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.35.1...HEAD
+[0.35.1]: https://github.com/simgine/bevy_replicon/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/simgine/bevy_replicon/compare/v0.34.4...v0.35.0
 [0.34.4]: https://github.com/simgine/bevy_replicon/compare/v0.34.3...v0.34.4
 [0.34.3]: https://github.com/simgine/bevy_replicon/compare/v0.34.1...v0.34.3

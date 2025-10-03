@@ -1,6 +1,6 @@
 [package]
 name = "bevy_replicon"
-version = "0.35.0"
+version = "0.35.1"
 authors = [
   "Hennadii Chernyshchyk <genaloner@gmail.com>",
   "koe <ukoe@protonmail.com>",
@@ -28,9 +28,7 @@ all-features = true
 members = ["bevy_replicon_example_backend"]
 
 [dependencies]
-bevy = { version = "0.16.0", default-features = false, features = [
-  "bevy_state",
-] }
+bevy = { version = "0.17", default-features = false, features = ["bevy_state"] }
 log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `bevy_log` currently requires `std`.
 petgraph = { version = "0.8", default-features = false, features = [
   "stable_graph",
@@ -52,9 +50,9 @@ bytes = { version = "1.10", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-bevy = { version = "0.16.0", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
   "bevy_log",
-  "bevy_sprite",
+  "bevy_sprite_render",
   "serialize",
 ] }
 test-log = "0.2"
@@ -90,11 +88,11 @@ name = "mutations"
 required-features = ["client", "server"]
 
 [[test]]
-name = "client_event"
+name = "client_message"
 required-features = ["client", "server"]
 
 [[test]]
-name = "client_trigger"
+name = "client_event"
 required-features = ["client", "server"]
 
 [[test]]
@@ -122,11 +120,11 @@ name = "scene"
 required-features = ["scene"]
 
 [[test]]
-name = "server_event"
+name = "server_message"
 required-features = ["client", "server"]
 
 [[test]]
-name = "server_trigger"
+name = "server_event"
 required-features = ["client", "server"]
 
 [[test]]

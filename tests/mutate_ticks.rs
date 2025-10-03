@@ -31,14 +31,14 @@ fn without_changes() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let events_count = client_app
+    let messages_count = client_app
         .world_mut()
-        .resource_mut::<Events<MutateTickReceived>>()
+        .resource_mut::<Messages<MutateTickReceived>>()
         .drain()
         .count();
     assert_eq!(
-        events_count, 2,
-        "should receive one event for connection and one for the exchange"
+        messages_count, 2,
+        "should receive one message for connection and one for the exchange"
     );
 }
 
@@ -69,13 +69,13 @@ fn one_message() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut tick_events = client_app
+    let mut received_ticks = client_app
         .world_mut()
-        .resource_mut::<Events<MutateTickReceived>>();
+        .resource_mut::<Messages<MutateTickReceived>>();
     assert_eq!(
-        tick_events.drain().count(),
+        received_ticks.drain().count(),
         2,
-        "should receive one event for connection and one for spawn"
+        "should receive one message for connection and one for spawn"
     );
 
     // Change value.
@@ -85,10 +85,10 @@ fn one_message() {
         .unwrap();
     component.0 = true;
 
-    // Clear previous events.
+    // Clear previous messages.
     client_app
         .world_mut()
-        .resource_mut::<Events<MutateTickReceived>>()
+        .resource_mut::<Messages<MutateTickReceived>>()
         .clear();
 
     server_app.update();
@@ -97,11 +97,15 @@ fn one_message() {
 
     let tick = **server_app.world().resource::<ServerTick>();
 
-    let mut tick_events = client_app
+    let mut received_ticks = client_app
         .world_mut()
-        .resource_mut::<Events<MutateTickReceived>>();
-    let [event] = tick_events.drain().collect::<Vec<_>>().try_into().unwrap();
-    assert_eq!(event.tick, tick);
+        .resource_mut::<Messages<MutateTickReceived>>();
+    let [received_tick] = received_ticks
+        .drain()
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+    assert_eq!(received_tick.tick, tick);
 
     let mutate_ticks = client_app.world().resource::<ServerMutateTicks>();
     assert!(mutate_ticks.contains(tick));
@@ -138,13 +142,13 @@ fn multiple_messages() {
     let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(replicated.iter(client_app.world()).len(), ENTITIES_COUNT);
 
-    let mut tick_events = client_app
+    let mut received_ticks = client_app
         .world_mut()
-        .resource_mut::<Events<MutateTickReceived>>();
+        .resource_mut::<Messages<MutateTickReceived>>();
     assert_eq!(
-        tick_events.drain().count(),
+        received_ticks.drain().count(),
         2,
-        "should receive one event for connection and one for spawns"
+        "should receive one message for connection and one for spawns"
     );
 
     for mut component in server_app
@@ -161,11 +165,15 @@ fn multiple_messages() {
 
     let tick = **server_app.world().resource::<ServerTick>();
 
-    let mut tick_events = client_app
+    let mut received_ticks = client_app
         .world_mut()
-        .resource_mut::<Events<MutateTickReceived>>();
-    let [event] = tick_events.drain().collect::<Vec<_>>().try_into().unwrap();
-    assert_eq!(event.tick, tick);
+        .resource_mut::<Messages<MutateTickReceived>>();
+    let [received_tick] = received_ticks
+        .drain()
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+    assert_eq!(received_tick.tick, tick);
 
     let mutate_ticks = client_app.world().resource::<ServerMutateTicks>();
     assert!(mutate_ticks.contains(tick));

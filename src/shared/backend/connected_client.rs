@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::{component::HookContext, world::DeferredWorld},
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
     platform::collections::HashMap,
     prelude::*,
 };

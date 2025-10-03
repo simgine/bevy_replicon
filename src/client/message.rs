@@ -7,40 +7,40 @@ use super::ServerUpdateTick;
 use crate::{
     prelude::*,
     shared::{
-        event::{
+        message::{
             ctx::{ClientReceiveCtx, ClientSendCtx},
-            registry::RemoteEventRegistry,
+            registry::RemoteMessageRegistry,
         },
         server_entity_map::ServerEntityMap,
     },
 };
 
-/// Sending events from a client to the server.
+/// Sending messages and events from a client to the server.
 ///
 /// Requires [`ClientPlugin`].
 /// Can be disabled for apps that act only as servers.
-pub struct ClientEventPlugin;
+pub struct ClientMessagePlugin;
 
-impl Plugin for ClientEventPlugin {
+impl Plugin for ClientMessagePlugin {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
         // Construct systems dynamically after all plugins initialization
         // because we need to access resources by registered IDs.
-        let event_registry = app
+        let registry = app
             .world_mut()
-            .remove_resource::<RemoteEventRegistry>()
-            .expect("event registry should be initialized on app build");
+            .remove_resource::<RemoteMessageRegistry>()
+            .expect("message registry should be initialized on app build");
 
         let send_fn = (
             FilteredResourcesParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_client() {
-                    builder.add_read_by_id(event.events_id());
+                for message in registry.iter_all_client() {
+                    builder.add_read_by_id(message.messages_id());
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_client() {
-                    builder.add_write_by_id(event.reader_id());
+                for message in registry.iter_all_client() {
+                    builder.add_write_by_id(message.reader_id());
                 }
             }),
             ParamBuilder,
@@ -53,13 +53,13 @@ impl Plugin for ClientEventPlugin {
 
         let receive_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_server() {
-                    builder.add_write_by_id(event.events_id());
+                for message in registry.iter_all_server() {
+                    builder.add_write_by_id(message.messages_id());
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_server() {
-                    builder.add_write_by_id(event.queue_id());
+                for message in registry.iter_all_server() {
+                    builder.add_write_by_id(message.queue_id());
                 }
             }),
             ParamBuilder,
@@ -80,8 +80,8 @@ impl Plugin for ClientEventPlugin {
 
         let trigger_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for trigger in event_registry.iter_server_triggers() {
-                    builder.add_write_by_id(trigger.event().events_id());
+                for event in registry.iter_server_events() {
+                    builder.add_write_by_id(event.message().messages_id());
                 }
             }),
             ParamBuilder,
@@ -97,31 +97,31 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(trigger);
 
-        let resend_locally_fn = (
+        let send_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_client() {
-                    builder.add_write_by_id(event.client_events_id());
+                for message in registry.iter_all_client() {
+                    builder.add_write_by_id(message.from_messages_id());
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_client() {
-                    builder.add_write_by_id(event.events_id());
+                for message in registry.iter_all_client() {
+                    builder.add_write_by_id(message.messages_id());
                 }
             }),
             ParamBuilder,
         )
             .build_state(app.world_mut())
-            .build_system(resend_locally);
+            .build_system(send_locally);
 
         let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_client() {
-                    builder.add_write_by_id(event.events_id());
+                for message in registry.iter_all_client() {
+                    builder.add_write_by_id(message.messages_id());
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in event_registry.iter_all_server() {
-                    builder.add_write_by_id(event.queue_id());
+                for message in registry.iter_all_server() {
+                    builder.add_write_by_id(message.queue_id());
                 }
             }),
             ParamBuilder,
@@ -129,7 +129,7 @@ impl Plugin for ClientEventPlugin {
             .build_state(app.world_mut())
             .build_system(reset);
 
-        app.insert_resource(event_registry)
+        app.insert_resource(registry)
             .add_systems(
                 PreUpdate,
                 (
@@ -154,7 +154,7 @@ impl Plugin for ClientEventPlugin {
                 PostUpdate,
                 (
                     send_fn.run_if(in_state(ClientState::Connected)),
-                    resend_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .in_set(ClientSystems::Send),
@@ -163,12 +163,12 @@ impl Plugin for ClientEventPlugin {
 }
 
 fn send(
-    events: FilteredResources,
+    messages: FilteredResources,
     mut readers: FilteredResourcesMut,
-    mut messages: ResMut<ClientMessages>,
+    mut client_messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
-    event_registry: Res<RemoteEventRegistry>,
+    registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ClientSendCtx {
         entity_map: &entity_map,
@@ -176,28 +176,33 @@ fn send(
         invalid_entities: Vec::new(),
     };
 
-    for event in event_registry.iter_all_client() {
-        let events = events
-            .get_by_id(event.events_id())
-            .expect("events resource should be accessible");
+    for message in registry.iter_all_client() {
+        let messages = messages
+            .get_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
         let reader = readers
-            .get_mut_by_id(event.reader_id())
-            .expect("event reader resource should be accessible");
+            .get_mut_by_id(message.reader_id())
+            .expect("message reader resource should be accessible");
 
-        // SAFETY: passed pointers were obtained using this event data.
+        // SAFETY: passed pointers were obtained using this message data.
         unsafe {
-            event.send(&mut ctx, &events, reader.into_inner(), &mut messages);
+            message.send(
+                &mut ctx,
+                &messages,
+                reader.into_inner(),
+                &mut client_messages,
+            );
         }
     }
 }
 
 fn receive(
-    mut events: FilteredResourcesMut,
+    mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
-    mut messages: ResMut<ClientMessages>,
+    mut client_messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
-    event_registry: Res<RemoteEventRegistry>,
+    message_registry: Res<RemoteMessageRegistry>,
     update_tick: Res<ServerUpdateTick>,
 ) {
     let mut ctx = ClientReceiveCtx {
@@ -206,21 +211,21 @@ fn receive(
         invalid_entities: Vec::new(),
     };
 
-    for event in event_registry.iter_all_server() {
-        let events = events
-            .get_mut_by_id(event.events_id())
-            .expect("events resource should be accessible");
+    for message in message_registry.iter_all_server() {
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
         let queue = queues
-            .get_mut_by_id(event.queue_id())
+            .get_mut_by_id(message.queue_id())
             .expect("queue resource should be accessible");
 
-        // SAFETY: passed pointers were obtained using this event data.
+        // SAFETY: passed pointers were obtained using this message data.
         unsafe {
-            event.receive(
+            message.receive(
                 &mut ctx,
-                events.into_inner(),
+                messages.into_inner(),
                 queue.into_inner(),
-                &mut messages,
+                &mut client_messages,
                 **update_tick,
             )
         };
@@ -228,56 +233,56 @@ fn receive(
 }
 
 fn trigger(
-    mut events: FilteredResourcesMut,
+    mut messages: FilteredResourcesMut,
     mut commands: Commands,
-    event_registry: Res<RemoteEventRegistry>,
+    registry: Res<RemoteMessageRegistry>,
 ) {
-    for trigger in event_registry.iter_server_triggers() {
-        let events = events
-            .get_mut_by_id(trigger.event().events_id())
-            .expect("events resource should be accessible");
-        trigger.trigger(&mut commands, events.into_inner());
+    for event in registry.iter_server_events() {
+        let messages = messages
+            .get_mut_by_id(event.message().messages_id())
+            .expect("messages resource should be accessible");
+        event.trigger(&mut commands, messages.into_inner());
     }
 }
 
-fn resend_locally(
-    mut client_events: FilteredResourcesMut,
-    mut events: FilteredResourcesMut,
-    event_registry: Res<RemoteEventRegistry>,
+fn send_locally(
+    mut from_messages: FilteredResourcesMut,
+    mut messages: FilteredResourcesMut,
+    registry: Res<RemoteMessageRegistry>,
 ) {
-    for event in event_registry.iter_all_client() {
-        let client_events = client_events
-            .get_mut_by_id(event.client_events_id())
-            .expect("client events resource should be accessible");
-        let events = events
-            .get_mut_by_id(event.events_id())
-            .expect("events resource should be accessible");
+    for message in registry.iter_all_client() {
+        let from_messages = from_messages
+            .get_mut_by_id(message.from_messages_id())
+            .expect("from messages resource should be accessible");
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
 
-        // SAFETY: passed pointers were obtained using this event data.
-        unsafe { event.resend_locally(client_events.into_inner(), events.into_inner()) };
+        // SAFETY: passed pointers were obtained using this message data.
+        unsafe { message.send_locally(from_messages.into_inner(), messages.into_inner()) };
     }
 }
 
 fn reset(
-    mut events: FilteredResourcesMut,
+    mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
-    event_registry: Res<RemoteEventRegistry>,
+    registry: Res<RemoteMessageRegistry>,
 ) {
-    for event in event_registry.iter_all_client() {
-        let events = events
-            .get_mut_by_id(event.events_id())
-            .expect("events resource should be accessible");
+    for message in registry.iter_all_client() {
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
 
-        // SAFETY: passed pointer was obtained using this event data.
-        unsafe { event.reset(events.into_inner()) };
+        // SAFETY: passed pointer was obtained using this message data.
+        unsafe { message.reset(messages.into_inner()) };
     }
 
-    for event in event_registry.iter_all_server() {
+    for messages in registry.iter_all_server() {
         let queue = queues
-            .get_mut_by_id(event.queue_id())
-            .expect("event queue resource should be accessible");
+            .get_mut_by_id(messages.queue_id())
+            .expect("queue resource should be accessible");
 
-        // SAFETY: passed pointer was obtained using this event data.
-        unsafe { event.reset(queue.into_inner()) };
+        // SAFETY: passed pointer was obtained using this message data.
+        unsafe { messages.reset(queue.into_inner()) };
     }
 }

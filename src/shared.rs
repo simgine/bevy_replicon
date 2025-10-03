@@ -1,6 +1,6 @@
 pub mod backend;
 pub mod client_id;
-pub mod event;
+pub mod message;
 pub mod protocol;
 pub mod replication;
 pub mod replicon_tick;
@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
-use event::registry::RemoteEventRegistry;
+use message::registry::RemoteMessageRegistry;
 use replication::signature::SignatureMap;
 use replication::{
     command_markers::CommandMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
@@ -42,9 +42,9 @@ pub struct RepliconSharedPlugin {
             auth_method: AuthMethod::Custom,
         }),
     ))
-    .add_client_trigger::<ClientInfo>(Channel::Ordered)
-    .add_server_trigger::<ProtocolMismatch>(Channel::Unreliable)
-    .make_trigger_independent::<ProtocolMismatch>() // Let the client receive it without replication.
+    .add_client_event::<ClientInfo>(Channel::Ordered)
+    .add_server_event::<ProtocolMismatch>(Channel::Unreliable)
+    .make_event_independent::<ProtocolMismatch>() // Let the client receive it without replication.
     .add_observer(start_game)
     .add_systems(OnEnter(ClientState::Connected), send_info);
 
@@ -59,26 +59,26 @@ pub struct RepliconSharedPlugin {
     }
 
     fn start_game(
-        trigger: Trigger<FromClient<ClientInfo>>,
+        client_info: On<FromClient<ClientInfo>>,
         mut commands: Commands,
-        mut events: EventWriter<DisconnectRequest>,
+        mut disconnects: MessageWriter<DisconnectRequest>,
         protocol: Res<ProtocolHash>,
     ) {
-        let client = trigger
+        let client = client_info
             .client_id
             .entity()
             .expect("protocol hash sent only from clients");
 
         // Since we are using custom authorization,
         // we need to verify the protocol manually.
-        if trigger.protocol != *protocol {
+        if client_info.protocol != *protocol {
             // Notify the client about the problem. No delivery
             // guarantee, since we disconnect after sending.
             commands.server_trigger(ToClients {
-                mode: SendMode::Direct(trigger.client_id),
-                event: ProtocolMismatch,
+                mode: SendMode::Direct(client_info.client_id),
+                message: ProtocolMismatch,
             });
-            events.write(DisconnectRequest { client });
+            disconnects.write(DisconnectRequest { client });
         }
 
         // Validate player name, run the necessary game logic...
@@ -87,7 +87,7 @@ pub struct RepliconSharedPlugin {
         commands.entity(client).insert(AuthorizedClient);
     }
 
-    /// A client trigger for custom authorization.
+    /// A client event for custom authorization.
     #[derive(Event, Serialize, Deserialize)]
     struct ClientInfo {
         protocol: ProtocolHash,
@@ -114,14 +114,14 @@ impl Plugin for RepliconSharedPlugin {
             .init_resource::<ReplicationRules>()
             .init_resource::<SignatureMap>()
             .init_resource::<CommandMarkers>()
-            .init_resource::<RemoteEventRegistry>()
+            .init_resource::<RemoteMessageRegistry>()
             .insert_resource(self.auth_method)
-            .add_event::<DisconnectRequest>();
+            .add_message::<DisconnectRequest>();
 
         if self.auth_method == AuthMethod::ProtocolCheck {
-            app.add_client_trigger::<ProtocolHash>(Channel::Ordered)
-                .add_server_trigger::<ProtocolMismatch>(Channel::Unreliable)
-                .make_trigger_independent::<ProtocolMismatch>();
+            app.add_client_event::<ProtocolHash>(Channel::Ordered)
+                .add_server_event::<ProtocolMismatch>(Channel::Unreliable)
+                .make_event_independent::<ProtocolMismatch>();
         }
     }
 

@@ -247,54 +247,54 @@ fn read_relations<C: Relationship>(
 }
 
 fn add_relation<C: Relationship>(
-    trigger: Trigger<OnInsert, C>,
+    insert: On<Insert, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     components: Query<&C, With<Replicated>>,
 ) {
     if *state == ServerState::Running
-        && let Ok(relationship) = components.get(trigger.target())
+        && let Ok(relationship) = components.get(insert.entity)
     {
-        related_entities.add_relation::<C>(trigger.target(), relationship.get());
+        related_entities.add_relation::<C>(insert.entity, relationship.get());
     }
 }
 
 fn remove_relation<C: Relationship>(
-    trigger: Trigger<OnReplace, C>,
+    replace: On<Replace, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     relationships: Query<&C, With<Replicated>>,
 ) {
     if *state == ServerState::Running
-        && let Ok(relationship) = relationships.get(trigger.target())
+        && let Ok(relationship) = relationships.get(replace.entity)
     {
-        related_entities.remove_relation::<C>(trigger.target(), relationship.get());
+        related_entities.remove_relation::<C>(replace.entity, relationship.get());
     }
 }
 
 fn start_replication<C: Relationship>(
-    trigger: Trigger<OnInsert, Replicated>,
+    insert: On<Insert, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     components: Query<&C, With<Replicated>>,
 ) {
     if *state == ServerState::Running
-        && let Ok(relationship) = components.get(trigger.target())
+        && let Ok(relationship) = components.get(insert.entity)
     {
-        related_entities.add_relation::<C>(trigger.target(), relationship.get());
+        related_entities.add_relation::<C>(insert.entity, relationship.get());
     }
 }
 
 fn stop_replication<C: Relationship>(
-    trigger: Trigger<OnReplace, Replicated>,
+    replace: On<Replace, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     relationships: Query<&C, With<Replicated>>,
 ) {
     if *state == ServerState::Running
-        && let Ok(relationship) = relationships.get(trigger.target())
+        && let Ok(relationship) = relationships.get(replace.entity)
     {
-        related_entities.remove_relation::<C>(trigger.target(), relationship.get());
+        related_entities.remove_relation::<C>(replace.entity, relationship.get());
     }
 }
 

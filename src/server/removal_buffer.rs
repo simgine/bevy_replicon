@@ -3,8 +3,8 @@ use bevy::{
         archetype::Archetype,
         component::ComponentId,
         entity::hash_map::EntityHashMap,
-        event::EventCursor,
-        removal_detection::{RemovedComponentEntity, RemovedComponentEvents},
+        lifecycle::{RemovedComponentEntity, RemovedComponentMessages},
+        message::MessageCursor,
         system::SystemParam,
     },
     platform::collections::{HashMap, HashSet},
@@ -18,14 +18,14 @@ use crate::{
 
 /// Reader for removed components.
 ///
-/// Like [`RemovedComponentEvents`], but reads them in per-entity format.
+/// Like [`RemovedComponentMessages`], but reads them in per-entity format.
 #[derive(SystemParam)]
 pub(super) struct RemovalReader<'w, 's> {
     /// Cached components list from [`ReplicationRules`].
     components: Local<'s, ReplicatedComponents>,
 
     /// Individual readers for each component.
-    readers: Local<'s, HashMap<ComponentId, EventCursor<RemovedComponentEntity>>>,
+    readers: Local<'s, HashMap<ComponentId, MessageCursor<RemovedComponentEntity>>>,
 
     /// Component removals grouped by entity.
     removals: Local<'s, EntityHashMap<HashSet<ComponentId>>>,
@@ -37,7 +37,7 @@ pub(super) struct RemovalReader<'w, 's> {
     ids_buffer: Local<'s, Vec<HashSet<ComponentId>>>,
 
     /// Component removals grouped by [`ComponentId`].
-    remove_events: &'w RemovedComponentEvents,
+    remove_messages: &'w RemovedComponentMessages,
 
     /// Filter for replicated and valid entities.
     replicated: Query<'w, 's, (), With<Replicated>>,
@@ -50,15 +50,15 @@ impl RemovalReader<'_, '_> {
     pub(super) fn read(&mut self) -> impl Iterator<Item = (&Entity, &HashSet<ComponentId>)> {
         self.clear();
 
-        for (&component_id, component_events) in self
-            .remove_events
+        for (&component_id, component_messages) in self
+            .remove_messages
             .iter()
             .filter(|(component_id, _)| self.components.contains(*component_id))
         {
             // Removed components are grouped by type, not by entity, so we need an intermediate container.
             let reader = self.readers.entry(component_id).or_default();
             for entity in reader
-                .read(component_events)
+                .read(component_messages)
                 .cloned()
                 .map(Into::into)
                 .filter(|&entity| self.replicated.get(entity).is_ok())
@@ -103,7 +103,7 @@ impl FromWorld for ReplicatedComponents {
 
 /// Buffer with removed components.
 ///
-/// Used to avoid missing events.
+/// Used to avoid missing messages.
 #[derive(Default, Resource, Deref)]
 pub(super) struct RemovalBuffer {
     /// Component removals grouped by entity.
