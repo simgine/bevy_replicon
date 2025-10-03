@@ -649,6 +649,7 @@ fn collect_changes(
                     }
 
                     if let Some((last_system_tick, last_server_tick)) = entity_cache.mutation_tick
+                        && entity_cache.visibility != Visibility::Gained
                         && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
                     {
                         let tick_diff = server_tick - last_server_tick;
