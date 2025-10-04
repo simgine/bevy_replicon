@@ -737,8 +737,9 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, VisibilityPolicy,
-        client_visibility::ClientVisibility, message::ServerMessagePlugin,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
+        client_visibility::{ClientVisibility, VisibilityPolicy},
+        message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
     };
 

@@ -41,7 +41,6 @@ use crate::{
         },
     },
 };
-use client_visibility::Visibility;
 use related_entities::RelatedEntities;
 use removal_buffer::{RemovalBuffer, RemovalReader};
 use replication_messages::{
@@ -418,8 +417,7 @@ fn send_messages(
     time: &Time,
 ) -> Result<()> {
     let mut server_tick_range = None;
-    for (client_entity, updates, mut mutations, client, .., mut ticks, _, mut visibility) in clients
-    {
+    for (client_entity, updates, mut mutations, client, .., mut ticks, _, _) in clients {
         if !updates.is_empty() {
             ticks.set_update_tick(server_tick);
             let server_tick_range =
@@ -446,8 +444,6 @@ fn send_messages(
                 client.max_size,
             )?;
         }
-
-        visibility.update();
     }
 
     Ok(())
@@ -614,7 +610,7 @@ fn collect_changes(
             {
                 *entity_cache = EntityCache {
                     mutation_tick: ticks.mutation_tick(entity.id()),
-                    visibility: visibility.state(entity.id()),
+                    visible: visibility.is_visible(entity.id()),
                     base_priority: priority.get(&entity.id()).copied().unwrap_or(1.0),
                 };
                 updates.start_entity_changes();
@@ -643,12 +639,11 @@ fn collect_changes(
                 for (client_entity, mut updates, mut mutations, .., entity_cache, _, _, _) in
                     &mut *clients
                 {
-                    if entity_cache.visibility == Visibility::Hidden {
+                    if !entity_cache.visible {
                         continue;
                     }
 
                     if let Some((last_system_tick, last_server_tick)) = entity_cache.mutation_tick
-                        && entity_cache.visibility != Visibility::Gained
                         && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
                     {
                         let tick_diff = server_tick - last_server_tick;
@@ -711,12 +706,13 @@ fn collect_changes(
             for (client_entity, mut updates, mut mutations, .., entity_cache, mut ticks, _, _) in
                 &mut *clients
             {
-                if entity_cache.visibility == Visibility::Hidden {
+                if !entity_cache.visible {
                     continue;
                 }
 
-                let new_entity = entity_cache.mutation_tick.is_none()
-                    || entity_cache.visibility == Visibility::Gained;
+                // The entity is new for the client if it's mutation tick is not set.
+                // This value resets when the entity loses visibility or stops being replicated.
+                let new_entity = entity_cache.mutation_tick.is_none();
                 if new_entity
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
@@ -757,14 +753,11 @@ fn should_send_mapping(
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
-    let visibility_state = visibility.state(entity);
-    if visibility_state == Visibility::Hidden {
+    if !visibility.is_visible(entity) {
         return false;
     }
 
-    visibility_state == Visibility::Gained
-        || signature.is_added()
-        || ticks.mutation_tick(entity).is_none()
+    signature.is_added() || ticks.mutation_tick(entity).is_none()
 }
 
 /// Writes a mapping or re-uses previously written range if exists.
@@ -878,16 +871,6 @@ pub enum ServerSystems {
     SendPackets,
 }
 
-/// Controls how visibility will be managed via [`ClientVisibility`].
-#[derive(Default, Debug, Clone, Copy)]
-pub enum VisibilityPolicy {
-    /// All entities are visible by default and should be explicitly registered to be hidden.
-    #[default]
-    Blacklist,
-    /// All entities are hidden by default and should be explicitly registered to be visible.
-    Whitelist,
-}
-
 /// Buffer with all despawned entities.
 ///
 /// We treat removals of [`Replicated`] component as despawns
@@ -938,6 +921,6 @@ pub struct PriorityMap(EntityHashMap<f32>);
 #[derive(Component, Default, Clone, Copy)]
 struct EntityCache {
     mutation_tick: Option<(Tick, RepliconTick)>,
-    visibility: Visibility,
+    visible: bool,
     base_priority: f32,
 }
