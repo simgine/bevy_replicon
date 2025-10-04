@@ -35,7 +35,6 @@ bevy = { version = "0.17", default-features = false, features = [
   "default_font",
   "serialize",
   "x11",
-  "zstd_rust",
 ] }
 clap = { version = "4.1", features = ["derive"] }
 fastrand-contrib = "0.1"
