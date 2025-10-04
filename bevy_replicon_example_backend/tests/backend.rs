@@ -58,7 +58,7 @@ fn disconnect_request() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -67,7 +67,7 @@ fn disconnect_request() {
     server_app.world_mut().spawn(Replicated);
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
 
     let mut clients = server_app
@@ -86,7 +86,7 @@ fn disconnect_request() {
     let client_state = client_app.world().resource::<State<ClientState>>();
     assert_eq!(*client_state, ClientState::Disconnected);
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert_eq!(messages.len(), 1, "last message should be received");
 
     let mut replicated = client_app.world_mut().query::<&Replicated>();
@@ -108,7 +108,7 @@ fn server_stop() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -118,7 +118,7 @@ fn server_stop() {
     server_app.world_mut().spawn(Replicated);
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
 
     server_app.update();
@@ -133,7 +133,7 @@ fn server_stop() {
     let client_state = client_app.world().resource::<State<ClientState>>();
     assert_eq!(*client_state, ClientState::Disconnected);
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert!(
         messages.is_empty(),
         "message shouldn't be received after stop"
@@ -173,7 +173,7 @@ fn replication() {
 }
 
 #[test]
-fn server_event() {
+fn server_message() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -183,7 +183,7 @@ fn server_event() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_server_message::<TestEvent>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
         .finish();
     }
 
@@ -191,18 +191,18 @@ fn server_event() {
 
     server_app.world_mut().write_message(ToClients {
         mode: SendMode::Broadcast,
-        message: TestEvent,
+        message: Test,
     });
 
     server_app.update();
     client_app.update();
 
-    let messages = client_app.world().resource::<Messages<TestEvent>>();
+    let messages = client_app.world().resource::<Messages<Test>>();
     assert_eq!(messages.len(), 1);
 }
 
 #[test]
-fn client_event() {
+fn client_message() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -212,20 +212,18 @@ fn client_event() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
             RepliconExampleBackendPlugins,
         ))
-        .add_client_message::<TestEvent>(Channel::Ordered)
+        .add_client_message::<Test>(Channel::Ordered)
         .finish();
     }
 
     setup(&mut server_app, &mut client_app).unwrap();
 
-    client_app.world_mut().write_message(TestEvent);
+    client_app.world_mut().write_message(Test);
 
     client_app.update();
     server_app.update();
 
-    let messages = server_app
-        .world()
-        .resource::<Messages<FromClient<TestEvent>>>();
+    let messages = server_app.world().resource::<Messages<FromClient<Test>>>();
     assert_eq!(messages.len(), 1);
 }
 
@@ -246,4 +244,4 @@ fn setup(server_app: &mut App, client_app: &mut App) -> io::Result<()> {
 }
 
 #[derive(Message, Serialize, Deserialize)]
-struct TestEvent;
+struct Test;
