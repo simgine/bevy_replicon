@@ -1,7 +1,4 @@
-use core::{
-    any::{self, TypeId},
-    mem,
-};
+use core::{any::TypeId, mem};
 
 use bevy::{
     ecs::component::{Immutable, Mutable},
@@ -16,7 +13,7 @@ use crate::{prelude::*, shared::replication::deferred_entity::DeferredEntity};
 #[derive(Clone, Copy)]
 pub(super) struct UntypedCommandFns {
     type_id: TypeId,
-    type_name: &'static str,
+    type_name: ShortName<'static>,
 
     write: unsafe fn(),
     remove: RemoveFn,
@@ -32,7 +29,7 @@ impl UntypedCommandFns {
     pub(super) fn new<C: Component>(write: WriteFn<C>, remove: RemoveFn) -> Self {
         Self {
             type_id: TypeId::of::<C>(),
-            type_name: any::type_name::<C>(),
+            type_name: ShortName::of::<C>(),
             // SAFETY: the function won't be called until the type is restored.
             write: unsafe { mem::transmute::<WriteFn<C>, unsafe fn()>(write) },
             remove,
@@ -55,7 +52,7 @@ impl UntypedCommandFns {
             self.type_id,
             TypeId::of::<C>(),
             "trying to call a command write function with `{}`, but it was created with `{}`",
-            any::type_name::<C>(),
+            ShortName::of::<C>(),
             self.type_name,
         );
 

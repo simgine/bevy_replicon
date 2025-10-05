@@ -1,4 +1,4 @@
-use core::any::{self, TypeId};
+use core::any::TypeId;
 
 use bevy::{
     ecs::{component::Immutable, relationship::Relationship},
@@ -106,7 +106,7 @@ impl RelatedEntities {
         let type_id = TypeId::of::<C>();
         debug!(
             "connecting `{source}` with `{target}` via `{}`",
-            any::type_name::<C>()
+            ShortName::of::<C>()
         );
 
         self.graph.add_edge(source_node, target_node, type_id);
@@ -124,7 +124,7 @@ impl RelatedEntities {
         let type_id = TypeId::of::<C>();
         debug!(
             "disconnecting `{source}` from `{target}` via `{}`",
-            any::type_name::<C>()
+            ShortName::of::<C>()
         );
 
         // Remove all matching edges of this type.

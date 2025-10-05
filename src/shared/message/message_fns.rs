@@ -1,8 +1,5 @@
 use alloc::vec::Vec;
-use core::{
-    any::{self, TypeId},
-    mem,
-};
+use core::{any::TypeId, mem};
 
 use bevy::prelude::*;
 use bytes::Bytes;
@@ -13,13 +10,13 @@ use bytes::Bytes;
 #[derive(Clone, Copy)]
 pub(super) struct UntypedMessageFns {
     serialize_ctx_id: TypeId,
-    serialize_ctx_name: &'static str,
+    serialize_ctx_name: ShortName<'static>,
     deserialize_ctx_id: TypeId,
-    deserialize_ctx_name: &'static str,
+    deserialize_ctx_name: ShortName<'static>,
     message_id: TypeId,
-    message_name: &'static str,
+    message_name: ShortName<'static>,
     inner_id: TypeId,
-    inner_name: &'static str,
+    inner_name: ShortName<'static>,
 
     serialize_adapter: unsafe fn(),
     deserialize_adapter: unsafe fn(),
@@ -41,28 +38,28 @@ impl UntypedMessageFns {
             self.serialize_ctx_id,
             typeid::of::<S>(),
             "trying to call message functions with serialize context `{}`, but they were created with `{}`",
-            any::type_name::<S>(),
+            ShortName::of::<S>(),
             self.serialize_ctx_name,
         );
         debug_assert_eq!(
             self.deserialize_ctx_id,
             typeid::of::<D>(),
             "trying to call message functions with deserialize context `{}`, but they were created with `{}`",
-            any::type_name::<D>(),
+            ShortName::of::<D>(),
             self.deserialize_ctx_name,
         );
         debug_assert_eq!(
             self.message_id,
             TypeId::of::<M>(),
             "trying to call message functions with message `{}`, but they were created with `{}`",
-            any::type_name::<M>(),
+            ShortName::of::<M>(),
             self.message_name,
         );
         debug_assert_eq!(
             self.inner_id,
             TypeId::of::<I>(),
             "trying to call message functions with inner type `{}`, but they were created with `{}`",
-            any::type_name::<I>(),
+            ShortName::of::<I>(),
             self.inner_name,
         );
 
@@ -88,13 +85,13 @@ impl<S, D, M: 'static, I: 'static> From<MessageFns<S, D, M, I>> for UntypedMessa
         // SAFETY: these functions won't be called until the type is restored.
         Self {
             serialize_ctx_id: typeid::of::<S>(),
-            serialize_ctx_name: any::type_name::<S>(),
+            serialize_ctx_name: ShortName::of::<S>(),
             deserialize_ctx_id: typeid::of::<D>(),
-            deserialize_ctx_name: any::type_name::<D>(),
+            deserialize_ctx_name: ShortName::of::<D>(),
             message_id: TypeId::of::<M>(),
-            message_name: any::type_name::<M>(),
+            message_name: ShortName::of::<M>(),
             inner_id: TypeId::of::<I>(),
-            inner_name: any::type_name::<I>(),
+            inner_name: ShortName::of::<I>(),
             serialize_adapter: unsafe {
                 mem::transmute::<AdapterSerializeFn<S, M, I>, unsafe fn()>(value.serialize_adapter)
             },

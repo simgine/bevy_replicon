@@ -1,4 +1,4 @@
-use core::any::{self, TypeId};
+use core::any::TypeId;
 
 use bevy::{
     ecs::{component::ComponentId, entity::MapEntities, message::MessageCursor},
@@ -263,12 +263,12 @@ impl ClientMessage {
             if let Err(e) = unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes) } {
                 error!(
                     "ignoring message `{}` that failed to serialize: {e}",
-                    any::type_name::<M>()
+                    ShortName::of::<M>()
                 );
                 continue;
             }
 
-            debug!("sending message `{}`", any::type_name::<M>());
+            debug!("sending message `{}`", ShortName::of::<M>());
             client_messages.send(self.channel_id, message_bytes);
         }
     }
@@ -306,7 +306,7 @@ impl ClientMessage {
                 Ok(message) => {
                     debug!(
                         "writing message `{}` from client `{client}`",
-                        any::type_name::<M>()
+                        ShortName::of::<M>()
                     );
                     from_messages.write(FromClient {
                         client_id: client.into(),
@@ -315,7 +315,7 @@ impl ClientMessage {
                 }
                 Err(e) => debug!(
                     "ignoring message `{}` from client `{client}` that failed to deserialize: {e}",
-                    any::type_name::<M>()
+                    ShortName::of::<M>()
                 ),
             }
         }
@@ -343,7 +343,7 @@ impl ClientMessage {
             debug!(
                 "writing {} message(s) `{}` locally",
                 messages.len(),
-                any::type_name::<M>()
+                ShortName::of::<M>()
             );
             from_messages.write_batch(messages.drain().map(|message| FromClient {
                 client_id: ClientId::Server,
@@ -373,7 +373,7 @@ impl ClientMessage {
         if drained_count > 0 {
             warn!(
                 "discarded {drained_count} messages of type `{}` that were buffered before the connection",
-                any::type_name::<M>()
+                ShortName::of::<M>()
             );
         }
     }
