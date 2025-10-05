@@ -600,7 +600,7 @@ pub trait AppRuleExt {
     impl serde::Serialize for WithReflectSerializer<'_> {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             let mut state =
-                serializer.serialize_struct(ShortName::of::<WithReflectComponent>(), 3)?;
+                serializer.serialize_struct(any::type_name::<WithReflectComponent>(), 3)?;
             state.serialize_field("regular", &self.component.regular)?;
             state.serialize_field(
                 "reflect",
@@ -623,7 +623,7 @@ pub trait AppRuleExt {
             deserializer: D,
         ) -> Result<Self::Value, D::Error> {
             deserializer.deserialize_struct(
-                ShortName::of::<WithReflectComponent>(),
+                any::type_name::<WithReflectComponent>(),
                 &["regular", "reflect"],
                 self,
             )
@@ -634,7 +634,7 @@ pub trait AppRuleExt {
         type Value = WithReflectComponent;
 
         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-            formatter.write_str(ShortName::of::<Self::Value>())
+            formatter.write_str(any::type_name::<Self::Value>())
         }
 
         fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
