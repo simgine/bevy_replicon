@@ -11,7 +11,7 @@ use core::{ops::Range, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::Tick,
+        component::{CheckChangeTicks, Tick},
         entity::{Entities, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -132,6 +132,7 @@ impl Plugin for ServerPlugin {
             .add_observer(handle_connects)
             .add_observer(handle_disconnects)
             .add_observer(buffer_despawns)
+            .add_observer(check_mutation_ticks)
             .add_systems(
                 PreUpdate,
                 (
@@ -312,6 +313,16 @@ fn buffer_removals(
         let archetype = archetypes.get(location.archetype_id).unwrap();
 
         removal_buffer.update(&rules, archetype, entity, removed_components);
+    }
+}
+
+fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
+    debug!(
+        "checking mutation ticks for overflow for {:?}",
+        check.present_tick()
+    );
+    for mut ticks in &mut clients {
+        ticks.check_mutation_ticks(*check);
     }
 }
 

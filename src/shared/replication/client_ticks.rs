@@ -1,7 +1,10 @@
 use core::{mem, time::Duration};
 
 use bevy::{
-    ecs::{component::Tick, entity::hash_map::EntityHashMap},
+    ecs::{
+        component::{CheckChangeTicks, Tick},
+        entity::hash_map::EntityHashMap,
+    },
     platform::collections::HashMap,
     prelude::*,
 };
@@ -33,6 +36,12 @@ pub struct ClientTicks {
 }
 
 impl ClientTicks {
+    pub(crate) fn check_mutation_ticks(&mut self, check: CheckChangeTicks) {
+        for (tick, _) in &mut self.mutation_ticks.values_mut() {
+            tick.check_tick(check);
+        }
+    }
+
     /// Sets the client's update tick.
     pub(crate) fn set_update_tick(&mut self, tick: RepliconTick) {
         self.update_tick = tick;
