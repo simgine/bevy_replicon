@@ -4,8 +4,6 @@ pub mod ctx;
 pub mod rule_fns;
 pub mod test_fns;
 
-use core::any;
-
 use bevy::{ecs::component::ComponentId, prelude::*};
 use log::trace;
 use serde::{Deserialize, Serialize};
@@ -114,7 +112,7 @@ impl ReplicationRegistry {
         self.rules.push((rule_fns.into(), index));
         let fns_id = FnsId(self.rules.len() - 1);
 
-        trace!("registering `{fns_id:?}` for `{}`", any::type_name::<C>());
+        trace!("registering `{fns_id:?}` for `{}`", ShortName::of::<C>());
         (component_id, fns_id)
     }
 

@@ -1,7 +1,7 @@
 pub(crate) mod message_buffer;
 mod message_queue;
 
-use core::any::{self, TypeId};
+use core::any::TypeId;
 
 use bevy::{
     ecs::{component::ComponentId, entity::MapEntities},
@@ -184,7 +184,7 @@ impl ServerMessageAppExt for App {
             .unwrap_or_else(|| {
                 panic!(
                     "message `{}` should be previously registered",
-                    any::type_name::<M>()
+                    ShortName::of::<M>()
                 )
             });
 
@@ -195,7 +195,7 @@ impl ServerMessageAppExt for App {
             .unwrap_or_else(|| {
                 panic!(
                     "message `{}` should be previously registered as a server message",
-                    any::type_name::<M>()
+                    ShortName::of::<M>()
                 )
             });
 
@@ -336,10 +336,7 @@ impl ServerMessage {
         // For server messages we don't track read message because
         // all of them will always be drained in the local sending system.
         for ToClients { message, mode } in to_messages.get_cursor().read(to_messages) {
-            debug!(
-                "sending message `{}` with `{mode:?}`",
-                any::type_name::<M>()
-            );
+            debug!("sending message `{}` with `{mode:?}`", ShortName::of::<M>());
 
             if self.independent {
                 unsafe {
@@ -481,13 +478,13 @@ impl ServerMessage {
                     Ok(message) => {
                         debug!(
                             "writing message `{}` from queue with `{tick:?}`",
-                            any::type_name::<M>()
+                            ShortName::of::<M>()
                         );
                         messages.write(message);
                     }
                     Err(e) => error!(
                         "ignoring message `{}` from queue with `{tick:?}` that failed to deserialize: {e}",
-                        any::type_name::<M>()
+                        ShortName::of::<M>()
                     ),
                 }
             }
@@ -500,34 +497,31 @@ impl ServerMessage {
                     Err(e) => {
                         error!(
                             "ignoring message `{}` because it's tick failed to deserialize: {e}",
-                            any::type_name::<M>()
+                            ShortName::of::<M>()
                         );
                         continue;
                     }
                 };
                 if tick > update_tick {
-                    debug!(
-                        "queuing message `{}` with `{tick:?}`",
-                        any::type_name::<M>()
-                    );
+                    debug!("queuing message `{}` with `{tick:?}`", ShortName::of::<M>());
                     queue.insert(tick, message);
                     continue;
                 } else {
                     debug!(
                         "receiving message `{}` with `{tick:?}`",
-                        any::type_name::<M>()
+                        ShortName::of::<M>()
                     );
                 }
             }
 
             match unsafe { self.deserialize::<M, I>(ctx, &mut message) } {
                 Ok(message) => {
-                    debug!("writing message `{}`", any::type_name::<M>());
+                    debug!("writing message `{}`", ShortName::of::<M>());
                     messages.write(message);
                 }
                 Err(e) => error!(
                     "ignoring message `{}` that failed to deserialize: {e}",
-                    any::type_name::<M>()
+                    ShortName::of::<M>()
                 ),
             }
         }
@@ -552,7 +546,7 @@ impl ServerMessage {
         let to_messages: &mut Messages<ToClients<M>> = unsafe { to_messages.deref_mut() };
         let messages: &mut Messages<M> = unsafe { messages.deref_mut() };
         for ToClients { message, mode } in to_messages.drain() {
-            debug!("writing message `{}` locally", any::type_name::<M>());
+            debug!("writing message `{}` locally", ShortName::of::<M>());
             match mode {
                 SendMode::Broadcast => {
                     messages.write(message);

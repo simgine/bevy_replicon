@@ -1,4 +1,4 @@
-use core::any::{self, TypeId};
+use core::any::TypeId;
 
 use bevy::{ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
 use log::debug;
@@ -96,7 +96,7 @@ impl ServerEventAppExt for App {
             .unwrap_or_else(|| {
                 panic!(
                     "event `{}` should be previously registered",
-                    any::type_name::<E>()
+                    ShortName::of::<E>()
                 )
             });
 
@@ -107,7 +107,7 @@ impl ServerEventAppExt for App {
             .unwrap_or_else(|| {
                 panic!(
                     "message `{}` should be previously registered as a server message",
-                    any::type_name::<E>()
+                    ShortName::of::<E>()
                 )
             });
 
@@ -158,7 +158,7 @@ impl ServerEvent {
     ) {
         let messages: &mut Messages<ServerTriggerEvent<E>> = unsafe { messages.deref_mut() };
         for message in messages.drain() {
-            debug!("triggering `{}`", any::type_name::<E>());
+            debug!("triggering `{}`", ShortName::of::<E>());
             commands.trigger(message.event);
         }
     }

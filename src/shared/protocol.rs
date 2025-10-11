@@ -53,7 +53,7 @@ impl ProtocolHasher {
     pub(crate) fn replicate<R>(&mut self, priority: usize) {
         debug!(
             "adding replication rule `{}` with priority {priority}",
-            any::type_name::<R>()
+            ShortName::of::<R>()
         );
         self.hash::<R>(ProtocolPart::Replicate {
             priority: priority as u64,
@@ -63,38 +63,38 @@ impl ProtocolHasher {
     pub(crate) fn replicate_bundle<B>(&mut self) {
         debug!(
             "adding replication rule for bundle `{}`",
-            any::type_name::<B>()
+            ShortName::of::<B>()
         );
         self.hash::<B>(ProtocolPart::ReplicateBundle);
     }
 
     pub(crate) fn add_client_message<E>(&mut self) {
-        debug!("adding client message `{}`", any::type_name::<E>());
+        debug!("adding client message `{}`", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::ClientMessage);
     }
 
     pub(crate) fn add_client_event<E>(&mut self) {
-        debug!("adding client event `{}`", any::type_name::<E>());
+        debug!("adding client event `{}`", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::ClientEvent);
     }
 
     pub(crate) fn add_server_message<E>(&mut self) {
-        debug!("adding server message `{}`", any::type_name::<E>());
+        debug!("adding server message `{}`", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::ServerMessage);
     }
 
     pub(crate) fn add_server_event<E>(&mut self) {
-        debug!("adding server event `{}`", any::type_name::<E>());
+        debug!("adding server event `{}`", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::ServerEvent);
     }
 
     pub(crate) fn make_message_independent<E>(&mut self) {
-        debug!("making message `{}` independent", any::type_name::<E>());
+        debug!("making message `{}` independent", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::IndependentMessage);
     }
 
     pub(crate) fn make_event_independent<E>(&mut self) {
-        debug!("making event `{}` independent", any::type_name::<E>());
+        debug!("making event `{}` independent", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::IndependentEvent);
     }
 
