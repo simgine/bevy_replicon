@@ -86,7 +86,7 @@ app.add_systems(OnEnter(ClientState::Connecting), display_connection_message) //
 # fn initialize_match() {}
 ```
 
-You can also use these states with [`DespawnOnExit`] to control the lifetime of entities across states.
+You can also use these states with [`DespawnOnExit`] to control the lifetime of entities.
 
 Read more about system patterns in the [Abstracting over configurations](#abstracting-over-configurations)
 section.
