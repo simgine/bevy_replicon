@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Move `VisibilityPolicy` to `server::client_visibility` module.
+
 ## [0.36.1] - 2025-10-11
 
 ### Changed
