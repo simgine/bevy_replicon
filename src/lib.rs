@@ -86,16 +86,7 @@ app.add_systems(OnEnter(ClientState::Connecting), display_connection_message) //
 # fn initialize_match() {}
 ```
 
-You can also use these states with [`StateScoped`], but you'll need to call
-[`AppExtStates::enable_state_scoped_entities`] in your app:
-
-```
-# use bevy::prelude::*;
-# use bevy_replicon::prelude::*;
-# let mut app = App::new();
-app.enable_state_scoped_entities::<ClientState>()
-    .enable_state_scoped_entities::<ServerState>();
-```
+You can also use these states with [`DespawnOnExit`] to control the lifetime of entities.
 
 Read more about system patterns in the [Abstracting over configurations](#abstracting-over-configurations)
 section.
