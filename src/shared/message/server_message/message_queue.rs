@@ -11,17 +11,17 @@ use crate::prelude::*;
 /// Stores data sorted by ticks and maintains order of arrival.
 /// Needed to ensure that when an message is triggered, all the data that it affects or references already exists.
 #[derive(Resource)]
-pub(super) struct MessageQueue<E> {
+pub(super) struct MessageQueue<M> {
     map: BTreeMap<RepliconTick, Vec<Bytes>>,
     /// [`Vec`]s from removals.
     ///
     /// All data is drained before the insertion.
     /// Stored to reuse allocated capacity.
     buffer: Vec<Vec<Bytes>>,
-    marker: PhantomData<E>,
+    marker: PhantomData<M>,
 }
 
-impl<E> MessageQueue<E> {
+impl<M> MessageQueue<M> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
         self.map
             .entry(tick)
@@ -60,7 +60,7 @@ impl<E> MessageQueue<E> {
     }
 }
 
-impl<E> Default for MessageQueue<E> {
+impl<M> Default for MessageQueue<M> {
     fn default() -> Self {
         Self {
             map: Default::default(),

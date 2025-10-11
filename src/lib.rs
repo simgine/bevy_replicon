@@ -40,7 +40,7 @@ see [this section](https://docs.rs/bevy_replicon_renet#server-and-client-creatio
 
 On server connected clients represented as entities with [`ConnectedClient`] component.
 Their data represented as components, such as [`ClientStats`]. Users can also attach their
-own metadata to them or even replicate these entiteis back to clients.
+own metadata to them or even replicate these entities back to clients.
 
 These entities are automatically spawned and despawned by the messaging backend. You can
 also despawn them yourself to trigger a disconnect or use the [`DisconnectRequest`] message
@@ -450,7 +450,7 @@ Depending on the game, you may need to support some of these configurations:
 - Listen server (where the server is also a client)
 - Singleplayer
 
-Theere are 2 ways to support multiple configurations at the same time.
+There are 2 ways to support multiple configurations at the same time.
 
 ### Classic way
 
@@ -512,7 +512,7 @@ Alternatively, you can use [Cargo features](https://doc.rust-lang.org/cargo/refe
 the logic into modules.
 
 We provide `client` and `server` features to disable unneeded functionality for this use case.
-You will need to disable similar features on your messaing backend crate too.
+You will need to disable similar features on your messaging backend crate too.
 
 <div class="warning">
 

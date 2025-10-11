@@ -1,4 +1,4 @@
-use core::any::{self, TypeId};
+use core::any::TypeId;
 
 use bevy::{ecs::entity::MapEntities, prelude::*, ptr::PtrMut};
 use log::debug;
@@ -123,7 +123,7 @@ impl ClientEvent {
         for FromClient { client_id, message } in from_messages.drain() {
             debug!(
                 "triggering `{}` from `{client_id}`",
-                any::type_name::<FromClient<E>>()
+                ShortName::of::<FromClient<E>>()
             );
             commands.trigger(FromClient {
                 client_id,

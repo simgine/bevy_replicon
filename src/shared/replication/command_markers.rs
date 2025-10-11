@@ -1,4 +1,4 @@
-use core::{any, cmp::Reverse};
+use core::cmp::Reverse;
 
 use bevy::{ecs::component::ComponentId, prelude::*};
 use log::debug;
@@ -140,7 +140,7 @@ impl AppMarkerExt for App {
     }
 
     fn register_marker_with<M: Component>(&mut self, config: MarkerConfig) -> &mut Self {
-        debug!("registering marker `{}`", any::type_name::<M>());
+        debug!("registering marker `{}`", ShortName::of::<M>());
         let component_id = self.world_mut().register_component::<M>();
         let mut command_markers = self.world_mut().resource_mut::<CommandMarkers>();
         let marker_id = command_markers.insert(CommandMarker {
@@ -161,8 +161,8 @@ impl AppMarkerExt for App {
     ) -> &mut Self {
         debug!(
             "adding fns for marker `{}` for component `{}`",
-            any::type_name::<M>(),
-            any::type_name::<C>()
+            ShortName::of::<M>(),
+            ShortName::of::<C>()
         );
         let component_id = self.world_mut().register_component::<M>();
         let command_markers = self.world().resource::<CommandMarkers>();
@@ -182,7 +182,7 @@ impl AppMarkerExt for App {
     ) -> &mut Self {
         debug!(
             "setting command fns for component `{}`",
-            any::type_name::<C>()
+            ShortName::of::<C>()
         );
         self.world_mut()
             .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {

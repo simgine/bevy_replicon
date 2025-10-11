@@ -1,7 +1,7 @@
 pub(crate) mod message_buffer;
 mod message_queue;
 
-use core::any::{self, TypeId};
+use core::any::TypeId;
 
 use bevy::{
     ecs::{component::ComponentId, entity::MapEntities},
@@ -28,10 +28,10 @@ use message_queue::MessageQueue;
 pub trait ServerMessageAppExt {
     /// Registers a remote server message.
     ///
-    /// After writing [`ToClients<E>`] message on the server, `E` message will be written on clients.
+    /// After writing [`ToClients<M>`] message on the server, `M` message will be written on clients.
     ///
     /// If [`ClientMessagePlugin`] is enabled and [`ClientId::Server`] is a recipient of the message, then
-    /// [`ToClients<E>`] message will be drained after sending to clients and `E` message will be written
+    /// [`ToClients<M>`] message will be drained after sending to clients and `M` message will be written
     /// on the server as well.
     ///
     /// Calling [`App::add_message`] is not necessary. Can used for regular messages that were
@@ -41,25 +41,25 @@ pub trait ServerMessageAppExt {
     /// for more details.
     ///
     /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
-    fn add_server_message<E: Message + Serialize + DeserializeOwned>(
+    fn add_server_message<M: Message + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
-        self.add_server_message_with(channel, default_serialize::<E>, default_deserialize::<E>)
+        self.add_server_message_with(channel, default_serialize::<M>, default_deserialize::<M>)
     }
 
     /// Same as [`Self::add_server_message`], but additionally maps server entities to client inside the message after receiving.
     ///
     /// Always use it for messages that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
-    fn add_mapped_server_message<E: Message + Serialize + DeserializeOwned + MapEntities>(
+    fn add_mapped_server_message<M: Message + Serialize + DeserializeOwned + MapEntities>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
         self.add_server_message_with(
             channel,
-            default_serialize::<E>,
-            default_deserialize_mapped::<E>,
+            default_serialize::<M>,
+            default_deserialize_mapped::<M>,
         )
     }
 
@@ -118,14 +118,14 @@ pub trait ServerMessageAppExt {
 
     See also [`AppRuleExt::replicate_with`] for more examples with custom ser/de.
     */
-    fn add_server_message_with<E: Message>(
+    fn add_server_message_with<M: Message>(
         &mut self,
         channel: Channel,
-        serialize: SerializeFn<ServerSendCtx, E>,
-        deserialize: DeserializeFn<ClientReceiveCtx, E>,
+        serialize: SerializeFn<ServerSendCtx, M>,
+        deserialize: DeserializeFn<ClientReceiveCtx, M>,
     ) -> &mut Self;
 
-    /// Marks the message `E` as an independent message.
+    /// Marks the message `M` as an independent message.
     ///
     /// By default, all server messages are buffered on server until server tick
     /// and queued on client until all insertions, removals and despawns
@@ -150,19 +150,19 @@ pub trait ServerMessageAppExt {
     /// </div>
     ///
     /// See also [`ServerEventAppExt::make_event_independent`].
-    fn make_message_independent<E: Message>(&mut self) -> &mut Self;
+    fn make_message_independent<M: Message>(&mut self) -> &mut Self;
 }
 
 impl ServerMessageAppExt for App {
-    fn add_server_message_with<E: Message>(
+    fn add_server_message_with<M: Message>(
         &mut self,
         channel: Channel,
-        serialize: SerializeFn<ServerSendCtx, E>,
-        deserialize: DeserializeFn<ClientReceiveCtx, E>,
+        serialize: SerializeFn<ServerSendCtx, M>,
+        deserialize: DeserializeFn<ClientReceiveCtx, M>,
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .add_server_message::<E>();
+            .add_server_message::<M>();
 
         let fns = MessageFns::new(serialize, deserialize);
         let message = ServerMessage::new(self, channel, fns);
@@ -172,19 +172,19 @@ impl ServerMessageAppExt for App {
         self
     }
 
-    fn make_message_independent<E: Message>(&mut self) -> &mut Self {
+    fn make_message_independent<M: Message>(&mut self) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .make_message_independent::<E>();
+            .make_message_independent::<M>();
 
         let messages_id = self
             .world()
             .components()
-            .resource_id::<Messages<E>>()
+            .resource_id::<Messages<M>>()
             .unwrap_or_else(|| {
                 panic!(
                     "message `{}` should be previously registered",
-                    any::type_name::<E>()
+                    ShortName::of::<M>()
                 )
             });
 
@@ -195,7 +195,7 @@ impl ServerMessageAppExt for App {
             .unwrap_or_else(|| {
                 panic!(
                     "message `{}` should be previously registered as a server message",
-                    any::type_name::<E>()
+                    ShortName::of::<M>()
                 )
             });
 
@@ -216,10 +216,10 @@ pub(crate) struct ServerMessage {
     /// immediately.
     pub(super) independent: bool,
 
-    /// ID of [`Messages<E>`].
+    /// ID of [`Messages<M>`].
     messages_id: ComponentId,
 
-    /// ID of [`Messages<ToClients<E>>`].
+    /// ID of [`Messages<ToClients<M>>`].
     to_messages_id: ComponentId,
 
     /// ID of [`MessageQueue<T>`].
@@ -228,7 +228,7 @@ pub(crate) struct ServerMessage {
     /// Used channel.
     channel_id: usize,
 
-    /// ID of `E`.
+    /// ID of `M`.
     type_id: TypeId,
 
     send_or_buffer: SendOrBufferFn,
@@ -239,23 +239,23 @@ pub(crate) struct ServerMessage {
 }
 
 impl ServerMessage {
-    pub(super) fn new<E: Message, I: 'static>(
+    pub(super) fn new<M: Message, I: 'static>(
         app: &mut App,
         channel: Channel,
-        fns: MessageFns<ServerSendCtx, ClientReceiveCtx, E, I>,
+        fns: MessageFns<ServerSendCtx, ClientReceiveCtx, M, I>,
     ) -> Self {
         let channel_id = app
             .world_mut()
             .resource_mut::<RepliconChannels>()
             .create_server_channel(channel);
 
-        app.add_message::<E>()
-            .add_message::<ToClients<E>>()
-            .init_resource::<MessageQueue<E>>();
+        app.add_message::<M>()
+            .add_message::<ToClients<M>>()
+            .init_resource::<MessageQueue<M>>();
 
-        let messages_id = app.world().resource_id::<Messages<E>>().unwrap();
-        let to_messages_id = app.world().resource_id::<Messages<ToClients<E>>>().unwrap();
-        let queue_id = app.world().resource_id::<MessageQueue<E>>().unwrap();
+        let messages_id = app.world().resource_id::<Messages<M>>().unwrap();
+        let to_messages_id = app.world().resource_id::<Messages<ToClients<M>>>().unwrap();
+        let queue_id = app.world().resource_id::<MessageQueue<M>>().unwrap();
 
         Self {
             independent: false,
@@ -263,11 +263,11 @@ impl ServerMessage {
             to_messages_id,
             queue_id,
             channel_id,
-            type_id: TypeId::of::<E>(),
-            send_or_buffer: Self::send_or_buffer_typed::<E, I>,
-            receive: Self::receive_typed::<E, I>,
-            send_locally: Self::send_locally_typed::<E>,
-            reset: Self::reset_typed::<E>,
+            type_id: TypeId::of::<M>(),
+            send_or_buffer: Self::send_or_buffer_typed::<M, I>,
+            receive: Self::receive_typed::<M, I>,
+            send_locally: Self::send_locally_typed::<M>,
+            reset: Self::reset_typed::<M>,
             fns: fns.into(),
         }
     }
@@ -296,8 +296,8 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `to_messages` is [`Messages<ToClients<E>>`]
-    /// and this instance was created for `E`.
+    /// The caller must ensure that `to_messages` is [`Messages<ToClients<M>>`]
+    /// and this instance was created for `M`.
     pub(crate) unsafe fn send_or_buffer(
         &self,
         ctx: &mut ServerSendCtx,
@@ -322,9 +322,9 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `to_messages` is [`Messages<ToClients<E>>`]
-    /// and this instance was created for `E` and `I`.
-    unsafe fn send_or_buffer_typed<E: Message, I: 'static>(
+    /// The caller must ensure that `to_messages` is [`Messages<ToClients<M>>`]
+    /// and this instance was created for `M` and `I`.
+    unsafe fn send_or_buffer_typed<M: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
         to_messages: &Ptr,
@@ -332,18 +332,15 @@ impl ServerMessage {
         clients: &Query<Entity, With<ConnectedClient>>,
         message_buffer: &mut MessageBuffer,
     ) {
-        let to_messages: &Messages<ToClients<E>> = unsafe { to_messages.deref() };
+        let to_messages: &Messages<ToClients<M>> = unsafe { to_messages.deref() };
         // For server messages we don't track read message because
         // all of them will always be drained in the local sending system.
         for ToClients { message, mode } in to_messages.get_cursor().read(to_messages) {
-            debug!(
-                "sending message `{}` with `{mode:?}`",
-                any::type_name::<E>()
-            );
+            debug!("sending message `{}` with `{mode:?}`", ShortName::of::<M>());
 
             if self.independent {
                 unsafe {
-                    self.send_independent_message::<E, I>(
+                    self.send_independent_message::<M, I>(
                         ctx,
                         message,
                         mode,
@@ -354,30 +351,30 @@ impl ServerMessage {
                 }
             } else {
                 unsafe {
-                    self.buffer_message::<E, I>(ctx, message, *mode, message_buffer)
+                    self.buffer_message::<M, I>(ctx, message, *mode, message_buffer)
                         .expect("server message should be serializable");
                 }
             }
         }
     }
 
-    /// Sends independent remote message `E` based on a mode.
+    /// Sends independent remote message `M` based on a mode.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that this instance was created for `E` and `I`.
+    /// The caller must ensure that this instance was created for `M` and `I`.
     ///
     /// For regular messages see [`Self::buffer_message`].
-    unsafe fn send_independent_message<E: Message, I: 'static>(
+    unsafe fn send_independent_message<M: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
-        message: &E,
+        message: &M,
         mode: &SendMode,
         server_messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
     ) -> Result<()> {
         let mut message_bytes = Vec::new();
-        unsafe { self.serialize::<E, I>(ctx, message, &mut message_bytes)? }
+        unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes)? }
         let message_bytes: Bytes = message_bytes.into();
 
         match *mode {
@@ -403,21 +400,21 @@ impl ServerMessage {
         Ok(())
     }
 
-    /// Buffers message `E` based on mode.
+    /// Buffers message `M` based on mode.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that this instance was created for `E` and `I`.
+    /// The caller must ensure that this instance was created for `M` and `I`.
     ///
     /// For independent messages see [`Self::send_independent_message`].
-    unsafe fn buffer_message<E: Message, I: 'static>(
+    unsafe fn buffer_message<M: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
-        message: &E,
+        message: &M,
         mode: SendMode,
         message_buffer: &mut MessageBuffer,
     ) -> Result<()> {
-        let message_bytes = unsafe { self.serialize_with_padding::<E, I>(ctx, message)? };
+        let message_bytes = unsafe { self.serialize_with_padding::<M, I>(ctx, message)? };
         message_buffer.insert(mode, self.channel_id, message_bytes);
         Ok(())
     }
@@ -428,14 +425,14 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that this instance was created for `E` and `I`.
-    unsafe fn serialize_with_padding<E: Message, I: 'static>(
+    /// The caller must ensure that this instance was created for `M` and `I`.
+    unsafe fn serialize_with_padding<M: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
-        message: &E,
+        message: &M,
     ) -> Result<SerializedMessage> {
         let mut message_bytes = vec![0; RepliconTick::POSTCARD_MAX_SIZE]; // Padding for the tick.
-        unsafe { self.serialize::<E, I>(ctx, message, &mut message_bytes)? }
+        unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes)? }
         let message = SerializedMessage::Raw(message_bytes);
 
         Ok(message)
@@ -445,8 +442,8 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<E>`], `queue` is [`MessageQueue<E>`],
-    /// and this instance was created for `E`.
+    /// The caller must ensure that `messages` is [`Messages<M>`], `queue` is [`MessageQueue<M>`],
+    /// and this instance was created for `M`.
     pub(crate) unsafe fn receive(
         &self,
         ctx: &mut ClientReceiveCtx,
@@ -462,9 +459,9 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<E>`], `queue` is [`MessageQueue<E>`]
-    /// and this instance was created for `E` and `I`.
-    unsafe fn receive_typed<E: Message, I: 'static>(
+    /// The caller must ensure that `messages` is [`Messages<M>`], `queue` is [`MessageQueue<M>`]
+    /// and this instance was created for `M` and `I`.
+    unsafe fn receive_typed<M: Message, I: 'static>(
         &self,
         ctx: &mut ClientReceiveCtx,
         messages: PtrMut,
@@ -472,22 +469,22 @@ impl ServerMessage {
         client_messages: &mut ClientMessages,
         update_tick: RepliconTick,
     ) {
-        let messages: &mut Messages<E> = unsafe { messages.deref_mut() };
-        let queue: &mut MessageQueue<E> = unsafe { queue.deref_mut() };
+        let messages: &mut Messages<M> = unsafe { messages.deref_mut() };
+        let queue: &mut MessageQueue<M> = unsafe { queue.deref_mut() };
 
         while let Some((tick, serialized_messages)) = queue.pop_if_le(update_tick) {
             for mut message in serialized_messages {
-                match unsafe { self.deserialize::<E, I>(ctx, &mut message) } {
+                match unsafe { self.deserialize::<M, I>(ctx, &mut message) } {
                     Ok(message) => {
                         debug!(
                             "writing message `{}` from queue with `{tick:?}`",
-                            any::type_name::<E>()
+                            ShortName::of::<M>()
                         );
                         messages.write(message);
                     }
                     Err(e) => error!(
                         "ignoring message `{}` from queue with `{tick:?}` that failed to deserialize: {e}",
-                        any::type_name::<E>()
+                        ShortName::of::<M>()
                     ),
                 }
             }
@@ -500,45 +497,42 @@ impl ServerMessage {
                     Err(e) => {
                         error!(
                             "ignoring message `{}` because it's tick failed to deserialize: {e}",
-                            any::type_name::<E>()
+                            ShortName::of::<M>()
                         );
                         continue;
                     }
                 };
                 if tick > update_tick {
-                    debug!(
-                        "queuing message `{}` with `{tick:?}`",
-                        any::type_name::<E>()
-                    );
+                    debug!("queuing message `{}` with `{tick:?}`", ShortName::of::<M>());
                     queue.insert(tick, message);
                     continue;
                 } else {
                     debug!(
                         "receiving message `{}` with `{tick:?}`",
-                        any::type_name::<E>()
+                        ShortName::of::<M>()
                     );
                 }
             }
 
-            match unsafe { self.deserialize::<E, I>(ctx, &mut message) } {
+            match unsafe { self.deserialize::<M, I>(ctx, &mut message) } {
                 Ok(message) => {
-                    debug!("writing message `{}`", any::type_name::<E>());
+                    debug!("writing message `{}`", ShortName::of::<M>());
                     messages.write(message);
                 }
                 Err(e) => error!(
                     "ignoring message `{}` that failed to deserialize: {e}",
-                    any::type_name::<E>()
+                    ShortName::of::<M>()
                 ),
             }
         }
     }
 
-    /// Drains messages [`ToClients<E>`] and writes them as `E` if the server is in the list of the message recipients.
+    /// Drains messages [`ToClients<M>`] and writes them as `M` if the server is in the list of the message recipients.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<E>`], `to_messages` is [`Messages<ToClients<E>>`],
-    /// and this instance was created for `E`.
+    /// The caller must ensure that `messages` is [`Messages<M>`], `to_messages` is [`Messages<ToClients<M>>`],
+    /// and this instance was created for `M`.
     pub(crate) unsafe fn send_locally(&self, to_messages: PtrMut, messages: PtrMut) {
         unsafe { (self.send_locally)(to_messages, messages) }
     }
@@ -547,12 +541,12 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<E>`] and `to_messages` is [`Messages<ToClients<E>>`].
-    unsafe fn send_locally_typed<E: Message>(to_messages: PtrMut, messages: PtrMut) {
-        let to_messages: &mut Messages<ToClients<E>> = unsafe { to_messages.deref_mut() };
-        let messages: &mut Messages<E> = unsafe { messages.deref_mut() };
+    /// The caller must ensure that `messages` is [`Messages<M>`] and `to_messages` is [`Messages<ToClients<M>>`].
+    unsafe fn send_locally_typed<M: Message>(to_messages: PtrMut, messages: PtrMut) {
+        let to_messages: &mut Messages<ToClients<M>> = unsafe { to_messages.deref_mut() };
+        let messages: &mut Messages<M> = unsafe { messages.deref_mut() };
         for ToClients { message, mode } in to_messages.drain() {
-            debug!("writing message `{}` locally", any::type_name::<E>());
+            debug!("writing message `{}` locally", ShortName::of::<M>());
             match mode {
                 SendMode::Broadcast => {
                     messages.write(message);
@@ -577,8 +571,8 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `queue` is [`MessageQueue<E>`]
-    /// and this instance was created for `E`.
+    /// The caller must ensure that `queue` is [`MessageQueue<M>`]
+    /// and this instance was created for `M`.
     pub(crate) unsafe fn reset(&self, queue: PtrMut) {
         unsafe { (self.reset)(queue) }
     }
@@ -587,9 +581,9 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `queue` is [`MessageQueue<E>`].
-    unsafe fn reset_typed<E: Message>(queue: PtrMut) {
-        let queue: &mut MessageQueue<E> = unsafe { queue.deref_mut() };
+    /// The caller must ensure that `queue` is [`MessageQueue<M>`].
+    unsafe fn reset_typed<M: Message>(queue: PtrMut) {
+        let queue: &mut MessageQueue<M> = unsafe { queue.deref_mut() };
         if !queue.is_empty() {
             warn!(
                 "discarding {} queued messages due to a disconnect",
@@ -603,16 +597,16 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that this instance was created for `E` and `I`.
-    unsafe fn serialize<E: Message, I: 'static>(
+    /// The caller must ensure that this instance was created for `M` and `I`.
+    unsafe fn serialize<M: Message, I: 'static>(
         &self,
         ctx: &mut ServerSendCtx,
-        message: &E,
+        message: &M,
         message_bytes: &mut Vec<u8>,
     ) -> Result<()> {
         unsafe {
             self.fns
-                .typed::<ServerSendCtx, ClientReceiveCtx, E, I>()
+                .typed::<ServerSendCtx, ClientReceiveCtx, M, I>()
                 .serialize(ctx, message, message_bytes)
         }
     }
@@ -621,15 +615,15 @@ impl ServerMessage {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that this instance was created for `E` and `I`.
-    unsafe fn deserialize<E: Message, I: 'static>(
+    /// The caller must ensure that this instance was created for `M` and `I`.
+    unsafe fn deserialize<M: Message, I: 'static>(
         &self,
         ctx: &mut ClientReceiveCtx,
         message: &mut Bytes,
-    ) -> Result<E> {
+    ) -> Result<M> {
         let message = unsafe {
             self.fns
-                .typed::<ServerSendCtx, ClientReceiveCtx, E, I>()
+                .typed::<ServerSendCtx, ClientReceiveCtx, M, I>()
                 .deserialize(ctx, message)?
         };
 
@@ -695,9 +689,9 @@ pub enum SendMode {
 }
 
 /// Default message serialization function.
-pub fn default_serialize<E: Serialize>(
+pub fn default_serialize<M: Serialize>(
     _ctx: &mut ServerSendCtx,
-    message: &E,
+    message: &M,
     message_bytes: &mut Vec<u8>,
 ) -> Result<()> {
     postcard_utils::to_extend_mut(message, message_bytes)?;
@@ -705,20 +699,20 @@ pub fn default_serialize<E: Serialize>(
 }
 
 /// Default message deserialization function.
-pub fn default_deserialize<E: DeserializeOwned>(
+pub fn default_deserialize<M: DeserializeOwned>(
     _ctx: &mut ClientReceiveCtx,
     message: &mut Bytes,
-) -> Result<E> {
+) -> Result<M> {
     let message = postcard_utils::from_buf(message)?;
     Ok(message)
 }
 
 /// Like [`default_deserialize`], but also maps entities.
-pub fn default_deserialize_mapped<E: DeserializeOwned + MapEntities>(
+pub fn default_deserialize_mapped<M: DeserializeOwned + MapEntities>(
     ctx: &mut ClientReceiveCtx,
     message: &mut Bytes,
-) -> Result<E> {
-    let mut message: E = postcard_utils::from_buf(message)?;
+) -> Result<M> {
+    let mut message: M = postcard_utils::from_buf(message)?;
     message.map_entities(ctx);
     Ok(message)
 }

@@ -1,7 +1,4 @@
-use core::{
-    any::{self, TypeId},
-    mem,
-};
+use core::{any::TypeId, mem};
 
 use bevy::prelude::*;
 use bytes::Bytes;
@@ -15,7 +12,7 @@ use crate::postcard_utils;
 /// Stored inside [`ReplicationRegistry`](super::ReplicationRegistry) after registration.
 pub(crate) struct UntypedRuleFns {
     type_id: TypeId,
-    type_name: &'static str,
+    type_name: ShortName<'static>,
 
     serialize: unsafe fn(),
     deserialize: unsafe fn(),
@@ -34,7 +31,7 @@ impl UntypedRuleFns {
             self.type_id,
             TypeId::of::<C>(),
             "trying to call rule functions with `{}`, but they were created with `{}`",
-            any::type_name::<C>(),
+            ShortName::of::<C>(),
             self.type_name,
         );
 
@@ -56,7 +53,7 @@ impl<C: Component> From<RuleFns<C>> for UntypedRuleFns {
         // SAFETY: these functions won't be called until the type is restored.
         Self {
             type_id: TypeId::of::<C>(),
-            type_name: any::type_name::<C>(),
+            type_name: ShortName::of::<C>(),
             serialize: unsafe { mem::transmute::<SerializeFn<C>, unsafe fn()>(value.serialize) },
             deserialize: unsafe {
                 mem::transmute::<DeserializeFn<C>, unsafe fn()>(value.deserialize)
