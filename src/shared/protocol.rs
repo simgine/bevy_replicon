@@ -98,6 +98,11 @@ impl ProtocolHasher {
         self.hash::<E>(ProtocolPart::IndependentEvent);
     }
 
+    pub(crate) fn track_mutate_messages(&mut self) {
+        debug!("enabling mutate message tracking");
+        ProtocolPart::TrackMutateMessages.hash(&mut self.0);
+    }
+
     fn hash<T>(&mut self, part: ProtocolPart) {
         part.hash(&mut self.0);
         any::type_name::<T>().hash(&mut self.0);
@@ -127,6 +132,7 @@ enum ProtocolPart {
     ServerEvent,
     IndependentMessage,
     IndependentEvent,
+    TrackMutateMessages,
 }
 
 /// Hash of all registered events and replication rules.
@@ -225,10 +231,11 @@ mod tests {
             hasher.add_server_event::<StructC>();
             hasher.add_client_message::<StructB>();
             hasher.add_client_event::<StructC>();
+            hasher.track_mutate_messages();
             hasher.add_custom(0usize);
         }
 
-        const EXPECTED: ProtocolHash = ProtocolHash(10617357519866006183);
+        const EXPECTED: ProtocolHash = ProtocolHash(7833509759262497991);
         assert_eq!(hasher1.finish(), EXPECTED);
         assert_eq!(hasher2.finish(), EXPECTED);
     }

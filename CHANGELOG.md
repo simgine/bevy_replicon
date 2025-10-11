@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Move `VisibilityPolicy` to `server::client_visibility` module.
+- Include `TrackAppExt::track_mutate_messages` in the replication protocol, since it affects the serialization format.
 
 ## [0.36.1] - 2025-10-11
 
