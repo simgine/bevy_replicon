@@ -710,10 +710,7 @@ fn collect_changes(
                     continue;
                 }
 
-                // The entity is new for the client if it's mutation tick is not set.
-                // This value resets when the entity loses visibility or stops being replicated.
-                let new_entity = entity_cache.mutation_tick.is_none();
-                if new_entity
+                if entity_cache.is_new_for_client()
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
                 {
@@ -729,7 +726,7 @@ fn collect_changes(
                     ticks.set_mutation_tick(entity.id(), change_tick.this_run(), server_tick);
                 }
 
-                if new_entity && !updates.changed_entity_added() {
+                if entity_cache.is_new_for_client() && !updates.changed_entity_added() {
                     trace!(
                         "writing empty `{}` for client `{client_entity}`",
                         entity.id()
@@ -757,7 +754,7 @@ fn should_send_mapping(
         return false;
     }
 
-    signature.is_added() || ticks.mutation_tick(entity).is_none()
+    signature.is_added() || ticks.is_new_for_client(entity)
 }
 
 /// Writes a mapping or re-uses previously written range if exists.
@@ -923,4 +920,13 @@ struct EntityCache {
     mutation_tick: Option<(Tick, RepliconTick)>,
     visible: bool,
     base_priority: f32,
+}
+
+impl EntityCache {
+    /// Returns whether this entity is new for the client.
+    ///
+    /// For details see [`ClientTicks::is_new_for_client`].
+    fn is_new_for_client(&self) -> bool {
+        self.mutation_tick.is_none()
+    }
 }

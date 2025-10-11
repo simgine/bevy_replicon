@@ -93,6 +93,14 @@ impl ClientTicks {
         self.mutation_ticks.get(&entity).copied()
     }
 
+    /// Returns whether this entity is new for the client.
+    ///
+    /// This can be a new entity spawned on the server or an entity that has just become visible to the client.
+    /// This occurs when its mutation tick is not set. It resets when the entity loses visibility or stops being replicated.
+    pub(crate) fn is_new_for_client(&self, entity: Entity) -> bool {
+        self.mutation_tick(entity).is_none()
+    }
+
     /// Marks mutate message as acknowledged by its index.
     ///
     /// Mutation tick for all entities from this mutate message will be set to the message tick if it's higher.
