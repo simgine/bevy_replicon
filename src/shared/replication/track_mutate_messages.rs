@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use log::debug;
+
+use crate::prelude::*;
 
 pub trait TrackAppExt {
     /// Enables mutate messages tracking.
@@ -19,7 +20,10 @@ pub trait TrackAppExt {
 
 impl TrackAppExt for App {
     fn track_mutate_messages(&mut self) -> &mut Self {
-        debug!("enabling mutate message tracking");
+        self.world_mut()
+            .resource_mut::<ProtocolHasher>()
+            .track_mutate_messages();
+
         self.world_mut().resource_mut::<TrackMutateMessages>().0 = true;
         self
     }
