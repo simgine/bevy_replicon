@@ -1028,6 +1028,62 @@ fn acknowledgment() {
 }
 
 #[test]
+fn before_acknowledgement() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap();
+    component.0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<&BoolComponent>();
+    let component = components.single(client_app.world()).unwrap();
+    assert!(component.0);
+
+    // Mutate again, but before receiving the acknowledgment from a client.
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap();
+    component.0 = false;
+
+    server_app.exchange_with_client(&mut client_app);
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(!component.0, "client should receive a new value");
+}
+
+#[test]
 fn confirm_history() {
     let mut server_app = App::new();
     let mut client_app = App::new();
