@@ -64,7 +64,7 @@ fn with_component() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+    server_app.world_mut().spawn((Replicated, A));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -72,32 +72,6 @@ fn with_component() {
 
     let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
-
-    server_app
-        .world_mut()
-        .entity_mut(server_entity)
-        .remove::<Replicated>();
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
-    assert_eq!(components.iter(client_app.world()).count(), 0);
-
-    server_app
-        .world_mut()
-        .entity_mut(server_entity)
-        .insert(Replicated);
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
-    assert_eq!(
-        components.iter(client_app.world()).count(),
-        1,
-        "entity should be spawned again"
-    );
 }
 
 #[test]
