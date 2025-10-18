@@ -201,6 +201,33 @@ fn remove_visibility() {
 }
 
 #[test]
+fn with_add_visibility_and_signature() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_visibility_filter::<TestVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app
+        .world_mut()
+        .spawn((Replicated, TestVisibility, Signature::from(0)))
+        .remove::<(Replicated, TestVisibility)>();
+
+    server_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(messages.drain_sent().count(), 0);
+}
+
+#[test]
 fn hidden() {
     let mut server_app = App::new();
     let mut client_app = App::new();
