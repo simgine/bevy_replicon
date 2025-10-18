@@ -107,11 +107,13 @@ fn after_spawn() {
         .remove::<Replicated>();
 
     server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().count(),
+        0,
+        "client shouldn't receive anything for a despawned entity"
+    );
 }
 
 #[test]
@@ -170,24 +172,18 @@ fn hidden() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn(Replicated).id();
-    let allocated_entities = client_app.world().entities().total_count();
+    server_app
+        .world_mut()
+        .spawn(Replicated)
+        .remove::<Replicated>();
 
     server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().despawn(server_entity);
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        client_app.world().entities().total_count(),
-        allocated_entities,
-        "client shouldn't spawn or despawn hidden entity"
+        messages.drain_sent().count(),
+        0,
+        "client shouldn't receive anything for a hidden entity"
     );
 }
 
