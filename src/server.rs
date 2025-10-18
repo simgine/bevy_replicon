@@ -344,7 +344,7 @@ fn send_replication(
         mutations.resize_related(related_entities.graphs_count());
     }
 
-    collect_mappings(&mut serialized, &mut clients, &entities)?;
+    collect_mappings(&mut serialized, &mut clients, &despawn_buffer, &entities)?;
     collect_despawns(&mut serialized, &mut clients, &mut despawn_buffer)?;
     collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
     collect_changes(
@@ -457,6 +457,7 @@ fn collect_mappings(
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    despawn_buffer: &DespawnBuffer,
     entities: &Query<(Entity, Ref<Signature>)>,
 ) -> Result<()> {
     for (entity, signature) in entities {
@@ -468,7 +469,7 @@ fn collect_mappings(
             else {
                 continue;
             };
-            if should_send_mapping(entity, &signature, &visibility, &ticks) {
+            if should_send_mapping(entity, despawn_buffer, &signature, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
                 );
@@ -478,7 +479,7 @@ fn collect_mappings(
             }
         } else {
             for (client_entity, mut message, .., ticks, _, visibility) in &mut *clients {
-                if should_send_mapping(entity, &signature, &visibility, &ticks) {
+                if should_send_mapping(entity, despawn_buffer, &signature, &visibility, &ticks) {
                     trace!(
                         "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
                     );
@@ -743,11 +744,14 @@ fn collect_changes(
 
 fn should_send_mapping(
     entity: Entity,
+    despawn_buffer: &DespawnBuffer,
     signature: &Ref<Signature>,
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
-    if !visibility.is_visible(entity) {
+    // Since despawns processed later, we need to explicitly check for them here
+    // because we can't distinguish between a despawn and removal of a visibility filter.
+    if !visibility.is_visible(entity) || despawn_buffer.contains(&entity) {
         return false;
     }
 
