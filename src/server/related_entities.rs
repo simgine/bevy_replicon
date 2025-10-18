@@ -507,7 +507,7 @@ mod tests {
             .add_children(&[child1, child2])
             .id();
 
-        app.world_mut().entity_mut(root).despawn();
+        app.world_mut().despawn(root);
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();

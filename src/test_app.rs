@@ -124,7 +124,7 @@ impl ServerTestAppExt for App {
             .remove_resource::<TestClientEntity>()
             .expect("client should have an assigned ID for disconnect");
 
-        self.world_mut().entity_mut(client_entity).despawn();
+        self.world_mut().despawn(client_entity);
 
         self.update();
         client_app.update();

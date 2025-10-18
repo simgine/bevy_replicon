@@ -1182,7 +1182,7 @@ fn after_disconnect() {
     server_app.exchange_with_client(&mut client_app);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    server_app.world_mut().entity_mut(client).despawn();
+    server_app.world_mut().despawn(client);
     server_app.update();
 }
 
