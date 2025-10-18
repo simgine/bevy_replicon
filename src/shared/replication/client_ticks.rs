@@ -148,8 +148,10 @@ impl ClientTicks {
     }
 
     /// Removes a despawned or hidden entity from tracking by this client.
-    pub(crate) fn remove_entity(&mut self, entity: Entity) {
-        self.mutation_ticks.remove(&entity);
+    ///
+    /// Returns `true` if the entity has a tick.
+    pub(crate) fn remove_entity(&mut self, entity: Entity) -> bool {
+        self.mutation_ticks.remove(&entity).is_some()
     }
 
     /// Removes all mutate messages older then `min_timestamp`.

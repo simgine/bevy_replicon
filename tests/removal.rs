@@ -461,27 +461,15 @@ fn hidden() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+    server_app.world_mut().spawn((Replicated, A)).remove::<A>();
 
     server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
 
-    server_app
-        .world_mut()
-        .entity_mut(server_entity)
-        .remove::<A>();
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        replicated.iter(client_app.world()).len(),
+        messages.drain_sent().count(),
         0,
-        "client shouldn't know about hidden entity"
+        "client shouldn't receive anything for a hidden entity"
     );
 }
 

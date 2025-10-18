@@ -530,22 +530,24 @@ fn collect_despawns(
         for (client_entity, mut message, .., mut ticks, mut priority, mut visibility) in
             &mut *clients
         {
-            if visibility.is_visible(entity) {
+            if ticks.remove_entity(entity) {
+                // Write despawn only if the entity was previously sent because
+                // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client_entity}`");
                 message.add_despawn(entity_range.clone());
             }
             visibility.remove_despawned(entity);
-            ticks.remove_entity(entity);
             priority.remove(&entity);
         }
     }
 
     for (client_entity, mut message, .., mut ticks, mut priority, mut visibility) in clients {
         for entity in visibility.drain_lost() {
-            trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
-            let entity_range = serialized.write_entity(entity)?;
-            message.add_despawn(entity_range);
-            ticks.remove_entity(entity);
+            if ticks.remove_entity(entity) {
+                trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
+                let entity_range = serialized.write_entity(entity)?;
+                message.add_despawn(entity_range);
+            }
             priority.remove(&entity);
         }
     }
