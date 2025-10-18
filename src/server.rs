@@ -559,7 +559,7 @@ fn collect_removals(
         let ids_len = remove_ids.len();
         let fn_ids = serialized.write_fn_ids(remove_ids.iter().map(|&(_, fns_id)| fns_id))?;
         for (client_entity, mut message, .., visibility) in &mut *clients {
-            if visibility.is_visible(entity) {
+            if !visibility.is_hidden(entity) {
                 trace!(
                     "writing removals for `{entity}` with `{remove_ids:?}` for client `{client_entity}`"
                 );
@@ -608,7 +608,7 @@ fn collect_changes(
             {
                 *entity_cache = EntityCache {
                     mutation_tick: ticks.mutation_tick(entity.id()),
-                    visible: visibility.is_visible(entity.id()),
+                    hidden: visibility.is_hidden(entity.id()),
                     base_priority: priority.get(&entity.id()).copied().unwrap_or(1.0),
                 };
                 updates.start_entity_changes();
@@ -637,7 +637,7 @@ fn collect_changes(
                 for (client_entity, mut updates, mut mutations, .., entity_cache, _, _, _) in
                     &mut *clients
                 {
-                    if !entity_cache.visible {
+                    if entity_cache.hidden {
                         continue;
                     }
 
@@ -704,7 +704,7 @@ fn collect_changes(
             for (client_entity, mut updates, mut mutations, .., entity_cache, mut ticks, _, _) in
                 &mut *clients
             {
-                if !entity_cache.visible {
+                if entity_cache.hidden {
                     continue;
                 }
 
@@ -751,7 +751,7 @@ fn should_send_mapping(
 ) -> bool {
     // Since despawns processed later, we need to explicitly check for them here
     // because we can't distinguish between a despawn and removal of a visibility filter.
-    if !visibility.is_visible(entity) || despawn_buffer.contains(&entity) {
+    if visibility.is_hidden(entity) || despawn_buffer.contains(&entity) {
         return false;
     }
 
@@ -926,7 +926,7 @@ pub struct PriorityMap(EntityHashMap<f32>);
 #[derive(Component, Default, Clone, Copy)]
 struct EntityCache {
     mutation_tick: Option<(Tick, RepliconTick)>,
-    visible: bool,
+    hidden: bool,
     base_priority: f32,
 }
 

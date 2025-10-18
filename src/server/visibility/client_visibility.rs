@@ -74,9 +74,9 @@ impl ClientVisibility {
         }
     }
 
-    /// Returns `true` if an entity is visible for this client.
-    pub fn is_visible(&self, entity: Entity) -> bool {
-        !self.hidden.contains_key(&entity)
+    /// Returns `true` if the entity is hidden from this client.
+    pub fn is_hidden(&self, entity: Entity) -> bool {
+        self.hidden.contains_key(&entity)
     }
 }
 
@@ -89,11 +89,11 @@ mod tests {
         let mut visibility = ClientVisibility::default();
 
         visibility.set_visibility::<A>(Entity::PLACEHOLDER, false);
-        assert!(!visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(visibility.is_hidden(Entity::PLACEHOLDER));
         assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_some());
 
         visibility.set_visibility::<A>(Entity::PLACEHOLDER, true);
-        assert!(visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
         assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_none());
     }
 
@@ -103,25 +103,25 @@ mod tests {
 
         visibility.set_visibility::<A>(Entity::PLACEHOLDER, false);
         visibility.set_visibility::<B>(Entity::PLACEHOLDER, false);
-        assert!(!visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(visibility.is_hidden(Entity::PLACEHOLDER));
         assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_some());
 
         visibility.set_visibility::<A>(Entity::PLACEHOLDER, true);
-        assert!(!visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(visibility.is_hidden(Entity::PLACEHOLDER));
         assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_some());
 
         visibility.set_visibility::<B>(Entity::PLACEHOLDER, true);
-        assert!(visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
         assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_none());
     }
 
     #[test]
     fn already_visible() {
         let mut visibility = ClientVisibility::default();
-        assert!(visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
 
         visibility.set_visibility::<A>(Entity::PLACEHOLDER, true);
-        assert!(visibility.is_visible(Entity::PLACEHOLDER));
+        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
         assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_none());
     }
 

@@ -230,10 +230,10 @@ mod tests {
         let entity = app.world_mut().spawn(A).id();
 
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(visibility1.is_visible(entity));
+        assert!(!visibility1.is_hidden(entity));
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(!visibility2.is_visible(entity));
+        assert!(visibility2.is_hidden(entity));
     }
 
     #[test]
@@ -246,10 +246,10 @@ mod tests {
         let client2 = app.world_mut().spawn(ClientVisibility::default()).id();
 
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(visibility1.is_visible(entity));
+        assert!(!visibility1.is_hidden(entity));
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(!visibility2.is_visible(entity));
+        assert!(visibility2.is_hidden(entity));
     }
 
     #[test]
@@ -261,7 +261,7 @@ mod tests {
         let entity = app.world_mut().spawn(A).remove::<A>().id();
 
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(visibility.is_visible(entity));
+        assert!(!visibility.is_hidden(entity));
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod tests {
             .id();
 
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(!visibility.is_visible(entity));
+        assert!(visibility.is_hidden(entity));
     }
 
     #[test]
@@ -294,25 +294,25 @@ mod tests {
         let entity = app.world_mut().spawn((A, B)).id();
 
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(visibility1.is_visible(entity));
+        assert!(!visibility1.is_hidden(entity));
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(!visibility2.is_visible(entity));
+        assert!(visibility2.is_hidden(entity));
 
         // Hide entity from the first client too.
         app.world_mut().entity_mut(client1).remove::<B>();
 
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.is_visible(entity));
+        assert!(visibility1.is_hidden(entity));
 
         // Relax visibility constraints to make it visible to both.
         app.world_mut().entity_mut(entity).remove::<B>();
 
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(visibility1.is_visible(entity));
+        assert!(!visibility1.is_hidden(entity));
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(visibility2.is_visible(entity));
+        assert!(!visibility2.is_hidden(entity));
     }
 
     #[derive(Component)]
