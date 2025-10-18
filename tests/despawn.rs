@@ -216,6 +216,7 @@ fn with_add_visibility_and_signature() {
 
     server_app.connect_client(&mut client_app);
 
+    // Remove visibility filter to make the entity visible and unreplicate.
     server_app
         .world_mut()
         .spawn((Replicated, TestVisibility, Signature::from(0)))
