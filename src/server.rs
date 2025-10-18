@@ -205,8 +205,8 @@ impl Plugin for ServerPlugin {
 
 /// Increments current server tick which causes the server to replicate this frame.
 fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+    trace!("incrementing `{:?}`", *server_tick);
     server_tick.increment();
-    trace!("incremented {server_tick:?}");
 }
 
 fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
