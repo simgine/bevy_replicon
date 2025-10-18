@@ -16,7 +16,7 @@ pub trait AppVisibilityExt {
     An entity will be visible to a client if it has all the filter components
     present on the entity, and [`VisibilityFilter::is_visible`] returns `true` for each of them.
 
-    To check whether an entity is visible to a client based on all filters, use [`ClientVisibility::is_visible`].
+    To check whether an entity is hidden from a client based on all filters, use [`ClientVisibility::is_hidden`].
 
     # Examples
 
