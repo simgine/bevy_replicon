@@ -315,7 +315,7 @@ fn after_insertion() {
 }
 
 #[test]
-fn with_spawn() {
+fn after_spawn() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -343,7 +343,7 @@ fn with_spawn() {
 }
 
 #[test]
-fn with_despawn() {
+fn after_despawn() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -372,8 +372,8 @@ fn with_despawn() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .remove::<A>()
-        .remove::<Replicated>();
+        .remove::<Replicated>()
+        .remove::<A>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
