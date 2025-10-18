@@ -530,14 +530,11 @@ This behavior can be customized via [`RepliconSharedPlugin::auth_method`].
 
 ### Client visibility
 
-You can control which parts of the world are visible for each client by setting visibility policy
-in [`ServerPlugin`] to [`VisibilityPolicy::Whitelist`] or [`VisibilityPolicy::Blacklist`].
+You can control which parts of the world are visible to each client by using components registered as visibility filters.
+This works similarly to collision layers in physics: you insert filters to both the client and gameplay entities.
+See [`AppVisibilityExt`] for API details.
 
-To set which entity is visible, you need to use the [`ClientVisibility`] component
-on authorized clients.
-
-Check also the [corresponding section](https://github.com/simgine/bevy_replicon#visibility)
-in our README for more high-level abstractions.
+The server always sees the entire world, even in listen-server mode.
 
 ### Prioritization
 
@@ -729,9 +726,9 @@ pub mod prelude {
     #[cfg(feature = "server")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
-        client_visibility::{ClientVisibility, VisibilityPolicy},
         message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
+        visibility::{AppVisibilityExt, VisibilityFilter, client_visibility::ClientVisibility},
     };
 
     #[cfg(feature = "client_diagnostics")]
