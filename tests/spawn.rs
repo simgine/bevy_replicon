@@ -422,8 +422,98 @@ fn after_started_replication() {
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
+#[test]
+fn add_visibility() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .add_visibility_filter::<TestVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app
+        .world_mut()
+        .spawn((Replicated, TestVisibility, A));
+
+    server_app.update();
+
+    let mut server_messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(server_messages.drain_sent().count(), 0);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(TestVisibility);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+}
+
+#[test]
+fn add_visibility_with_signature() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .add_visibility_filter::<TestVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, TestVisibility, Signature::from(0), A));
+
+    server_app.update();
+
+    let mut server_messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(server_messages.drain_sent().count(), 0);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(TestVisibility);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(client_app.world().get::<A>(client_entity).is_some());
+}
+
 #[derive(Component, Deserialize, Serialize)]
 struct A;
 
 #[derive(Component, Deserialize, Serialize)]
 struct B;
+
+#[derive(Component)]
+#[component(immutable)]
+struct TestVisibility;
+
+impl VisibilityFilter for TestVisibility {
+    fn is_visible(&self, _entity_filter: &Self) -> bool {
+        true
+    }
+}

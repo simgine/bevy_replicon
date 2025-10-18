@@ -1,10 +1,10 @@
-pub mod client_visibility;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
 pub(super) mod replication_messages;
 pub mod server_tick;
 mod server_world;
+pub mod visibility;
 
 use core::{ops::Range, time::Duration};
 
@@ -48,6 +48,7 @@ use replication_messages::{
 };
 use server_tick::ServerTick;
 use server_world::ServerWorld;
+use visibility::client_visibility::ClientVisibility;
 
 pub struct ServerPlugin {
     /// Schedule in which [`ServerTick`] is incremented.
@@ -77,9 +78,6 @@ pub struct ServerPlugin {
     /// ```
     pub tick_schedule: Interned<dyn ScheduleLabel>,
 
-    /// Visibility configuration.
-    pub visibility_policy: VisibilityPolicy,
-
     /// The time after which mutations will be considered lost if an acknowledgment is not received for them.
     ///
     /// In practice mutations will live at least `mutations_timeout`, and at most `2*mutations_timeout`.
@@ -91,7 +89,6 @@ impl ServerPlugin {
     pub fn new(tick_schedule: impl ScheduleLabel) -> Self {
         Self {
             tick_schedule: tick_schedule.intern(),
-            visibility_policy: Default::default(),
             mutations_timeout: Duration::from_secs(10),
         }
     }
@@ -161,20 +158,6 @@ impl Plugin for ServerPlugin {
                 .in_set(ServerSystems::IncrementTick)
                 .run_if(in_state(ServerState::Running)),
         );
-
-        debug!("using visibility policy `{:?}`", self.visibility_policy);
-        match self.visibility_policy {
-            VisibilityPolicy::Blacklist => {
-                app.register_required_components_with::<AuthorizedClient, _>(
-                    ClientVisibility::blacklist,
-                );
-            }
-            VisibilityPolicy::Whitelist => {
-                app.register_required_components_with::<AuthorizedClient, _>(
-                    ClientVisibility::whitelist,
-                );
-            }
-        }
 
         let auth_method = app.world().resource::<AuthMethod>();
         debug!("using authorization method `{auth_method:?}`");
@@ -898,7 +881,14 @@ struct DespawnBuffer(Vec<Entity>);
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
 #[derive(Component, Default)]
-#[require(ClientTicks, PriorityMap, EntityCache, Updates, Mutations)]
+#[require(
+    ClientTicks,
+    ClientVisibility,
+    PriorityMap,
+    EntityCache,
+    Updates,
+    Mutations
+)]
 pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for an authorized client.
