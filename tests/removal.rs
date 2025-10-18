@@ -450,18 +450,19 @@ fn hidden() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin {
-                visibility_policy: VisibilityPolicy::Whitelist, // Hide all spawned entities by default.
-                ..ServerPlugin::new(PostUpdate)
-            }),
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
+        .add_visibility_filter::<TestVisibility>()
         .replicate::<A>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    server_app.world_mut().spawn((Replicated, A)).remove::<A>();
+    server_app
+        .world_mut()
+        .spawn((Replicated, TestVisibility, A))
+        .remove::<A>();
 
     server_app.update();
 
@@ -490,6 +491,16 @@ struct Original;
 
 #[derive(Component, Deserialize, Serialize)]
 struct Replaced;
+
+#[derive(Component)]
+#[component(immutable)]
+struct TestVisibility;
+
+impl VisibilityFilter for TestVisibility {
+    fn is_visible(&self, _entity_filter: &Self) -> bool {
+        true
+    }
+}
 
 /// Deserializes [`OriginalComponent`], but ignores it and inserts [`ReplacedComponent`].
 fn replace(

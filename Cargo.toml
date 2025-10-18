@@ -135,10 +135,6 @@ required-features = ["client", "server"]
 name = "stats"
 required-features = ["client_diagnostics", "client", "server"]
 
-[[test]]
-name = "visibility"
-required-features = ["client", "server"]
-
 [lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
