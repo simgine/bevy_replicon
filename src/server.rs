@@ -294,6 +294,7 @@ fn buffer_despawns(
     state: Res<State<ServerState>>,
 ) {
     if *state == ServerState::Running {
+        trace!("buffering despawn of `{}`", remove.entity);
         despawn_buffer.push(remove.entity);
     }
 }
