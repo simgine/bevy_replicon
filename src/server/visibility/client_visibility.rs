@@ -8,7 +8,6 @@ use bevy::{
     },
     prelude::*,
 };
-use log::trace;
 
 use crate::prelude::*;
 
@@ -49,10 +48,6 @@ impl ClientVisibility {
 
     /// Sets visibility of an entity for a filter.
     pub(super) fn set_visibility<F: VisibilityFilter>(&mut self, entity: Entity, visible: bool) {
-        trace!(
-            "setting `{visible}` from filter `{}` for `{entity}`",
-            ShortName::of::<F>()
-        );
         if visible {
             if let Entry::Occupied(mut components) = self.hidden.entry(entity) {
                 components.get_mut().remove(&TypeId::of::<F>());
