@@ -274,7 +274,7 @@ mod tests {
         app.init_resource::<FilterRegistry>()
             .add_visibility_filter::<A>();
 
-        let client = app.world_mut().spawn((ClientVisibility::default(), A)).id();
+        let client = app.world_mut().spawn(ClientVisibility::default()).id();
         let entity = app.world_mut().spawn(A).remove::<A>().id();
 
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
