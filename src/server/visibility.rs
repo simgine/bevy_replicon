@@ -1,4 +1,5 @@
 pub mod client_visibility;
+pub mod registry;
 
 use bevy::{
     ecs::{component::Immutable, entity_disabling::Disabled},
@@ -7,6 +8,7 @@ use bevy::{
 use log::debug;
 
 use client_visibility::ClientVisibility;
+use registry::FilterRegistry;
 
 /// Remote visibility functions for [`App`].
 pub trait AppVisibilityExt {
@@ -17,6 +19,9 @@ pub trait AppVisibilityExt {
     present on the entity, and [`VisibilityFilter::is_visible`] returns `true` for each of them.
 
     To check whether an entity is hidden from a client based on all filters, use [`ClientVisibility::is_hidden`].
+
+    To keep the representation compact, the total number of registered filters cannot exceed [`u32::MAX`].
+    But a filter can itself represent multiple flags using a bitmask. See the example in [`VisibilityFilter`].
 
     # Examples
 
@@ -66,6 +71,11 @@ pub trait AppVisibilityExt {
 impl AppVisibilityExt for App {
     fn add_visibility_filter<F: VisibilityFilter>(&mut self) -> &mut Self {
         debug!("adding visibility filter `{}`", ShortName::of::<F>());
+
+        self.world_mut()
+            .resource_mut::<FilterRegistry>()
+            .register::<F>();
+
         self.add_observer(hide_for_new_clients::<F>)
             .add_observer(on_insert::<F>)
             .add_observer(on_remove::<F>)
@@ -74,26 +84,30 @@ impl AppVisibilityExt for App {
 
 fn hide_for_new_clients<F: VisibilityFilter>(
     insert: On<Insert, ClientVisibility>,
+    registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility, Without<F>>,
     entities: Query<Entity, With<F>>,
 ) {
     if let Ok(mut visibility) = clients.get_mut(insert.entity) {
+        let filter_bit = registry.get::<F>();
         for entity in &entities {
             debug!(
                 "hiding `{entity}` from client `{}` without `{}` filter",
                 insert.entity,
                 ShortName::of::<F>(),
             );
-            visibility.set_visibility::<F>(entity, false);
+            visibility.set_visibility(entity, filter_bit, false);
         }
     }
 }
 
 fn on_insert<F: VisibilityFilter>(
     insert: On<Insert, F>,
+    registry: Res<FilterRegistry>,
     entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
     mut clients: Query<(Entity, Option<&F>, &mut ClientVisibility)>,
 ) {
+    let filter_bit = registry.get::<F>();
     if let Ok((client_entity, client_component, mut visibility)) = clients.get_mut(insert.entity) {
         let client_component = client_component.unwrap();
         for (entity, component) in &entities {
@@ -102,7 +116,7 @@ fn on_insert<F: VisibilityFilter>(
                 "updating `{}` filter on client `{client_entity}` to `{visible}` for `{entity}`",
                 ShortName::of::<F>(),
             );
-            visibility.set_visibility::<F>(entity, visible);
+            visibility.set_visibility(entity, filter_bit, visible);
         }
     } else {
         let (entity, component) = entities.get(insert.entity).unwrap();
@@ -112,16 +126,18 @@ fn on_insert<F: VisibilityFilter>(
                 "updating `{}` filter on `{entity}` to `{visible}` for client `{client_entity}`",
                 ShortName::of::<F>(),
             );
-            visibility.set_visibility::<F>(insert.entity, visible);
+            visibility.set_visibility(insert.entity, filter_bit, visible);
         }
     }
 }
 
 fn on_remove<F: VisibilityFilter>(
     remove: On<Remove, F>,
+    registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility>,
     entities: Query<Entity, (With<F>, Without<ClientVisibility>)>,
 ) {
+    let filter_bit = registry.get::<F>();
     if let Ok(mut visibility) = clients.get_mut(remove.entity) {
         for entity in &entities {
             debug!(
@@ -129,7 +145,7 @@ fn on_remove<F: VisibilityFilter>(
                 remove.entity,
                 ShortName::of::<F>(),
             );
-            visibility.set_visibility::<F>(entity, false);
+            visibility.set_visibility(entity, filter_bit, false);
         }
     } else {
         debug!(
@@ -138,7 +154,7 @@ fn on_remove<F: VisibilityFilter>(
             remove.entity
         );
         for mut visibility in &mut clients {
-            visibility.set_visibility::<F>(remove.entity, true);
+            visibility.set_visibility(remove.entity, filter_bit, true);
         }
     }
 }
@@ -221,7 +237,8 @@ mod tests {
     #[test]
     fn before_clients() {
         let mut app = App::new();
-        app.add_visibility_filter::<A>();
+        app.init_resource::<FilterRegistry>()
+            .add_visibility_filter::<A>();
 
         let client1 = app.world_mut().spawn((ClientVisibility::default(), A)).id();
         let client2 = app.world_mut().spawn(ClientVisibility::default()).id();
@@ -237,7 +254,8 @@ mod tests {
     #[test]
     fn after_clients() {
         let mut app = App::new();
-        app.add_visibility_filter::<A>();
+        app.init_resource::<FilterRegistry>()
+            .add_visibility_filter::<A>();
 
         let entity = app.world_mut().spawn(A).id();
         let client1 = app.world_mut().spawn((ClientVisibility::default(), A)).id();
@@ -253,7 +271,8 @@ mod tests {
     #[test]
     fn remove_filter_from_entity() {
         let mut app = App::new();
-        app.add_visibility_filter::<A>();
+        app.init_resource::<FilterRegistry>()
+            .add_visibility_filter::<A>();
 
         let client = app.world_mut().spawn((ClientVisibility::default(), A)).id();
         let entity = app.world_mut().spawn(A).remove::<A>().id();
@@ -265,7 +284,8 @@ mod tests {
     #[test]
     fn remove_filter_from_client() {
         let mut app = App::new();
-        app.add_visibility_filter::<A>();
+        app.init_resource::<FilterRegistry>()
+            .add_visibility_filter::<A>();
 
         let entity = app.world_mut().spawn(A).id();
         let client = app
@@ -281,7 +301,8 @@ mod tests {
     #[test]
     fn multiple_filters() {
         let mut app = App::new();
-        app.add_visibility_filter::<A>()
+        app.init_resource::<FilterRegistry>()
+            .add_visibility_filter::<A>()
             .add_visibility_filter::<B>();
 
         let client1 = app

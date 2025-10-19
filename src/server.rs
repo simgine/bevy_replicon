@@ -27,6 +27,7 @@ use log::{Level, debug, log_enabled, trace};
 use crate::{
     postcard_utils,
     prelude::*,
+    server::visibility::registry::FilterRegistry,
     shared::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
@@ -112,6 +113,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<EntityBuffer>()
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
+            .init_resource::<FilterRegistry>()
             .configure_sets(
                 PreUpdate,
                 (ServerSystems::ReceivePackets, ServerSystems::Receive).chain(),
