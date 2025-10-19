@@ -64,8 +64,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn max() {
-        let mut registry = FilterRegistry::default();
-        registry.next = 32;
+        let mut registry = FilterRegistry {
+            next: 32,
+            ..Default::default()
+        };
         registry.register::<A>();
     }
 
