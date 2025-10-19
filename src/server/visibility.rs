@@ -235,7 +235,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn before_clients() {
+    fn after_clients() {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .add_visibility_filter::<A>();
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn after_clients() {
+    fn before_clients() {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .add_visibility_filter::<A>();
