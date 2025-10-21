@@ -11,7 +11,7 @@ use bevy::{
 pub struct ClientVisibility {
     /// List of hidden entities and the filters that block their visibility.
     ///
-    /// Dilters are stored as a bitmask, with bit indices assigned by the
+    /// Filters are stored as a bitmask, with bit indices assigned by the
     /// [`FilterRegistry`](super::registry::FilterRegistry).
     hidden: EntityHashMap<u32>,
 
