@@ -1,10 +1,10 @@
-pub mod client_visibility;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
 pub(super) mod replication_messages;
 pub mod server_tick;
 mod server_world;
+pub mod visibility;
 
 use core::{ops::Range, time::Duration};
 
@@ -27,6 +27,7 @@ use log::{Level, debug, log_enabled, trace};
 use crate::{
     postcard_utils,
     prelude::*,
+    server::visibility::registry::FilterRegistry,
     shared::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
@@ -48,6 +49,7 @@ use replication_messages::{
 };
 use server_tick::ServerTick;
 use server_world::ServerWorld;
+use visibility::client_visibility::ClientVisibility;
 
 pub struct ServerPlugin {
     /// Schedule in which [`ServerTick`] is incremented.
@@ -77,9 +79,6 @@ pub struct ServerPlugin {
     /// ```
     pub tick_schedule: Interned<dyn ScheduleLabel>,
 
-    /// Visibility configuration.
-    pub visibility_policy: VisibilityPolicy,
-
     /// The time after which mutations will be considered lost if an acknowledgment is not received for them.
     ///
     /// In practice mutations will live at least `mutations_timeout`, and at most `2*mutations_timeout`.
@@ -91,7 +90,6 @@ impl ServerPlugin {
     pub fn new(tick_schedule: impl ScheduleLabel) -> Self {
         Self {
             tick_schedule: tick_schedule.intern(),
-            visibility_policy: Default::default(),
             mutations_timeout: Duration::from_secs(10),
         }
     }
@@ -115,6 +113,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<EntityBuffer>()
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
+            .init_resource::<FilterRegistry>()
             .configure_sets(
                 PreUpdate,
                 (ServerSystems::ReceivePackets, ServerSystems::Receive).chain(),
@@ -161,20 +160,6 @@ impl Plugin for ServerPlugin {
                 .in_set(ServerSystems::IncrementTick)
                 .run_if(in_state(ServerState::Running)),
         );
-
-        debug!("using visibility policy `{:?}`", self.visibility_policy);
-        match self.visibility_policy {
-            VisibilityPolicy::Blacklist => {
-                app.register_required_components_with::<AuthorizedClient, _>(
-                    ClientVisibility::blacklist,
-                );
-            }
-            VisibilityPolicy::Whitelist => {
-                app.register_required_components_with::<AuthorizedClient, _>(
-                    ClientVisibility::whitelist,
-                );
-            }
-        }
 
         let auth_method = app.world().resource::<AuthMethod>();
         debug!("using authorization method `{auth_method:?}`");
@@ -361,7 +346,7 @@ fn send_replication(
         mutations.resize_related(related_entities.graphs_count());
     }
 
-    collect_mappings(&mut serialized, &mut clients, &entities)?;
+    collect_mappings(&mut serialized, &mut clients, &despawn_buffer, &entities)?;
     collect_despawns(&mut serialized, &mut clients, &mut despawn_buffer)?;
     collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
     collect_changes(
@@ -474,6 +459,7 @@ fn collect_mappings(
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    despawn_buffer: &DespawnBuffer,
     entities: &Query<(Entity, Ref<Signature>)>,
 ) -> Result<()> {
     for (entity, signature) in entities {
@@ -485,7 +471,7 @@ fn collect_mappings(
             else {
                 continue;
             };
-            if should_send_mapping(entity, &signature, &visibility, &ticks) {
+            if should_send_mapping(entity, despawn_buffer, &signature, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
                 );
@@ -495,7 +481,7 @@ fn collect_mappings(
             }
         } else {
             for (client_entity, mut message, .., ticks, _, visibility) in &mut *clients {
-                if should_send_mapping(entity, &signature, &visibility, &ticks) {
+                if should_send_mapping(entity, despawn_buffer, &signature, &visibility, &ticks) {
                     trace!(
                         "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
                     );
@@ -575,7 +561,7 @@ fn collect_removals(
         let ids_len = remove_ids.len();
         let fn_ids = serialized.write_fn_ids(remove_ids.iter().map(|&(_, fns_id)| fns_id))?;
         for (client_entity, mut message, .., visibility) in &mut *clients {
-            if visibility.is_visible(entity) {
+            if !visibility.is_hidden(entity) {
                 trace!(
                     "writing removals for `{entity}` with `{remove_ids:?}` for client `{client_entity}`"
                 );
@@ -624,7 +610,7 @@ fn collect_changes(
             {
                 *entity_cache = EntityCache {
                     mutation_tick: ticks.mutation_tick(entity.id()),
-                    visible: visibility.is_visible(entity.id()),
+                    hidden: visibility.is_hidden(entity.id()),
                     base_priority: priority.get(&entity.id()).copied().unwrap_or(1.0),
                 };
                 updates.start_entity_changes();
@@ -653,7 +639,7 @@ fn collect_changes(
                 for (client_entity, mut updates, mut mutations, .., entity_cache, _, _, _) in
                     &mut *clients
                 {
-                    if !entity_cache.visible {
+                    if entity_cache.hidden {
                         continue;
                     }
 
@@ -720,7 +706,7 @@ fn collect_changes(
             for (client_entity, mut updates, mut mutations, .., entity_cache, mut ticks, _, _) in
                 &mut *clients
             {
-                if !entity_cache.visible {
+                if entity_cache.hidden {
                     continue;
                 }
 
@@ -760,11 +746,14 @@ fn collect_changes(
 
 fn should_send_mapping(
     entity: Entity,
+    despawn_buffer: &DespawnBuffer,
     signature: &Ref<Signature>,
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
-    if !visibility.is_visible(entity) {
+    // Since despawns processed later, we need to explicitly check for them here
+    // because we can't distinguish between a despawn and removal of a visibility filter.
+    if visibility.is_hidden(entity) || despawn_buffer.contains(&entity) {
         return false;
     }
 
@@ -898,7 +887,14 @@ struct DespawnBuffer(Vec<Entity>);
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
 #[derive(Component, Default)]
-#[require(ClientTicks, PriorityMap, EntityCache, Updates, Mutations)]
+#[require(
+    ClientTicks,
+    ClientVisibility,
+    PriorityMap,
+    EntityCache,
+    Updates,
+    Mutations
+)]
 pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for an authorized client.
@@ -932,7 +928,7 @@ pub struct PriorityMap(EntityHashMap<f32>);
 #[derive(Component, Default, Clone, Copy)]
 struct EntityCache {
     mutation_tick: Option<(Tick, RepliconTick)>,
-    visible: bool,
+    hidden: bool,
     base_priority: f32,
 }
 

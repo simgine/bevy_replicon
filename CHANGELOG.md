@@ -7,14 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Component-based visibility API, which works similarly to layers in physics. See `AppVisibilityExt` for more details.
+
 ### Changed
 
-- Move `VisibilityPolicy` to `server::client_visibility` module.
+- `ClientVisibility` no longer allows controlling visibility. It is now a low-level layer that holds cached visibility information. Use the new visibility API instead.
 - Include `TrackAppExt::track_mutate_messages` in the replication protocol, since it affects the serialization format.
 
 ### Fixed
 
 - Avoid sending despawn for entities that weren't sent.
+
+### Removed
+
+- `VisibilityPolicy`. No longer needed because visibility is now ergonomically controlled by components.
 
 ## [0.36.1] - 2025-10-11
 
