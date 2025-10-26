@@ -46,7 +46,7 @@ pub(crate) struct Mutations {
     /// Intermediate buffer with mutate index, message size and a range for [`Self::standalone`].
     ///
     /// We split messages first in order to know their count in advance.
-    messages: Vec<(MutateIndex, usize, Range<usize>)>,
+    splits: Vec<MutationsSplit>,
 }
 
 impl Mutations {
@@ -191,8 +191,11 @@ impl Mutations {
                 && !can_pack(header_size + body_size, mutations_size, max_size)
                 && !can_pack(header_size + mutations_size, body_size, max_size)
             {
-                self.messages
-                    .push((mutate_index, body_size + header_size, chunks_range.clone()));
+                self.splits.push(MutationsSplit {
+                    mutate_index,
+                    message_size: body_size + header_size,
+                    chunks_range: chunks_range.clone(),
+                });
 
                 chunks_range.start = chunks_range.end;
                 (mutate_index, entities) = ticks.register_mutate_message(
@@ -212,31 +215,35 @@ impl Mutations {
         if !chunks_range.is_empty() || track_mutate_messages {
             // When the loop ends, pack all leftovers into a message.
             // Or create an empty message if tracking mutate messages is enabled.
-            self.messages
-                .push((mutate_index, body_size + header_size, chunks_range));
+            self.splits.push(MutationsSplit {
+                mutate_index,
+                message_size: body_size + header_size,
+                chunks_range,
+            });
         }
 
-        if self.messages.len() > 1 {
+        if self.splits.len() > 1 {
             trace!(
                 "splitting into {} messages for client `{client}`",
-                self.messages.len()
+                self.splits.len()
             );
         }
 
-        for &(mutate_index, mut message_size, ref chunks_range) in &self.messages {
+        for split in &self.splits {
+            let mut message_size = split.message_size;
             if track_mutate_messages {
                 // Update message counter size based on actual value.
-                message_size -= MAX_COUNT_SIZE - serialized_size(&self.messages.len())?;
+                message_size -= MAX_COUNT_SIZE - serialized_size(&self.splits.len())?;
             }
             let mut message = Vec::with_capacity(message_size);
 
             message.extend_from_slice(update_tick);
             message.extend_from_slice(&serialized[server_tick_range.clone()]);
             if track_mutate_messages {
-                postcard_utils::to_extend_mut(&self.messages.len(), &mut message)?;
+                postcard_utils::to_extend_mut(&self.splits.len(), &mut message)?;
             }
-            postcard_utils::to_extend_mut(&mutate_index, &mut message)?;
-            for mutations in chunks.iter_flatten(chunks_range.clone()) {
+            postcard_utils::to_extend_mut(&split.mutate_index, &mut message)?;
+            for mutations in chunks.iter_flatten(split.chunks_range.clone()) {
                 message.extend_from_slice(&serialized[mutations.ranges.entity.clone()]);
                 postcard_utils::to_extend_mut(&mutations.ranges.components_size(), &mut message)?;
                 for component in &mutations.ranges.components {
@@ -249,14 +256,14 @@ impl Mutations {
             messages.send(client, ServerChannel::Mutations, message);
         }
 
-        Ok(self.messages.len())
+        Ok(self.splits.len())
     }
 
     /// Clears all chunks.
     ///
     /// Keeps allocated memory for reuse.
     pub(crate) fn clear(&mut self) {
-        self.messages.clear();
+        self.splits.clear();
         for entities in self
             .related
             .iter_mut()
@@ -365,6 +372,13 @@ impl<'a> EntityChunks<'a> {
             .flatten()
             .chain(&self.standalone[standalone_range])
     }
+}
+
+struct MutationsSplit {
+    mutate_index: MutateIndex,
+    message_size: usize,
+    /// Indices in [`EntityChunks`].
+    chunks_range: Range<usize>,
 }
 
 /// Returns `true` if the additional data fits within the remaining space
