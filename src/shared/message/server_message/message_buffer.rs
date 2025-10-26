@@ -19,12 +19,12 @@ pub(crate) struct MessageBuffer {
     /// Cached unused sets to avoid reallocations when pushing into the buffer.
     ///
     /// These are cleared before insertion.
-    buffer: Vec<TickMessages>,
+    pool: Vec<TickMessages>,
 }
 
 impl MessageBuffer {
     pub(crate) fn start_tick(&mut self) {
-        self.ticks.push(self.buffer.pop().unwrap_or_default());
+        self.ticks.push(self.pool.pop().unwrap_or_default());
     }
 
     fn active_tick(&mut self) -> Option<&mut TickMessages> {
@@ -108,7 +108,7 @@ impl MessageBuffer {
                 }
             }
             tick.clear();
-            self.buffer.push(tick);
+            self.pool.push(tick);
         }
         Ok(())
     }
@@ -116,7 +116,7 @@ impl MessageBuffer {
     pub(crate) fn clear(&mut self) {
         for mut set in self.ticks.drain(..) {
             set.clear();
-            self.buffer.push(set);
+            self.pool.push(set);
         }
     }
 }

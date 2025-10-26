@@ -34,7 +34,7 @@ pub(super) struct RemovalReader<'w, 's> {
     ///
     /// All data is cleared before the insertion.
     /// Stored to reuse allocated capacity.
-    ids_buffer: Local<'s, Vec<HashSet<ComponentId>>>,
+    ids_pool: Local<'s, Vec<HashSet<ComponentId>>>,
 
     /// Component removals grouped by [`ComponentId`].
     remove_messages: &'w RemovedComponentMessages,
@@ -65,7 +65,7 @@ impl RemovalReader<'_, '_> {
             {
                 self.removals
                     .entry(entity)
-                    .or_insert_with(|| self.ids_buffer.pop().unwrap_or_default())
+                    .or_insert_with(|| self.ids_pool.pop().unwrap_or_default())
                     .insert(component_id);
             }
         }
@@ -77,7 +77,7 @@ impl RemovalReader<'_, '_> {
     ///
     /// Keeps the allocated memory for reuse.
     fn clear(&mut self) {
-        self.ids_buffer
+        self.ids_pool
             .extend(self.removals.drain().map(|(_, mut components)| {
                 components.clear();
                 components
@@ -114,7 +114,7 @@ pub(super) struct RemovalBuffer {
     ///
     /// All data is cleared before the insertion.
     /// Stored to reuse allocated capacity.
-    ids_buffer: Vec<Vec<(ComponentId, FnsId)>>,
+    ids_pool: Vec<Vec<(ComponentId, FnsId)>>,
 }
 
 impl RemovalBuffer {
@@ -126,7 +126,7 @@ impl RemovalBuffer {
         entity: Entity,
         removed_components: &HashSet<ComponentId>,
     ) {
-        let mut removed_ids = self.ids_buffer.pop().unwrap_or_default();
+        let mut removed_ids = self.ids_pool.pop().unwrap_or_default();
         for rule in rules
             .iter()
             .filter(|rule| rule.matches_removals(archetype, removed_components))
@@ -143,7 +143,7 @@ impl RemovalBuffer {
         }
 
         if removed_ids.is_empty() {
-            self.ids_buffer.push(removed_ids);
+            self.ids_pool.push(removed_ids);
         } else {
             self.removals.insert(entity, removed_ids);
         }
@@ -153,7 +153,7 @@ impl RemovalBuffer {
     ///
     /// Keeps the allocated memory for reuse.
     pub(super) fn clear(&mut self) {
-        self.ids_buffer
+        self.ids_pool
             .extend(self.removals.drain().map(|(_, mut components)| {
                 components.clear();
                 components
