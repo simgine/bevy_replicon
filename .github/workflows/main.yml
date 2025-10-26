@@ -66,22 +66,6 @@ jobs:
           cargo rustdoc --all-features -- -D warnings
           cargo rustdoc -p bevy_replicon_example_backend -- -D warnings
 
-  doctest:
-    name: Doctest
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clone repo
-        uses: actions/checkout@v5
-
-      - name: Instal stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache crates
-        uses: Swatinem/rust-cache@v2
-
-      - name: Test doc
-        run: cargo test --workspace --all-features --doc
-
   feature-combinations:
     name: Feature combinations
     runs-on: ubuntu-latest
@@ -165,10 +149,10 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Test
-        run: cargo tarpaulin --all-features --tests --benches --engine llvm --out lcov --exclude-files benches/*
+        run: cargo tarpaulin --all-features --all-targets --doc --engine llvm --out lcov --exclude-files benches/*
 
         # Can't collect coverage from the example backend,
-        # it crashes tarpaulin due to TCP usage.
+        # llvm crashes during compilation.
       - name: Test backend
         run: cargo test -p bevy_replicon_example_backend
 
@@ -187,7 +171,6 @@ jobs:
         typos,
         format,
         lint,
-        doctest,
         feature-combinations,
         no-std-portable-atomic,
         wasi,
