@@ -17,7 +17,7 @@ pub(super) struct MessageQueue<M> {
     ///
     /// All data is drained before the insertion.
     /// Stored to reuse allocated capacity.
-    buffer: Vec<Vec<Bytes>>,
+    pool: Vec<Vec<Bytes>>,
     marker: PhantomData<M>,
 }
 
@@ -25,7 +25,7 @@ impl<M> MessageQueue<M> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
         self.map
             .entry(tick)
-            .or_insert_with(|| self.buffer.pop().unwrap_or_default())
+            .or_insert_with(|| self.pool.pop().unwrap_or_default())
             .push(message);
     }
 
@@ -40,8 +40,8 @@ impl<M> MessageQueue<M> {
         }
 
         let (tick, messages) = entry.remove_entry();
-        self.buffer.push(messages);
-        let messages = self.buffer.last_mut().unwrap();
+        self.pool.push(messages);
+        let messages = self.pool.last_mut().unwrap();
         Some((tick, messages.drain(..)))
     }
 
@@ -55,7 +55,7 @@ impl<M> MessageQueue<M> {
 
     pub(super) fn clear(&mut self) {
         while let Some((_, messages)) = self.map.pop_first() {
-            self.buffer.push(messages);
+            self.pool.push(messages);
         }
     }
 }
@@ -64,7 +64,7 @@ impl<M> Default for MessageQueue<M> {
     fn default() -> Self {
         Self {
             map: Default::default(),
-            buffer: Default::default(),
+            pool: Default::default(),
             marker: PhantomData,
         }
     }
