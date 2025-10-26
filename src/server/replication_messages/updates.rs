@@ -7,6 +7,7 @@ use super::{change_ranges::ChangeRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
+    server::ClientPools,
     shared::{
         backend::channels::ServerChannel, replication::update_message_flags::UpdateMessageFlags,
     },
@@ -63,9 +64,6 @@ pub(crate) struct Updates {
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_changes`].
     changed_entity_added: bool,
-
-    /// Intermediate buffer to reuse allocated memory from [`Self::changes`].
-    buffer: Vec<Vec<Range<usize>>>,
 }
 
 impl Updates {
@@ -121,8 +119,8 @@ impl Updates {
     }
 
     /// Adds an entity chunk.
-    pub(crate) fn add_changed_entity(&mut self, entity: Range<usize>) {
-        let components = self.buffer.pop().unwrap_or_default();
+    pub(crate) fn add_changed_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
+        let components = pools.ranges.pop().unwrap_or_default();
         self.changes.push(ChangeRanges {
             entity,
             components_len: 0,
@@ -142,24 +140,19 @@ impl Updates {
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.
-    pub(crate) fn take_added_entity(&mut self, mutations: &mut Mutations) {
+    pub(crate) fn take_added_entity(&mut self, pools: &mut ClientPools, mutations: &mut Mutations) {
         debug_assert!(mutations.entity_added());
-        let last_changes = mutations.last().expect("entity should be written");
+        let mut last_changes = mutations.pop().expect("entity should be written");
 
         if !self.changed_entity_added {
-            let components = self.buffer.pop().unwrap_or_default();
-            let changes = ChangeRanges {
-                entity: last_changes.entity.clone(),
-                components_len: 0,
-                components,
-            };
-            self.changes.push(changes);
+            self.changes.push(last_changes);
+        } else {
+            let changes = self.changes.last_mut().expect("entity should be written");
+            debug_assert_eq!(last_changes.entity, changes.entity);
+            changes.extend(&last_changes);
+            last_changes.components.clear();
+            pools.ranges.push(last_changes.components);
         }
-        let changes = self.changes.last_mut().unwrap();
-        debug_assert_eq!(last_changes.entity, changes.entity);
-        changes.extend(last_changes);
-
-        mutations.pop();
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -308,13 +301,14 @@ impl Updates {
     /// Clears all chunks.
     ///
     /// Keeps allocated memory for reuse.
-    pub(crate) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self, pools: &mut ClientPools) {
         self.mappings = Default::default();
         self.mappings_len = 0;
         self.despawns.clear();
         self.despawns_len = 0;
         self.removals.clear();
-        self.buffer
+        pools
+            .ranges
             .extend(self.changes.drain(..).map(|mut changes| {
                 changes.components.clear();
                 changes.components
