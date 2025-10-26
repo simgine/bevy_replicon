@@ -1,4 +1,4 @@
-use core::{mem, time::Duration};
+use core::time::Duration;
 
 use bevy::{
     ecs::{
@@ -59,21 +59,9 @@ impl ClientTicks {
     #[must_use]
     pub(crate) fn register_mutate_message(
         &mut self,
-        entity_buffer: &mut EntityBuffer,
-        system_tick: Tick,
-        server_tick: RepliconTick,
-        timestamp: Duration,
+        mutate_info: MutateInfo,
     ) -> (MutateIndex, &mut Vec<Entity>) {
         let mutate_index = self.mutate_index.advance();
-
-        let mut entities = entity_buffer.pop().unwrap_or_default();
-        entities.clear();
-        let mutate_info = MutateInfo {
-            system_tick,
-            server_tick,
-            timestamp,
-            entities,
-        };
         let mutate_info = self
             .mutations
             .entry(mutate_index)
@@ -113,8 +101,6 @@ impl ClientTicks {
     /// Marks mutate message as acknowledged by its index.
     ///
     /// Mutation tick for all entities from this mutate message will be set to the message tick if it's higher.
-    ///
-    /// Keeps allocated memory in the buffers for reuse.
     pub(crate) fn ack_mutate_message(
         &mut self,
         client: Entity,
@@ -156,15 +142,15 @@ impl ClientTicks {
 
     /// Removes all mutate messages older then `min_timestamp`.
     ///
-    /// Keeps allocated memory in the buffers for reuse.
+    /// Calls given function for each removed message.
     pub(crate) fn cleanup_older_mutations(
         &mut self,
-        entity_buffer: &mut EntityBuffer,
         min_timestamp: Duration,
+        mut f: impl FnMut(&mut MutateInfo),
     ) {
         self.mutations.retain(|_, mutate_info| {
             if mutate_info.timestamp < min_timestamp {
-                entity_buffer.push(mem::take(&mut mutate_info.entities));
+                (f)(mutate_info);
                 false
             } else {
                 true
@@ -173,16 +159,9 @@ impl ClientTicks {
     }
 }
 
-/// Reusable buffer for [`ClientTicks`].
-///
-/// Stores [`Vec`]'s from acknowledged [`MutateInfo`]'s.
-/// to reuse allocated capacity.
-#[derive(Default, Resource, Deref, DerefMut)]
-pub(crate) struct EntityBuffer(Vec<Vec<Entity>>);
-
-struct MutateInfo {
-    system_tick: Tick,
-    server_tick: RepliconTick,
-    timestamp: Duration,
-    entities: Vec<Entity>,
+pub(crate) struct MutateInfo {
+    pub(crate) system_tick: Tick,
+    pub(crate) server_tick: RepliconTick,
+    pub(crate) timestamp: Duration,
+    pub(crate) entities: Vec<Entity>,
 }

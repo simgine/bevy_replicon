@@ -6,7 +6,7 @@ pub mod server_tick;
 mod server_world;
 pub mod visibility;
 
-use core::{ops::Range, time::Duration};
+use core::{mem, ops::Range, time::Duration};
 
 use bevy::{
     ecs::{
@@ -27,12 +27,14 @@ use log::{Level, debug, log_enabled, trace};
 use crate::{
     postcard_utils,
     prelude::*,
-    server::visibility::registry::FilterRegistry,
+    server::{
+        replication_messages::mutations::EntityMutations, visibility::registry::FilterRegistry,
+    },
     shared::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
         replication::{
-            client_ticks::{ClientTicks, EntityBuffer},
+            client_ticks::ClientTicks,
             registry::{
                 ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
                 rule_fns::UntypedRuleFns,
@@ -110,7 +112,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<RemovalBuffer>()
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
-            .init_resource::<EntityBuffer>()
+            .init_resource::<ClientPools>()
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .init_resource::<FilterRegistry>()
@@ -233,13 +235,14 @@ fn check_protocol(
 
 fn cleanup_acks(
     mutations_timeout: Duration,
-) -> impl FnMut(Query<&mut ClientTicks>, ResMut<EntityBuffer>, Res<Time>) {
-    move |mut clients: Query<&mut ClientTicks>,
-          mut entity_buffer: ResMut<EntityBuffer>,
-          time: Res<Time>| {
+) -> impl FnMut(Query<&mut ClientTicks>, ResMut<ClientPools>, Res<Time>) {
+    move |mut clients: Query<&mut ClientTicks>, mut pools: ResMut<ClientPools>, time: Res<Time>| {
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
-            ticks.cleanup_older_mutations(&mut entity_buffer, min_timestamp);
+            ticks.cleanup_older_mutations(min_timestamp, |mutate_info| {
+                mutate_info.entities.clear();
+                pools.entities.push(mem::take(&mut mutate_info.entities));
+            });
         }
     }
 }
@@ -247,8 +250,8 @@ fn cleanup_acks(
 fn receive_acks(
     change_tick: SystemChangeTick,
     mut messages: ResMut<ServerMessages>,
+    mut pools: ResMut<ClientPools>,
     mut clients: Query<&mut ClientTicks>,
-    mut entity_buffer: ResMut<EntityBuffer>,
 ) {
     for (client, mut message) in messages.receive(ClientChannel::MutationAcks) {
         while message.has_remaining() {
@@ -259,10 +262,11 @@ fn receive_acks(
                             "messages from client `{client}` should have been removed on disconnect"
                         )
                     });
-                    if let Some(entities) =
+                    if let Some(mut entities) =
                         ticks.ack_mutate_message(client, change_tick.this_run(), mutate_index)
                     {
-                        entity_buffer.push(entities);
+                        entities.clear();
+                        pools.entities.push(entities);
                     }
                 }
                 Err(e) => {
@@ -329,9 +333,9 @@ fn send_replication(
     entities: Query<(Entity, Ref<Signature>)>,
     mut related_entities: ResMut<RelatedEntities>,
     mut removal_buffer: ResMut<RemovalBuffer>,
-    mut entity_buffer: ResMut<EntityBuffer>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     mut messages: ResMut<ServerMessages>,
+    mut pools: ResMut<ClientPools>,
     track_mutate_messages: Res<TrackMutateMessages>,
     registry: Res<ReplicationRegistry>,
     type_registry: Res<AppTypeRegistry>,
@@ -341,9 +345,9 @@ fn send_replication(
     related_entities.rebuild_graphs();
 
     for (_, mut updates, mut mutations, ..) in &mut clients {
-        updates.clear();
-        mutations.clear();
-        mutations.resize_related(related_entities.graphs_count());
+        updates.clear(&mut pools);
+        mutations.clear(&mut pools);
+        mutations.resize_related(&mut pools, related_entities.graphs_count());
     }
 
     collect_mappings(&mut serialized, &mut clients, &despawn_buffer, &entities)?;
@@ -351,6 +355,7 @@ fn send_replication(
     collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
     collect_changes(
         &mut serialized,
+        &mut pools,
         &mut clients,
         &registry,
         &type_registry,
@@ -368,7 +373,7 @@ fn send_replication(
         **server_tick,
         **track_mutate_messages,
         &mut serialized,
-        &mut entity_buffer,
+        &mut pools,
         change_tick,
         &time,
     )?;
@@ -409,7 +414,7 @@ fn send_messages(
     server_tick: RepliconTick,
     track_mutate_messages: bool,
     serialized: &mut SerializedData,
-    entity_buffer: &mut EntityBuffer,
+    pools: &mut ClientPools,
     change_tick: SystemChangeTick,
     time: &Time,
 ) -> Result<()> {
@@ -431,7 +436,7 @@ fn send_messages(
                 messages,
                 client_entity,
                 &mut ticks,
-                entity_buffer,
+                pools,
                 serialized,
                 track_mutate_messages,
                 server_tick_range,
@@ -576,6 +581,7 @@ fn collect_removals(
 /// Collects component changes from this tick into update and mutate messages since the last entity tick.
 fn collect_changes(
     serialized: &mut SerializedData,
+    pools: &mut ClientPools,
     clients: &mut Query<(
         Entity,
         &mut Updates,
@@ -658,7 +664,7 @@ fn collect_changes(
                                     serialized,
                                     entity.id(),
                                 )?;
-                                mutations.add_entity(entity.id(), graph_index, entity_range);
+                                mutations.add_entity(pools, entity.id(), graph_index, entity_range);
                             }
                             let component_range = write_component_cached(
                                 &mut component_range,
@@ -681,7 +687,7 @@ fn collect_changes(
                         if !updates.changed_entity_added() {
                             let entity_range =
                                 write_entity_cached(&mut entity_range, serialized, entity.id())?;
-                            updates.add_changed_entity(entity_range);
+                            updates.add_changed_entity(pools, entity_range);
                         }
                         let component_range = write_component_cached(
                             &mut component_range,
@@ -721,7 +727,7 @@ fn collect_changes(
                             "merging mutations for `{}` with updates for client `{client_entity}`",
                             entity.id()
                         );
-                        updates.take_added_entity(&mut mutations);
+                        updates.take_added_entity(pools, &mut mutations);
                     }
                     ticks.set_mutation_tick(entity.id(), change_tick.this_run(), server_tick);
                 }
@@ -735,7 +741,7 @@ fn collect_changes(
                     // Force-write new entity even if it doesn't have any components.
                     let entity_range =
                         write_entity_cached(&mut entity_range, serialized, entity.id())?;
-                    updates.add_changed_entity(entity_range);
+                    updates.add_changed_entity(pools, entity_range);
                 }
             }
         }
@@ -919,6 +925,19 @@ pub struct AuthorizedClient;
 /// See its documentation for more details.
 #[derive(Component, Deref, DerefMut, Debug, Default, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);
+
+/// Pools for various client components to reuse allocated capacity.
+///
+/// All data is cleared before the insertion.
+#[derive(Resource, Default)]
+pub(crate) struct ClientPools {
+    /// Entities from [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo)s.
+    entities: Vec<Vec<Entity>>,
+    /// Ranges from [`Updates`] and [`Mutations`].
+    ranges: Vec<Vec<Range<usize>>>,
+    /// Entities from [`Mutations`].
+    mutations: Vec<Vec<EntityMutations>>,
+}
 
 /// Cached data from [`ClientTicks`] and [`ClientVisibility`] about the entity
 /// currently being processed during [`collect_changes`].
