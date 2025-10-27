@@ -28,7 +28,8 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replication_messages::mutations::EntityMutations, visibility::registry::FilterRegistry,
+        replication_messages::mutations::{EntityMutations, MutationsSplit},
+        visibility::registry::FilterRegistry,
     },
     shared::{
         backend::channels::ClientChannel,
@@ -318,6 +319,7 @@ fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut Cli
 /// Collects [`ReplicationMessages`] and sends them.
 fn send_replication(
     mut serialized: Local<SerializedData>,
+    mut split_buffer: Local<Vec<MutationsSplit>>,
     change_tick: SystemChangeTick,
     world: ServerWorld,
     mut clients: Query<(
@@ -373,6 +375,7 @@ fn send_replication(
         **server_tick,
         **track_mutate_messages,
         &mut serialized,
+        &mut split_buffer,
         &mut pools,
         change_tick,
         &time,
@@ -414,6 +417,7 @@ fn send_messages(
     server_tick: RepliconTick,
     track_mutate_messages: bool,
     serialized: &mut SerializedData,
+    split_buffer: &mut Vec<MutationsSplit>,
     pools: &mut ClientPools,
     change_tick: SystemChangeTick,
     time: &Time,
@@ -436,6 +440,7 @@ fn send_messages(
                 messages,
                 client_entity,
                 &mut ticks,
+                split_buffer,
                 pools,
                 serialized,
                 track_mutate_messages,
