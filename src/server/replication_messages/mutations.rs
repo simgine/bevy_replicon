@@ -39,11 +39,6 @@ pub(crate) struct Mutations {
 
     /// Location of the last written entity since the last call of [`Self::start_entity_mutations`].
     entity_location: Option<EntityLocation>,
-
-    /// Intermediate buffer with mutate index, message size and a range for [`Self::standalone`].
-    ///
-    /// We split messages first in order to know their count in advance.
-    splits: Vec<MutationsSplit>,
 }
 
 impl Mutations {
@@ -137,6 +132,7 @@ impl Mutations {
         messages: &mut ServerMessages,
         client: Entity,
         ticks: &mut ClientTicks,
+        split_buffer: &mut Vec<MutationsSplit>,
         pools: &mut ClientPools,
         serialized: &SerializedData,
         track_mutate_messages: bool,
@@ -175,7 +171,7 @@ impl Mutations {
                 && !can_pack(header_size + body_size, mutations_size, max_size)
                 && !can_pack(header_size + mutations_size, body_size, max_size)
             {
-                self.splits.push(MutationsSplit {
+                split_buffer.push(MutationsSplit {
                     mutate_index,
                     message_size: body_size + header_size,
                     chunks_range: chunks_range.clone(),
@@ -199,32 +195,32 @@ impl Mutations {
         if !chunks_range.is_empty() || track_mutate_messages {
             // When the loop ends, pack all leftovers into a message.
             // Or create an empty message if tracking mutate messages is enabled.
-            self.splits.push(MutationsSplit {
+            split_buffer.push(MutationsSplit {
                 mutate_index,
                 message_size: body_size + header_size,
                 chunks_range,
             });
         }
 
-        if self.splits.len() > 1 {
+        if split_buffer.len() > 1 {
             trace!(
                 "splitting into {} messages for client `{client}`",
-                self.splits.len()
+                split_buffer.len()
             );
         }
 
-        for split in &self.splits {
+        for split in &*split_buffer {
             let mut message_size = split.message_size;
             if track_mutate_messages {
                 // Update message counter size based on actual value.
-                message_size -= MAX_COUNT_SIZE - serialized_size(&self.splits.len())?;
+                message_size -= MAX_COUNT_SIZE - serialized_size(&split_buffer.len())?;
             }
             let mut message = Vec::with_capacity(message_size);
 
             message.extend_from_slice(update_tick);
             message.extend_from_slice(&serialized[server_tick_range.clone()]);
             if track_mutate_messages {
-                postcard_utils::to_extend_mut(&self.splits.len(), &mut message)?;
+                postcard_utils::to_extend_mut(&split_buffer.len(), &mut message)?;
             }
             postcard_utils::to_extend_mut(&split.mutate_index, &mut message)?;
             for mutations in chunks.iter_flatten(split.chunks_range.clone()) {
@@ -240,14 +236,15 @@ impl Mutations {
             messages.send(client, ServerChannel::Mutations, message);
         }
 
-        Ok(self.splits.len())
+        let len = split_buffer.len();
+        split_buffer.clear();
+        Ok(len)
     }
 
     /// Clears all chunks.
     ///
     /// Keeps allocated memory for reuse.
     pub(crate) fn clear(&mut self, pools: &mut ClientPools) {
-        self.splits.clear();
         for entities in self
             .related
             .iter_mut()
@@ -358,7 +355,10 @@ impl<'a> EntityChunks<'a> {
     }
 }
 
-struct MutationsSplit {
+/// Information about mutations that are split into a message.
+///
+/// We split mutations into messages first in order to know their count in advance.
+pub(crate) struct MutationsSplit {
     mutate_index: MutateIndex,
     message_size: usize,
     /// Indices in [`EntityChunks`].
@@ -476,6 +476,7 @@ mod tests {
             .send(
                 &mut messages,
                 Entity::PLACEHOLDER,
+                &mut Default::default(),
                 &mut Default::default(),
                 &mut Default::default(),
                 &serialized,
