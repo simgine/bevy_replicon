@@ -11,7 +11,7 @@ use core::{mem, ops::Range, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::{CheckChangeTicks, Tick},
+        component::CheckChangeTicks,
         entity::{Entities, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -327,7 +327,6 @@ fn send_replication(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
@@ -408,7 +407,6 @@ fn send_messages(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
@@ -464,7 +462,6 @@ fn collect_mappings(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
@@ -514,7 +511,6 @@ fn collect_despawns(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
@@ -559,7 +555,6 @@ fn collect_removals(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
@@ -592,7 +587,6 @@ fn collect_changes(
         &mut Updates,
         &mut Mutations,
         &ConnectedClient,
-        &mut EntityCache,
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
@@ -608,22 +602,7 @@ fn collect_changes(
     for (archetype, replicated_archetype) in world.iter_archetypes() {
         for entity in archetype.entities() {
             let mut entity_range = None;
-            for (
-                _,
-                mut updates,
-                mut mutations,
-                ..,
-                mut entity_cache,
-                ticks,
-                priority,
-                visibility,
-            ) in &mut *clients
-            {
-                *entity_cache = EntityCache {
-                    mutation_tick: ticks.mutation_tick(entity.id()),
-                    hidden: visibility.is_hidden(entity.id()),
-                    base_priority: priority.get(&entity.id()).copied().unwrap_or(1.0),
-                };
+            for (_, mut updates, mut mutations, ..) in &mut *clients {
                 updates.start_entity_changes();
                 mutations.start_entity();
             }
@@ -647,19 +626,29 @@ fn collect_changes(
                     type_registry,
                 };
                 let mut component_range = None;
-                for (client_entity, mut updates, mut mutations, .., entity_cache, _, _, _) in
-                    &mut *clients
+                for (
+                    client_entity,
+                    mut updates,
+                    mut mutations,
+                    ..,
+                    client_ticks,
+                    priority,
+                    visibility,
+                ) in &mut *clients
                 {
-                    if entity_cache.hidden {
+                    if visibility.is_hidden(entity.id()) {
                         continue;
                     }
 
-                    if let Some((last_system_tick, last_server_tick)) = entity_cache.mutation_tick
+                    if let Some((last_system_tick, last_server_tick)) =
+                        client_ticks.mutation_tick(entity.id())
                         && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
                     {
+                        let base_priority = priority.get(&entity.id()).copied().unwrap_or(1.0);
+
                         let tick_diff = server_tick - last_server_tick;
                         if component_rule.mode != ReplicationMode::Once
-                            && entity_cache.base_priority * tick_diff as f32 >= 1.0
+                            && base_priority * tick_diff as f32 >= 1.0
                             && ticks.is_changed(last_system_tick, change_tick.this_run())
                         {
                             if !mutations.entity_added() {
@@ -714,14 +703,15 @@ fn collect_changes(
                 }
             }
 
-            for (client_entity, mut updates, mut mutations, .., entity_cache, mut ticks, _, _) in
+            for (client_entity, mut updates, mut mutations, .., mut ticks, _, visibility) in
                 &mut *clients
             {
-                if entity_cache.hidden {
+                if visibility.is_hidden(entity.id()) {
                     continue;
                 }
+                let new_for_client = ticks.is_new_for_client(entity.id());
 
-                if entity_cache.is_new_for_client()
+                if new_for_client
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
                 {
@@ -737,7 +727,7 @@ fn collect_changes(
                     ticks.set_mutation_tick(entity.id(), change_tick.this_run(), server_tick);
                 }
 
-                if entity_cache.is_new_for_client() && !updates.changed_entity_added() {
+                if new_for_client && !updates.changed_entity_added() {
                     trace!(
                         "writing empty `{}` for client `{client_entity}`",
                         entity.id()
@@ -898,14 +888,7 @@ struct DespawnBuffer(Vec<Entity>);
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
 #[derive(Component, Default)]
-#[require(
-    ClientTicks,
-    ClientVisibility,
-    PriorityMap,
-    EntityCache,
-    Updates,
-    Mutations
-)]
+#[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for an authorized client.
@@ -942,25 +925,4 @@ pub(crate) struct ClientPools {
     ranges: Vec<Vec<Range<usize>>>,
     /// Entities from [`Mutations`].
     mutations: Vec<Vec<EntityMutations>>,
-}
-
-/// Cached data from [`ClientTicks`] and [`ClientVisibility`] about the entity
-/// currently being processed during [`collect_changes`].
-///
-/// Because we iterate over clients for each component, this information is
-/// cached to avoid redundant lookups.
-#[derive(Component, Default, Clone, Copy)]
-struct EntityCache {
-    mutation_tick: Option<(Tick, RepliconTick)>,
-    hidden: bool,
-    base_priority: f32,
-}
-
-impl EntityCache {
-    /// Returns whether this entity is new for the client.
-    ///
-    /// For details see [`ClientTicks::is_new_for_client`].
-    fn is_new_for_client(&self) -> bool {
-        self.mutation_tick.is_none()
-    }
 }
