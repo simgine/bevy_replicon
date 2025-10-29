@@ -247,9 +247,13 @@ impl Mutations {
         Ok(len)
     }
 
-    /// Clears all chunks.
+    /// Clears all entity mutations.
     ///
     /// Keeps allocated memory for reuse.
+    ///
+    /// The outer array of [`Self::related`] is not cleared.
+    /// It should be resized via [`Self::resize_related`] before
+    /// collecting new changes.
     pub(crate) fn clear(&mut self, pools: &mut ClientPools) {
         for entities in self
             .related
