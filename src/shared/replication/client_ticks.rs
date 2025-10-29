@@ -53,22 +53,17 @@ impl ClientTicks {
         self.update_tick
     }
 
-    /// Registers mutate message at specified `tick` and `timestamp` and returns its index with entities to fill.
+    /// Allocates a new index for update message.
     ///
-    /// Used later to acknowledge updated entities.
+    /// The message later needs to be registered via [`Self::register_update_message`].
     #[must_use]
-    pub(crate) fn register_mutate_message(
-        &mut self,
-        mutate_info: MutateInfo,
-    ) -> (MutateIndex, &mut Vec<Entity>) {
-        let mutate_index = self.mutate_index.advance();
-        let mutate_info = self
-            .mutations
-            .entry(mutate_index)
-            .insert(mutate_info)
-            .into_mut();
+    pub(crate) fn next_mutate_index(&mut self) -> MutateIndex {
+        self.mutate_index.advance()
+    }
 
-        (mutate_index, &mut mutate_info.entities)
+    /// Registers mutate message to later acknowledge updated entities.
+    pub(crate) fn register_mutate_message(&mut self, index: MutateIndex, info: MutateInfo) {
+        self.mutations.insert(index, info);
     }
 
     /// Sets the mutation tick for an entity that is replicated to this client.
