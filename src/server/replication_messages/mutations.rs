@@ -150,12 +150,13 @@ impl Mutations {
             metadata_size += MAX_COUNT_SIZE;
         }
 
-        let (mut mutate_index, mut entities) = ticks.register_mutate_message(MutateInfo {
+        let mut mutate_info = MutateInfo {
             system_tick,
             server_tick,
             timestamp,
             entities: pools.entities.pop().unwrap_or_default(),
-        });
+        };
+        let mut mutate_index = ticks.next_mutate_index();
         let chunks = EntityChunks::new(&self.related, &self.standalone);
         let mut header_size = metadata_size + serialized_size(&mutate_index)?;
         let mut body_size = 0;
@@ -177,18 +178,22 @@ impl Mutations {
                     chunks_range: chunks_range.clone(),
                 });
 
-                (mutate_index, entities) = ticks.register_mutate_message(MutateInfo {
+                ticks.register_mutate_message(mutate_index, mutate_info);
+                mutate_index = ticks.next_mutate_index();
+                mutate_info = MutateInfo {
                     system_tick,
                     server_tick,
                     timestamp,
                     entities: pools.entities.pop().unwrap_or_default(),
-                });
+                };
                 chunks_range.start = chunks_range.end;
                 header_size = metadata_size + serialized_size(&mutate_index)?; // Recalculate since the mutate index changed.
                 body_size = 0;
             }
 
-            entities.extend(chunk.iter().map(|mutations| mutations.entity));
+            mutate_info
+                .entities
+                .extend(chunk.iter().map(|mutations| mutations.entity));
             chunks_range.end += 1;
             body_size += mutations_size;
         }
@@ -200,6 +205,7 @@ impl Mutations {
                 message_size: body_size + header_size,
                 chunks_range,
             });
+            ticks.register_mutate_message(mutate_index, mutate_info);
         }
 
         if split_buffer.len() > 1 {
