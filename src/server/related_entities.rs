@@ -1,7 +1,7 @@
 use core::any::TypeId;
 
 use bevy::{
-    ecs::{component::Immutable, relationship::Relationship},
+    ecs::{component::Immutable, entity::EntityHashMap, relationship::Relationship},
     platform::collections::HashMap,
     prelude::*,
 };
@@ -82,7 +82,7 @@ pub(super) struct RelatedEntities {
     /// can't use graphmap because it doesn't support parallel connections (needed when
     /// relationships overlap).
     graph: StableUnGraph<Entity, TypeId>,
-    entity_to_node: HashMap<Entity, NodeIndex>,
+    entity_to_node: EntityHashMap<NodeIndex>,
     node_to_entity: HashMap<NodeIndex, Entity>,
 
     /// Intermediate buffer to store connected edges before removal.
@@ -95,7 +95,7 @@ pub(super) struct RelatedEntities {
     scc: TarjanScc<NodeIndex>,
 
     /// Maps each entity to its disconnected graph's index.
-    entity_graphs: HashMap<Entity, usize>,
+    entity_graphs: EntityHashMap<usize>,
     graphs_count: usize,
 }
 
