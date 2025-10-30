@@ -249,7 +249,6 @@ fn cleanup_acks(
 }
 
 fn receive_acks(
-    change_tick: SystemChangeTick,
     mut messages: ResMut<ServerMessages>,
     mut pools: ResMut<ClientPools>,
     mut clients: Query<&mut ClientTicks>,
@@ -263,9 +262,7 @@ fn receive_acks(
                             "messages from client `{client}` should have been removed on disconnect"
                         )
                     });
-                    if let Some(mut entities) =
-                        ticks.ack_mutate_message(client, change_tick.this_run(), mutate_index)
-                    {
+                    if let Some(mut entities) = ticks.ack_mutate_message(client, mutate_index) {
                         entities.clear();
                         pools.entities.push(entities);
                     }
