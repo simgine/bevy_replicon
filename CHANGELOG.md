@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ClientVisibility` no longer allows controlling visibility. It is now a low-level layer that holds cached visibility information. Use the new visibility API instead.
 - Include `TrackAppExt::track_mutate_messages` in the replication protocol, since it affects the serialization format.
-- Better reuse memory for client components.
+- Better memory reuse for client components.
 
 ### Fixed
 
