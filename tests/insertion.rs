@@ -274,7 +274,7 @@ fn multiple_components() {
 }
 
 #[test]
-fn incremental() {
+fn multiple_components_sequential() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
