@@ -99,7 +99,6 @@ impl ClientTicks {
     pub(crate) fn ack_mutate_message(
         &mut self,
         client: Entity,
-        this_run: Tick,
         mutate_index: MutateIndex,
     ) -> Option<Vec<Entity>> {
         let Some(mutate_info) = self.mutations.remove(&mutate_index) else {
@@ -115,7 +114,7 @@ impl ClientTicks {
 
             // Received tick could be outdated because we bump it
             // if we detect any insertion on the entity in `collect_changes`.
-            if !system_tick.is_newer_than(mutate_info.system_tick, this_run) {
+            if *server_tick < mutate_info.server_tick {
                 *system_tick = mutate_info.system_tick;
                 *server_tick = mutate_info.server_tick;
             }
