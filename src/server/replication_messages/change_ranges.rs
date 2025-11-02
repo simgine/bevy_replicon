@@ -33,10 +33,7 @@ impl ChangeRanges {
     }
 
     pub(super) fn components_size(&self) -> usize {
-        self.components
-            .iter()
-            .map(|range| range.len())
-            .sum::<usize>()
+        self.components.iter().map(|range| range.len()).sum()
     }
 
     pub(super) fn add_component(&mut self, component: Range<usize>) {
