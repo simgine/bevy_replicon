@@ -151,8 +151,8 @@ impl Mutations {
         }
 
         let mut mutate_info = MutateInfo {
-            system_tick,
             server_tick,
+            system_tick,
             timestamp,
             entities: pools.entities.pop().unwrap_or_default(),
         };
@@ -181,8 +181,8 @@ impl Mutations {
                 ticks.register_mutate_message(mutate_index, mutate_info);
                 mutate_index = ticks.next_mutate_index();
                 mutate_info = MutateInfo {
-                    system_tick,
                     server_tick,
+                    system_tick,
                     timestamp,
                     entities: pools.entities.pop().unwrap_or_default(),
                 };

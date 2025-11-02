@@ -104,8 +104,8 @@ impl ClientTicks {
             // Received tick could be outdated because we bump it
             // if we detect any insertion on the entity in `collect_changes`.
             if *server_tick < mutate_info.server_tick {
-                *system_tick = mutate_info.system_tick;
                 *server_tick = mutate_info.server_tick;
+                *system_tick = mutate_info.system_tick;
             }
         }
         trace!(
@@ -143,8 +143,8 @@ impl ClientTicks {
 }
 
 pub(crate) struct MutateInfo {
-    pub(crate) system_tick: Tick,
     pub(crate) server_tick: RepliconTick,
+    pub(crate) system_tick: Tick,
     pub(crate) timestamp: Duration,
     pub(crate) entities: Vec<Entity>,
 }
