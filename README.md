@@ -30,7 +30,7 @@ If you are new to networking, see [glossary](https://gist.github.com/maniwani/f9
 
 Check out the [quick start guide](https://docs.rs/bevy_replicon).
 
-For examples navigate to the [`bevy_replicon_example_backend`](bevy_replicon_example_backend) (because you need I/O in order to run them).
+For examples navigate to the [`example_backend`](example_backend) (because you need I/O in order to run them).
 [Messaging backend](#messaging-backends) repositories usually also contains the exact same examples, but with backend initialization adapted to each backend's API.
 
 You can also:
