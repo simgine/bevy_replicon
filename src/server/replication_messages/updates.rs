@@ -120,11 +120,10 @@ impl Updates {
 
     /// Adds an entity chunk.
     pub(crate) fn add_changed_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
-        let components = pools.ranges.pop().unwrap_or_default();
         self.changes.push(ChangeRanges {
             entity,
             components_len: 0,
-            components,
+            components: pools.ranges.pop().unwrap_or_default(),
         });
         self.changed_entity_added = true;
     }
