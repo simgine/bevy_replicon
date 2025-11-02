@@ -104,10 +104,10 @@ impl Updates {
         });
     }
 
-    /// Updates internal state to start writing changed components for an entity with the given visibility.
+    /// Updates internal state to start writing changed components for an entity.
     ///
     /// Entities and their data are written lazily during the iteration.
-    /// See [`Self::add_changed_entity`] and [`Self::add_changed_component`].
+    /// See [`Self::add_changed_entity`] and [`Self::add_inserted_component`].
     pub(crate) fn start_entity_changes(&mut self) {
         self.changed_entity_added = false;
     }
