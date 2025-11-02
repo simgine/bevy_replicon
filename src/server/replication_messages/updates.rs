@@ -134,7 +134,7 @@ impl Updates {
         let changes = self
             .changes
             .last_mut()
-            .expect("entity should be written before adding components");
+            .expect("entity should be written before adding insertions");
 
         changes.add_component(component);
     }
