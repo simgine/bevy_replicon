@@ -604,8 +604,8 @@ fn collect_changes(
                 mutations.start_entity();
             }
 
-            for &(component_rule, storage) in &replicated_archetype.components {
-                let (component_id, component_fns, rule_fns) = registry.get(component_rule.fns_id);
+            for &(rule, storage) in &replicated_archetype.components {
+                let (component_id, component_fns, rule_fns) = registry.get(rule.fns_id);
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (component, ticks) = unsafe {
@@ -644,7 +644,7 @@ fn collect_changes(
                         let base_priority = priority.get(&entity.id()).copied().unwrap_or(1.0);
 
                         let tick_diff = server_tick - last_server_tick;
-                        if component_rule.mode != ReplicationMode::Once
+                        if rule.mode != ReplicationMode::Once
                             && base_priority * tick_diff as f32 >= 1.0
                             && ticks.is_changed(last_system_tick, change_tick.this_run())
                         {
@@ -663,14 +663,14 @@ fn collect_changes(
                                 rule_fns,
                                 component_fns,
                                 &ctx,
-                                component_rule,
+                                rule,
                                 component,
                             )?;
 
                             trace!(
                                 "writing mutation for `{}` with `{:?}` for client `{client_entity}`",
                                 entity.id(),
-                                component_rule.fns_id,
+                                rule.fns_id,
                             );
                             mutations.add_component(component_range);
                         }
@@ -686,14 +686,14 @@ fn collect_changes(
                             rule_fns,
                             component_fns,
                             &ctx,
-                            component_rule,
+                            rule,
                             component,
                         )?;
 
                         trace!(
                             "writing insertion for `{}` with `{:?}` for client `{client_entity}`",
                             entity.id(),
-                            component_rule.fns_id,
+                            rule.fns_id,
                         );
                         updates.add_inserted_component(component_range);
                     }
@@ -798,20 +798,14 @@ fn write_component_cached(
     rule_fns: &UntypedRuleFns,
     component_fns: &ComponentFns,
     ctx: &SerializeCtx,
-    component_rule: ComponentRule,
+    rule: ComponentRule,
     component: Ptr<'_>,
 ) -> Result<Range<usize>> {
     if let Some(component_range) = component_range.clone() {
         return Ok(component_range);
     }
 
-    let range = serialized.write_component(
-        rule_fns,
-        component_fns,
-        ctx,
-        component_rule.fns_id,
-        component,
-    )?;
+    let range = serialized.write_component(rule_fns, component_fns, ctx, rule.fns_id, component)?;
     *component_range = Some(range.clone());
 
     Ok(range)
