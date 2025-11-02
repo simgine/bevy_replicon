@@ -909,7 +909,7 @@ pub struct PriorityMap(EntityHashMap<f32>);
 ///
 /// All data is cleared before the insertion.
 #[derive(Resource, Default)]
-pub(crate) struct ClientPools {
+struct ClientPools {
     /// Entities from [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo)s.
     entities: Vec<Vec<Entity>>,
     /// Ranges from [`Updates`] and [`Mutations`].
