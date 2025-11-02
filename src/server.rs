@@ -648,6 +648,12 @@ fn collect_changes(
                             && base_priority * tick_diff as f32 >= 1.0
                             && ticks.is_changed(last_system_tick, change_tick.this_run())
                         {
+                            trace!(
+                                "writing `{:?}` mutation for `{}` for client `{client_entity}`",
+                                rule.fns_id,
+                                entity.id(),
+                            );
+
                             if !mutations.entity_added() {
                                 let graph_index = related_entities.graph_index(entity.id());
                                 let entity_range = write_entity_cached(
@@ -666,15 +672,15 @@ fn collect_changes(
                                 rule,
                                 component,
                             )?;
-
-                            trace!(
-                                "writing mutation for `{}` with `{:?}` for client `{client_entity}`",
-                                entity.id(),
-                                rule.fns_id,
-                            );
                             mutations.add_component(component_range);
                         }
                     } else {
+                        trace!(
+                            "writing `{:?}` insertion for `{}` for client `{client_entity}`",
+                            rule.fns_id,
+                            entity.id(),
+                        );
+
                         if !updates.changed_entity_added() {
                             let entity_range =
                                 write_entity_cached(&mut entity_range, serialized, entity.id())?;
@@ -689,12 +695,6 @@ fn collect_changes(
                             rule,
                             component,
                         )?;
-
-                        trace!(
-                            "writing insertion for `{}` with `{:?}` for client `{client_entity}`",
-                            entity.id(),
-                            rule.fns_id,
-                        );
                         updates.add_inserted_component(component_range);
                     }
                 }
