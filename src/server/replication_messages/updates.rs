@@ -1,6 +1,6 @@
 use core::ops::Range;
 
-use bevy::prelude::*;
+use bevy::{ecs::component::ComponentId, prelude::*};
 use postcard::experimental::serialized_size;
 
 use super::{change_ranges::ChangeRanges, mutations::Mutations, serialized_data::SerializedData};
@@ -46,10 +46,13 @@ pub(crate) struct Updates {
 
     /// Component removals that happened in this tick.
     ///
-    /// Serialized as a list of pairs of entity chunk and a list of
-    /// [`FnsId`](crate::shared::replication::registry::FnsId)
-    /// serialized as a single chunk.
+    /// Serialized as a list of pairs of entity chunk and a multiple chunks with
+    /// [`FnsId`](crate::shared::replication::registry::FnsId).
     removals: Vec<RemovalRanges>,
+
+    /// Indicates that an entity has been written since the
+    /// last call of [`Self::start_entity_removals`].
+    removals_entity_added: bool,
 
     /// Component insertions or mutations that happened in this tick.
     ///
@@ -60,6 +63,9 @@ pub(crate) struct Updates {
     /// Usually mutations are stored in [`MutateMessage`], but if an entity has any insertions or removal,
     /// or the entity just became visible for a client, we serialize it as part of the update message to keep entity updates atomic.
     changes: Vec<ChangeRanges>,
+
+    /// IDs of components for the last changed entity that was written.
+    changed_entity_ids: Vec<ComponentId>,
 
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_changes`].
@@ -91,17 +97,39 @@ impl Updates {
         self.despawns.push(entity);
     }
 
-    pub(crate) fn add_removals(
-        &mut self,
-        entity: Range<usize>,
-        ids_len: usize,
-        fn_ids: Range<usize>,
-    ) {
+    /// Updates internal state to start writing removed components for an entity.
+    ///
+    /// Entities and their removals are written lazily during the iteration.
+    /// See [`Self::add_removals_entity`] and [`Self::add_removal`].
+    pub(crate) fn start_entity_removals(&mut self) {
+        self.removals_entity_added = false;
+    }
+
+    /// Returns `true` if [`Self::add_removals_entity`] were called since the last
+    /// call of [`Self::start_entity_removals`].
+    pub(crate) fn removals_entity_added(&mut self) -> bool {
+        self.removals_entity_added
+    }
+
+    /// Adds an entity chunk for removals.
+    pub(crate) fn add_removals_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
         self.removals.push(RemovalRanges {
             entity,
-            ids_len,
-            fn_ids,
+            ids_len: 0,
+            ids: pools.ranges.pop().unwrap_or_default(),
         });
+        self.removals_entity_added = true;
+    }
+
+    /// Adds a chunk with removal to the last added entity from [`Self::add_removals_entity`].
+    pub(crate) fn add_removal(&mut self, fns_id: Range<usize>) {
+        debug_assert!(self.removals_entity_added);
+        let removals = self
+            .removals
+            .last_mut()
+            .expect("entity should be written before adding removals");
+
+        removals.add_removal(fns_id);
     }
 
     /// Updates internal state to start writing changed components for an entity.
@@ -109,6 +137,10 @@ impl Updates {
     /// Entities and their data are written lazily during the iteration.
     /// See [`Self::add_changed_entity`] and [`Self::add_inserted_component`].
     pub(crate) fn start_entity_changes(&mut self) {
+        debug_assert!(
+            self.changed_entity_ids.is_empty(),
+            "changed IDs should be drained before next entity is written"
+        );
         self.changed_entity_added = false;
     }
 
@@ -118,7 +150,7 @@ impl Updates {
         self.changed_entity_added
     }
 
-    /// Adds an entity chunk.
+    /// Adds an entity chunk for insertions and mutations.
     pub(crate) fn add_changed_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
         self.changes.push(ChangeRanges {
             entity,
@@ -129,7 +161,11 @@ impl Updates {
     }
 
     /// Adds a component chunk to the last added entity from [`Self::add_changed_entity`].
-    pub(crate) fn add_inserted_component(&mut self, component: Range<usize>) {
+    pub(crate) fn add_inserted_component(
+        &mut self,
+        component: Range<usize>,
+        component_id: ComponentId,
+    ) {
         debug_assert!(self.changed_entity_added);
         let changes = self
             .changes
@@ -137,22 +173,31 @@ impl Updates {
             .expect("entity should be written before adding insertions");
 
         changes.add_component(component);
+        self.changed_entity_ids.push(component_id);
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.
     pub(crate) fn take_added_entity(&mut self, pools: &mut ClientPools, mutations: &mut Mutations) {
         debug_assert!(mutations.entity_added());
-        let mut last_changes = mutations.pop().expect("entity should be written");
+        let mut entity_mutations = mutations.pop().expect("entity should be written");
 
         if !self.changed_entity_added {
-            self.changes.push(last_changes);
+            self.changes.push(entity_mutations.ranges);
         } else {
             let changes = self.changes.last_mut().expect("entity should be written");
-            debug_assert_eq!(last_changes.entity, changes.entity);
-            changes.extend(&last_changes);
-            last_changes.components.clear();
-            pools.ranges.push(last_changes.components);
+            debug_assert_eq!(entity_mutations.ranges.entity, changes.entity);
+            changes.extend(&entity_mutations.ranges);
+            entity_mutations.ranges.components.clear();
+            pools.ranges.push(entity_mutations.ranges.components);
+
+            self.changed_entity_ids.append(&mut entity_mutations.ids);
+            pools.components.push(entity_mutations.ids);
         }
+    }
+
+    /// Drains all component IDs for the last changed entity that was written.
+    pub(crate) fn drain_changed_entity_ids(&mut self) -> impl Iterator<Item = ComponentId> {
+        self.changed_entity_ids.drain(..)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -255,7 +300,9 @@ impl Updates {
                     for removals in &self.removals {
                         message.extend_from_slice(&serialized[removals.entity.clone()]);
                         postcard_utils::to_extend_mut(&removals.ids_len, &mut message)?;
-                        message.extend_from_slice(&serialized[removals.fn_ids.clone()]);
+                        for fns_id in &removals.ids {
+                            message.extend_from_slice(&serialized[fns_id.clone()]);
+                        }
                     }
                 }
                 UpdateMessageFlags::CHANGES => {
@@ -306,25 +353,43 @@ impl Updates {
         self.mappings_len = 0;
         self.despawns.clear();
         self.despawns_len = 0;
-        self.removals.clear();
-        pools
-            .ranges
-            .extend(self.changes.drain(..).map(|mut changes| {
-                changes.components.clear();
-                changes.components
-            }));
+
+        let change_ranges = self.changes.drain(..).map(|mut changes| {
+            changes.components.clear();
+            changes.components
+        });
+        let removal_ranges = self.removals.drain(..).map(|mut removals| {
+            removals.ids.clear();
+            removals.ids
+        });
+        pools.ranges.extend(change_ranges.chain(removal_ranges));
     }
 }
 
 struct RemovalRanges {
     entity: Range<usize>,
     ids_len: usize,
-    fn_ids: Range<usize>,
+    ids: Vec<Range<usize>>,
 }
 
 impl RemovalRanges {
+    pub(super) fn add_removal(&mut self, fns_id: Range<usize>) {
+        self.ids_len += 1;
+
+        if let Some(last) = self.ids.last_mut() {
+            // Append to previous range if possible.
+            if last.end == fns_id.start {
+                last.end = fns_id.end;
+                return;
+            }
+        }
+
+        self.ids.push(fns_id);
+    }
+
     fn size(&self) -> Result<usize> {
         let len_size = serialized_size(&self.ids_len)?;
-        Ok(self.entity.len() + len_size + self.fn_ids.len())
+        let ids_size: usize = self.ids.iter().map(|range| range.len()).sum();
+        Ok(self.entity.len() + len_size + ids_size)
     }
 }

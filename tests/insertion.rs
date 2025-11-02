@@ -313,6 +313,43 @@ fn multiple_components_sequential() {
 }
 
 #[test]
+fn rule_split_across_ticks() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_bundle::<(A, B)>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut a_components = client_app.world_mut().query::<&A>();
+    assert_eq!(a_components.iter(client_app.world()).count(), 0);
+
+    // Insert component that should trigger replication of another component.
+    server_app.world_mut().entity_mut(server_entity).insert(B);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut all_components = client_app.world_mut().query::<(&A, &B)>();
+    assert_eq!(all_components.iter(client_app.world()).count(), 1);
+}
+
+#[test]
 fn command_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();

@@ -29,15 +29,10 @@ impl SerializedData {
         Ok(start..end)
     }
 
-    pub(crate) fn write_fn_ids(
-        &mut self,
-        fn_ids: impl Iterator<Item = FnsId>,
-    ) -> Result<Range<usize>> {
+    pub(crate) fn write_fns_id(&mut self, fns_id: FnsId) -> Result<Range<usize>> {
         let start = self.len();
 
-        for fns_id in fn_ids {
-            postcard_utils::to_extend_mut(&fns_id, &mut self.0)?;
-        }
+        postcard_utils::to_extend_mut(&fns_id, &mut self.0)?;
 
         let end = self.len();
 

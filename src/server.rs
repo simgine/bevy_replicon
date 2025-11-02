@@ -11,12 +11,13 @@ use core::{mem, ops::Range, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::CheckChangeTicks,
+        component::{CheckChangeTicks, ComponentId},
         entity::{Entities, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
         system::SystemChangeTick,
     },
+    platform::collections::{HashSet, hash_map::Entry},
     prelude::*,
     ptr::Ptr,
     time::common_conditions::on_timer,
@@ -35,9 +36,9 @@ use crate::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
         replication::{
-            client_ticks::ClientTicks,
+            client_ticks::{ClientTicks, EntityTicks},
             registry::{
-                ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
+                FnsId, ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
                 rule_fns::UntypedRuleFns,
             },
             rules::{ReplicationRules, component::ComponentRule},
@@ -241,7 +242,9 @@ fn cleanup_acks(
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
             ticks.cleanup_older_mutations(min_timestamp, |mutate_info| {
-                mutate_info.entities.clear();
+                for (_, components) in mutate_info.entities.drain(..) {
+                    pools.components.push(components);
+                }
                 pools.entities.push(mem::take(&mut mutate_info.entities));
             });
         }
@@ -263,7 +266,9 @@ fn receive_acks(
                         )
                     });
                     if let Some(mut entities) = ticks.ack_mutate_message(client, mutate_index) {
-                        entities.clear();
+                        for (_, components) in entities.drain(..) {
+                            pools.components.push(components);
+                        }
                         pools.entities.push(entities);
                     }
                 }
@@ -309,7 +314,9 @@ fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut Cli
         check.present_tick()
     );
     for mut ticks in &mut clients {
-        ticks.check_mutation_ticks(*check);
+        for entity_ticks in ticks.entities.values_mut() {
+            entity_ticks.system_tick.check_tick(*check);
+        }
     }
 }
 
@@ -349,8 +356,13 @@ fn send_replication(
     }
 
     collect_mappings(&mut serialized, &mut clients, &despawn_buffer, &entities)?;
-    collect_despawns(&mut serialized, &mut clients, &mut despawn_buffer)?;
-    collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
+    collect_despawns(
+        &mut serialized,
+        &mut pools,
+        &mut clients,
+        &mut despawn_buffer,
+    )?;
+    collect_removals(&mut serialized, &mut pools, &mut clients, &removal_buffer)?;
     collect_changes(
         &mut serialized,
         &mut pools,
@@ -503,6 +515,7 @@ fn collect_mappings(
 /// Collect entity despawns from this tick into update messages.
 fn collect_despawns(
     serialized: &mut SerializedData,
+    pools: &mut ClientPools,
     clients: &mut Query<(
         Entity,
         &mut Updates,
@@ -519,11 +532,12 @@ fn collect_despawns(
         for (client_entity, mut message, .., mut ticks, mut priority, mut visibility) in
             &mut *clients
         {
-            if ticks.remove_entity(entity) {
+            if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 // Write despawn only if the entity was previously sent because
                 // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client_entity}`");
                 message.add_despawn(entity_range.clone());
+                pools.component_sets.push(entity_ticks.components);
             }
             visibility.remove_despawned(entity);
             priority.remove(&entity);
@@ -532,10 +546,11 @@ fn collect_despawns(
 
     for (client_entity, mut message, .., mut ticks, mut priority, mut visibility) in clients {
         for entity in visibility.drain_lost() {
-            if ticks.remove_entity(entity) {
+            if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
                 let entity_range = serialized.write_entity(entity)?;
                 message.add_despawn(entity_range);
+                pools.component_sets.push(entity_ticks.components);
             }
             priority.remove(&entity);
         }
@@ -547,6 +562,7 @@ fn collect_despawns(
 /// Collects component removals from this tick into update messages.
 fn collect_removals(
     serialized: &mut SerializedData,
+    pools: &mut ClientPools,
     clients: &mut Query<(
         Entity,
         &mut Updates,
@@ -559,15 +575,29 @@ fn collect_removals(
     removal_buffer: &RemovalBuffer,
 ) -> Result<()> {
     for (&entity, remove_ids) in removal_buffer.iter() {
-        let entity_range = serialized.write_entity(entity)?;
-        let ids_len = remove_ids.len();
-        let fn_ids = serialized.write_fn_ids(remove_ids.iter().map(|&(_, fns_id)| fns_id))?;
-        for (client_entity, mut message, .., visibility) in &mut *clients {
-            if !visibility.is_hidden(entity) {
-                trace!(
-                    "writing removals for `{entity}` with `{remove_ids:?}` for client `{client_entity}`"
-                );
-                message.add_removals(entity_range.clone(), ids_len, fn_ids.clone());
+        let mut entity_range = None;
+        for (_, mut message, ..) in &mut *clients {
+            message.start_entity_removals();
+        }
+
+        for &(component_id, fns_id) in remove_ids {
+            let mut fns_id_range = None;
+            for (client_entity, mut message, .., mut ticks, _, _) in &mut *clients {
+                // Only send removals for components that were previously sent.
+                let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
+                    continue;
+                };
+                if !entity_ticks.components.remove(&component_id) {
+                    continue;
+                }
+
+                trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client_entity}`");
+                if !message.removals_entity_added() {
+                    let entity_range = write_entity_cached(&mut entity_range, serialized, entity)?;
+                    message.add_removals_entity(pools, entity_range);
+                }
+                let fns_id_range = write_fns_id_cached(&mut fns_id_range, serialized, fns_id)?;
+                message.add_removal(fns_id_range);
             }
         }
     }
@@ -636,17 +666,15 @@ fn collect_changes(
                     if visibility.is_hidden(entity.id()) {
                         continue;
                     }
-
-                    if let Some((last_system_tick, last_server_tick)) =
-                        client_ticks.mutation_tick(entity.id())
-                        && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
+                    if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
+                        && entity_ticks.components.contains(&component_id)
                     {
                         let base_priority = priority.get(&entity.id()).copied().unwrap_or(1.0);
 
-                        let tick_diff = server_tick - last_server_tick;
+                        let tick_diff = server_tick - entity_ticks.server_tick;
                         if rule.mode != ReplicationMode::Once
                             && base_priority * tick_diff as f32 >= 1.0
-                            && ticks.is_changed(last_system_tick, change_tick.this_run())
+                            && ticks.is_changed(entity_ticks.system_tick, change_tick.this_run())
                         {
                             trace!(
                                 "writing `{:?}` mutation for `{}` for client `{client_entity}`",
@@ -695,7 +723,7 @@ fn collect_changes(
                             rule,
                             component,
                         )?;
-                        updates.add_inserted_component(component_range);
+                        updates.add_inserted_component(component_range, component_id);
                     }
                 }
             }
@@ -706,8 +734,9 @@ fn collect_changes(
                 if visibility.is_hidden(entity.id()) {
                     continue;
                 }
-                let new_for_client = ticks.is_new_for_client(entity.id());
 
+                let entity_entry = ticks.entities.entry(entity.id());
+                let new_for_client = matches!(entity_entry, Entry::Vacant(_));
                 if new_for_client
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
@@ -721,7 +750,26 @@ fn collect_changes(
                         );
                         updates.take_added_entity(pools, &mut mutations);
                     }
-                    ticks.set_mutation_tick(entity.id(), change_tick.this_run(), server_tick);
+
+                    match entity_entry {
+                        Entry::Occupied(entry) => {
+                            let entity_ticks = entry.into_mut();
+                            entity_ticks.system_tick = change_tick.this_run();
+                            entity_ticks.server_tick = server_tick;
+                            entity_ticks
+                                .components
+                                .extend(updates.drain_changed_entity_ids());
+                        }
+                        Entry::Vacant(entry) => {
+                            let mut components = pools.component_sets.pop().unwrap_or_default();
+                            components.extend(updates.drain_changed_entity_ids());
+                            entry.insert(EntityTicks {
+                                server_tick,
+                                system_tick: change_tick.this_run(),
+                                components,
+                            });
+                        }
+                    }
                 }
 
                 if new_for_client && !updates.changed_entity_added() {
@@ -755,7 +803,7 @@ fn should_send_mapping(
         return false;
     }
 
-    signature.is_added() || ticks.is_new_for_client(entity)
+    signature.is_added() || !ticks.entities.contains_key(&entity)
 }
 
 /// Writes a mapping or re-uses previously written range if exists.
@@ -787,6 +835,22 @@ fn write_entity_cached(
 
     let range = serialized.write_entity(entity)?;
     *entity_range = Some(range.clone());
+
+    Ok(range)
+}
+
+/// Writes an ID or re-uses previously written range if exists.
+fn write_fns_id_cached(
+    fns_id_range: &mut Option<Range<usize>>,
+    serialized: &mut SerializedData,
+    fns_id: FnsId,
+) -> Result<Range<usize>> {
+    if let Some(range) = fns_id_range.clone() {
+        return Ok(range);
+    }
+
+    let range = serialized.write_fns_id(fns_id)?;
+    *fns_id_range = Some(range.clone());
 
     Ok(range)
 }
@@ -910,8 +974,12 @@ pub struct PriorityMap(EntityHashMap<f32>);
 /// All data is cleared before the insertion.
 #[derive(Resource, Default)]
 struct ClientPools {
-    /// Entities from [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo)s.
-    entities: Vec<Vec<Entity>>,
+    /// Entities with components from [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo)s.
+    entities: Vec<Vec<(Entity, Vec<ComponentId>)>>,
+    /// Components from [`Self::entities`].
+    components: Vec<Vec<ComponentId>>,
+    /// Components from [`ClientTicks`].
+    component_sets: Vec<HashSet<ComponentId>>,
     /// Ranges from [`Updates`] and [`Mutations`].
     ranges: Vec<Vec<Range<usize>>>,
     /// Entities from [`Mutations`].
