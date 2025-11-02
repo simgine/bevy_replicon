@@ -479,7 +479,7 @@ To achieve this, use the provided [`ClientState`] and [`ServerState`] states:
 - For everything else don't use Replicon's states.
 
 Everything else is done automatically by the crate. All provided
-[examples](https://github.com/simgine/bevy_replicon/tree/master/bevy_replicon_example_backend/examples)
+[examples](https://github.com/simgine/bevy_replicon/tree/master/example_backend/examples)
 use this approach.
 
 Internally we run replication sending system only in [`ServerState::Running`] and replication receiving
