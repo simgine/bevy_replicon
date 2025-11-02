@@ -130,6 +130,7 @@ impl Updates {
 
     /// Adds a component chunk to the last added entity from [`Self::add_changed_entity`].
     pub(crate) fn add_inserted_component(&mut self, component: Range<usize>) {
+        debug_assert!(self.changed_entity_added);
         let changes = self
             .changes
             .last_mut()
