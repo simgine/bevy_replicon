@@ -148,7 +148,7 @@ impl BufferedMessage {
         client_entity: Entity,
         client: &ClientTicks,
     ) -> Result<()> {
-        let message = self.message.get_bytes(client.update_tick())?;
+        let message = self.message.get_bytes(client.update_tick)?;
         messages.send(client_entity, self.channel_id, message);
         Ok(())
     }

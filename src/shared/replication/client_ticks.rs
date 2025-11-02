@@ -24,7 +24,7 @@ pub struct ClientTicks {
     ///
     /// It should be included in mutate messages and server events to avoid needless waiting for the next update
     /// message to arrive.
-    update_tick: RepliconTick,
+    pub(crate) update_tick: RepliconTick,
 
     /// Mutate message indices mapped to their info.
     mutations: HashMap<MutateIndex, MutateInfo>,
@@ -40,17 +40,6 @@ impl ClientTicks {
         for (tick, _) in &mut self.mutation_ticks.values_mut() {
             tick.check_tick(check);
         }
-    }
-
-    /// Sets the client's update tick.
-    pub(crate) fn set_update_tick(&mut self, tick: RepliconTick) {
-        self.update_tick = tick;
-    }
-
-    /// Returns the last tick in which a replicated entity had an insertion, removal, or gained/lost a component from the
-    /// perspective of the client.
-    pub fn update_tick(&self) -> RepliconTick {
-        self.update_tick
     }
 
     /// Allocates a new index for update message.

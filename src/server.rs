@@ -420,7 +420,7 @@ fn send_messages(
     let mut server_tick_range = None;
     for (client_entity, updates, mut mutations, client, .., mut ticks, _, _) in clients {
         if !updates.is_empty() {
-            ticks.set_update_tick(server_tick);
+            ticks.update_tick = server_tick;
             let server_tick_range =
                 write_tick_cached(&mut server_tick_range, serialized, server_tick)?;
 

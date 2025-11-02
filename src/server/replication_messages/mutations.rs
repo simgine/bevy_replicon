@@ -144,7 +144,7 @@ impl Mutations {
     ) -> Result<usize> {
         const MAX_COUNT_SIZE: usize = usize::POSTCARD_MAX_SIZE;
         let mut tick_buffer = [0; RepliconTick::POSTCARD_MAX_SIZE];
-        let update_tick = postcard::to_slice(&ticks.update_tick(), &mut tick_buffer)?;
+        let update_tick = postcard::to_slice(&ticks.update_tick, &mut tick_buffer)?;
         let mut metadata_size = update_tick.len() + server_tick_range.len();
         if track_mutate_messages {
             metadata_size += MAX_COUNT_SIZE;
