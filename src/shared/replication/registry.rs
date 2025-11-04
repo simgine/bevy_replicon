@@ -2,6 +2,7 @@ pub mod command_fns;
 pub mod component_fns;
 pub mod ctx;
 pub mod rule_fns;
+pub(crate) mod serde_fns;
 pub mod test_fns;
 
 use bevy::{ecs::component::ComponentId, prelude::*};
@@ -9,7 +10,7 @@ use log::trace;
 use serde::{Deserialize, Serialize};
 
 use super::command_markers::CommandMarkerIndex;
-use crate::prelude::*;
+use crate::{prelude::*, shared::replication::registry::serde_fns::SerdeFns};
 use command_fns::{MutWrite, RemoveFn, UntypedCommandFns, WriteFn};
 use component_fns::ComponentFns;
 use ctx::DespawnCtx;
@@ -141,16 +142,19 @@ impl ReplicationRegistry {
     /// Returns associates functions.
     ///
     /// See also [`Self::register_rule_fns`].
-    pub(crate) fn get(&self, fns_id: FnsId) -> (ComponentId, &ComponentFns, &UntypedRuleFns) {
+    pub(crate) fn get<'a>(&'a self, fns_id: FnsId) -> (ComponentId, SerdeFns<'a>) {
         let (rule_fns, index) = self
             .rules
             .get(fns_id.0)
             .unwrap_or_else(|| panic!("replication `{fns_id:?}` should be registered first"));
 
         // SAFETY: index obtained from `rules` is always valid.
-        let (component_id, command_fns) = unsafe { self.components.get_unchecked(*index) };
+        let (component_id, component_fns) = unsafe { self.components.get_unchecked(*index) };
 
-        (*component_id, command_fns, rule_fns)
+        // SAFETY: `RuleFns` and `ComponentFns` belong to the same type.
+        let fns = unsafe { SerdeFns::new(component_fns, rule_fns) };
+
+        (*component_id, fns)
     }
 }
 
@@ -165,7 +169,8 @@ impl Default for ReplicationRegistry {
     }
 }
 
-/// ID of replicaton functions for a component.
+/// ID of replication functions registered for a
+/// [`ComponentRule`](super::rules::component::ComponentRule).
 ///
 /// Can be obtained from [`ReplicationRegistry::register_rule_fns`].
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]

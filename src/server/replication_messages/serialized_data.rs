@@ -5,9 +5,7 @@ use bevy::{prelude::*, ptr::Ptr};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::registry::{
-        FnsId, component_fns::ComponentFns, ctx::SerializeCtx, rule_fns::UntypedRuleFns,
-    },
+    shared::replication::registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
 };
 
 /// Single continuous buffer that stores serialized data for messages.
@@ -41,8 +39,7 @@ impl SerializedData {
 
     pub(crate) fn write_component(
         &mut self,
-        rule_fns: &UntypedRuleFns,
-        component_fns: &ComponentFns,
+        fns: &SerdeFns,
         ctx: &SerializeCtx,
         fns_id: FnsId,
         ptr: Ptr,
@@ -50,8 +47,8 @@ impl SerializedData {
         let start = self.len();
 
         postcard_utils::to_extend_mut(&fns_id, &mut self.0)?;
-        // SAFETY: `component_fns`, `ptr` and `rule_fns` were created for the same component type.
-        unsafe { component_fns.serialize(ctx, rule_fns, ptr, &mut self.0)? };
+        // SAFETY: `fns` and `ptr` were created for the same component type.
+        unsafe { fns.serialize(ctx, ptr, &mut self.0)? };
 
         let end = self.len();
 

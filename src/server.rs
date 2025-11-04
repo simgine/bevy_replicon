@@ -37,10 +37,7 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{
-                FnsId, ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
-                rule_fns::UntypedRuleFns,
-            },
+            registry::{FnsId, ReplicationRegistry, ctx::SerializeCtx, serde_fns::SerdeFns},
             rules::{ReplicationRules, component::ComponentRule},
             track_mutate_messages::TrackMutateMessages,
         },
@@ -635,7 +632,7 @@ fn collect_changes(
             }
 
             for &(rule, storage) in &replicated_archetype.components {
-                let (component_id, component_fns, rule_fns) = registry.get(rule.fns_id);
+                let (component_id, fns) = registry.get(rule.fns_id);
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (component, ticks) = unsafe {
@@ -694,8 +691,7 @@ fn collect_changes(
                             let component_range = write_component_cached(
                                 &mut component_range,
                                 serialized,
-                                rule_fns,
-                                component_fns,
+                                &fns,
                                 &ctx,
                                 rule,
                                 component,
@@ -717,8 +713,7 @@ fn collect_changes(
                         let component_range = write_component_cached(
                             &mut component_range,
                             serialized,
-                            rule_fns,
-                            component_fns,
+                            &fns,
                             &ctx,
                             rule,
                             component,
@@ -859,8 +854,7 @@ fn write_fns_id_cached(
 fn write_component_cached(
     component_range: &mut Option<Range<usize>>,
     serialized: &mut SerializedData,
-    rule_fns: &UntypedRuleFns,
-    component_fns: &ComponentFns,
+    fns: &SerdeFns,
     ctx: &SerializeCtx,
     rule: ComponentRule,
     component: Ptr<'_>,
@@ -869,7 +863,7 @@ fn write_component_cached(
         return Ok(component_range);
     }
 
-    let range = serialized.write_component(rule_fns, component_fns, ctx, rule.fns_id, component)?;
+    let range = serialized.write_component(fns, ctx, rule.fns_id, component)?;
     *component_range = Some(range.clone());
 
     Ok(range)

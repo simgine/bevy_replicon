@@ -11,7 +11,7 @@ use crate::{
 pub struct ComponentRule {
     /// ID of the replicated component.
     pub id: ComponentId,
-    /// Associated serialization and deserialization functions.
+    /// ID of the replication functions registered in [`ReplicationRegistry`].
     pub fns_id: FnsId,
     /// Replication configuration.
     pub mode: ReplicationMode,
