@@ -109,7 +109,7 @@ impl Updates {
         self.removals_entity_added = false;
     }
 
-    /// Returns `true` if [`Self::add_removals_entity`] were called since the last
+    /// Returns `true` if [`Self::add_removals_entity`] was called since the last
     /// call of [`Self::start_entity_removals`].
     pub(crate) fn removals_entity_added(&mut self) -> bool {
         self.removals_entity_added

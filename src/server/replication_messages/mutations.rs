@@ -268,7 +268,7 @@ impl Mutations {
                 mutations.ranges.components
             });
             pools.ranges.extend(ranges);
-            // We don't take component masks because they moved to `MutateInfo` during sending.
+            // We don't take component masks because they are moved to `MutateInfo` during sending.
         }
     }
 
