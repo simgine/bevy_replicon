@@ -99,7 +99,7 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
     fn serialize(&mut self, fns_id: FnsId, server_tick: RepliconTick) -> Vec<u8> {
         let type_registry = self.world().resource::<AppTypeRegistry>();
         let registry = self.world().resource::<ReplicationRegistry>();
-        let (component_id, fns) = registry.get(fns_id);
+        let (_, component_id, fns) = registry.get(fns_id);
         let mut message = Vec::new();
         let ctx = SerializeCtx {
             server_tick,
@@ -146,7 +146,7 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                     let mut changes = DeferredChanges::default();
                     let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
 
-                    let (component_id, fns) = registry.get(fns_id);
+                    let (_, component_id, fns) = registry.get(fns_id);
                     let mut ctx = WriteCtx {
                         entities,
                         entity_map: &mut entity_map,
@@ -178,7 +178,7 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                 let mut changes = DeferredChanges::default();
                 let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
 
-                let (component_id, fns) = registry.get(fns_id);
+                let (_, component_id, fns) = registry.get(fns_id);
                 let mut ctx = RemoveCtx {
                     message_tick,
                     component_id,

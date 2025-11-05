@@ -13,7 +13,10 @@ use bevy::{
 
 use crate::{
     prelude::*,
-    shared::replication::{registry::FnsId, rules::ReplicationRules},
+    shared::replication::{
+        registry::{ComponentIndex, FnsId, ReplicationRegistry},
+        rules::ReplicationRules,
+    },
 };
 
 /// Reader for removed components.
@@ -108,13 +111,13 @@ impl FromWorld for ReplicatedComponents {
 pub(super) struct RemovalBuffer {
     /// Component removals grouped by entity.
     #[deref]
-    removals: EntityHashMap<Vec<(ComponentId, FnsId)>>,
+    removals: EntityHashMap<Vec<(ComponentIndex, FnsId)>>,
 
     /// [`Vec`]s from removals.
     ///
     /// All data is cleared before the insertion.
     /// Stored to reuse allocated capacity.
-    ids_pool: Vec<Vec<(ComponentId, FnsId)>>,
+    pool: Vec<Vec<(ComponentIndex, FnsId)>>,
 }
 
 impl RemovalBuffer {
@@ -122,30 +125,34 @@ impl RemovalBuffer {
     pub(super) fn update(
         &mut self,
         rules: &ReplicationRules,
+        registry: &ReplicationRegistry,
         archetype: &Archetype,
         entity: Entity,
         removed_components: &HashSet<ComponentId>,
     ) {
-        let mut removed_ids = self.ids_pool.pop().unwrap_or_default();
+        let mut entity_removals = self.pool.pop().unwrap_or_default();
         for rule in rules
             .iter()
             .filter(|rule| rule.matches_removals(archetype, removed_components))
         {
             for component in &rule.components {
+                let (component_index, ..) = registry.get(component.fns_id);
                 // Since rules are sorted by priority,
                 // we are inserting only new components that aren't present.
-                if removed_ids.iter().all(|&(id, _)| id != component.id)
+                if entity_removals
+                    .iter()
+                    .all(|&(index, _)| index != component_index)
                     && removed_components.contains(&component.id)
                 {
-                    removed_ids.push((component.id, component.fns_id));
+                    entity_removals.push((component_index, component.fns_id));
                 }
             }
         }
 
-        if removed_ids.is_empty() {
-            self.ids_pool.push(removed_ids);
+        if entity_removals.is_empty() {
+            self.pool.push(entity_removals);
         } else {
-            self.removals.insert(entity, removed_ids);
+            self.removals.insert(entity, entity_removals);
         }
     }
 
@@ -153,7 +160,7 @@ impl RemovalBuffer {
     ///
     /// Keeps the allocated memory for reuse.
     pub(super) fn clear(&mut self) {
-        self.ids_pool
+        self.pool
             .extend(self.removals.drain().map(|(_, mut components)| {
                 components.clear();
                 components

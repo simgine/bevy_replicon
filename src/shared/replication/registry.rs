@@ -1,5 +1,6 @@
 pub mod command_fns;
 pub mod component_fns;
+pub(crate) mod component_mask;
 pub mod ctx;
 pub mod rule_fns;
 pub(crate) mod serde_fns;
@@ -35,7 +36,7 @@ pub struct ReplicationRegistry {
     ///
     /// Can be registered multiple times for the same component for a different
     /// [`ReplicationRule`](super::rules::ReplicationRule)
-    rules: Vec<(UntypedRuleFns, usize)>,
+    rules: Vec<(ComponentIndex, UntypedRuleFns)>,
 
     /// Number of registered markers.
     ///
@@ -72,7 +73,7 @@ impl ReplicationRegistry {
         remove: RemoveFn,
     ) {
         let (index, _) = self.init_component_fns::<C>(world);
-        let (_, component_fns) = &mut self.components[index];
+        let (_, component_fns) = &mut self.components[index.0];
         let command_fns = UntypedCommandFns::new(write, remove);
 
         // SAFETY: `component_fns` and `command_fns` were created for `C`.
@@ -91,7 +92,7 @@ impl ReplicationRegistry {
         remove: RemoveFn,
     ) {
         let (index, _) = self.init_component_fns::<C>(world);
-        let (_, component_fns) = &mut self.components[index];
+        let (_, component_fns) = &mut self.components[index.0];
         let command_fns = UntypedCommandFns::new(write, remove);
 
         // SAFETY: `component_fns` and `command_fns` were created for `C`.
@@ -110,7 +111,7 @@ impl ReplicationRegistry {
         rule_fns: RuleFns<C>,
     ) -> (ComponentId, FnsId) {
         let (index, component_id) = self.init_component_fns::<C>(world);
-        self.rules.push((rule_fns.into(), index));
+        self.rules.push((index, rule_fns.into()));
         let fns_id = FnsId(self.rules.len() - 1);
 
         trace!("registering `{fns_id:?}` for `{}`", ShortName::of::<C>());
@@ -124,7 +125,7 @@ impl ReplicationRegistry {
     fn init_component_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         world: &mut World,
-    ) -> (usize, ComponentId) {
+    ) -> (ComponentIndex, ComponentId) {
         let component_id = world.register_component::<C>();
         let index = self
             .components
@@ -136,25 +137,25 @@ impl ReplicationRegistry {
                 self.components.len() - 1
             });
 
-        (index, component_id)
+        (ComponentIndex(index), component_id)
     }
 
-    /// Returns associates functions.
+    /// Returns associates functions and associated data.
     ///
     /// See also [`Self::register_rule_fns`].
-    pub(crate) fn get<'a>(&'a self, fns_id: FnsId) -> (ComponentId, SerdeFns<'a>) {
-        let (rule_fns, index) = self
+    pub(crate) fn get<'a>(&'a self, fns_id: FnsId) -> (ComponentIndex, ComponentId, SerdeFns<'a>) {
+        let (index, rule_fns) = self
             .rules
             .get(fns_id.0)
             .unwrap_or_else(|| panic!("replication `{fns_id:?}` should be registered first"));
 
         // SAFETY: index obtained from `rules` is always valid.
-        let (component_id, component_fns) = unsafe { self.components.get_unchecked(*index) };
+        let (component_id, component_fns) = unsafe { self.components.get_unchecked(index.0) };
 
         // SAFETY: `RuleFns` and `ComponentFns` belong to the same type.
         let fns = unsafe { SerdeFns::new(component_fns, rule_fns) };
 
-        (*component_id, fns)
+        (*index, *component_id, fns)
     }
 }
 
@@ -175,6 +176,10 @@ impl Default for ReplicationRegistry {
 /// Can be obtained from [`ReplicationRegistry::register_rule_fns`].
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct FnsId(usize);
+
+/// Index of a component inside [`ReplicationRegistry`].
+#[derive(Debug, Serialize, Deserialize, Eq, Hash, PartialEq, Clone, Copy)]
+pub(crate) struct ComponentIndex(usize);
 
 /// Signature of the entity despawn function.
 pub type DespawnFn = fn(&DespawnCtx, EntityWorldMut);

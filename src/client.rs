@@ -489,7 +489,7 @@ fn apply_removals(
 
     let len = apply_array(ArrayKind::Sized, message, |message| {
         let fns_id = postcard_utils::from_buf(message)?;
-        let (component_id, fns) = params.registry.get(fns_id);
+        let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = RemoveCtx {
             message_tick,
             component_id,
@@ -548,7 +548,7 @@ fn apply_changes(
 
     let len = apply_array(ArrayKind::Sized, message, |message| {
         let fns_id = postcard_utils::from_buf(message)?;
-        let (component_id, fns) = params.registry.get(fns_id);
+        let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
             entity_map: params.entity_map,
             type_registry: params.type_registry,
@@ -695,7 +695,7 @@ fn apply_mutations(
     let mut components_count = 0;
     while data.has_remaining() {
         let fns_id = postcard_utils::from_buf(&mut data)?;
-        let (component_id, fns) = params.registry.get(fns_id);
+        let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
             entity_map: params.entity_map,
             type_registry: params.type_registry,

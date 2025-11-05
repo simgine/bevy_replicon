@@ -1,17 +1,14 @@
 use core::time::Duration;
 
 use bevy::{
-    ecs::{
-        component::{ComponentId, Tick},
-        entity::hash_map::EntityHashMap,
-    },
-    platform::collections::{HashMap, HashSet},
+    ecs::{component::Tick, entity::hash_map::EntityHashMap},
+    platform::collections::HashMap,
     prelude::*,
 };
 use log::{debug, trace};
 
 use super::mutate_index::MutateIndex;
-use crate::prelude::*;
+use crate::{prelude::*, shared::replication::registry::component_mask::ComponentMask};
 
 /// Tracks replication ticks for a client.
 #[derive(Component, Default)]
@@ -58,7 +55,7 @@ impl ClientTicks {
         &mut self,
         client: Entity,
         mutate_index: MutateIndex,
-    ) -> Option<Vec<(Entity, Vec<ComponentId>)>> {
+    ) -> Option<Vec<(Entity, ComponentMask)>> {
         let Some(mutate_info) = self.mutations.remove(&mutate_index) else {
             debug!("received unknown `{mutate_index:?}` from client `{client}`");
             return None;
@@ -75,9 +72,7 @@ impl ClientTicks {
             if entity_ticks.server_tick < mutate_info.server_tick {
                 entity_ticks.server_tick = mutate_info.server_tick;
                 entity_ticks.system_tick = mutate_info.system_tick;
-                for &component_id in components {
-                    entity_ticks.components.insert(component_id);
-                }
+                entity_ticks.components |= components;
             }
         }
         trace!(
@@ -120,7 +115,7 @@ pub(crate) struct EntityTicks {
     pub(crate) system_tick: Tick,
 
     /// The list of components that were replicated on this tick.
-    pub(crate) components: HashSet<ComponentId>,
+    pub(crate) components: ComponentMask,
 }
 
 /// Information about a mutation message.
@@ -128,5 +123,5 @@ pub(crate) struct MutateInfo {
     pub(crate) server_tick: RepliconTick,
     pub(crate) system_tick: Tick,
     pub(crate) timestamp: Duration,
-    pub(crate) entities: Vec<(Entity, Vec<ComponentId>)>,
+    pub(crate) entities: Vec<(Entity, ComponentMask)>,
 }

@@ -1,6 +1,6 @@
-use core::ops::Range;
+use core::{mem, ops::Range};
 
-use bevy::{ecs::component::ComponentId, prelude::*};
+use bevy::prelude::*;
 use postcard::experimental::serialized_size;
 
 use super::{change_ranges::ChangeRanges, mutations::Mutations, serialized_data::SerializedData};
@@ -9,7 +9,11 @@ use crate::{
     prelude::*,
     server::ClientPools,
     shared::{
-        backend::channels::ServerChannel, replication::update_message_flags::UpdateMessageFlags,
+        backend::channels::ServerChannel,
+        replication::{
+            registry::{ComponentIndex, component_mask::ComponentMask},
+            update_message_flags::UpdateMessageFlags,
+        },
     },
 };
 
@@ -64,8 +68,8 @@ pub(crate) struct Updates {
     /// or the entity just became visible for a client, we serialize it as part of the update message to keep entity updates atomic.
     changes: Vec<ChangeRanges>,
 
-    /// IDs of components for the last changed entity that was written.
-    changed_entity_ids: Vec<ComponentId>,
+    /// Components written in [`Self::changes`].
+    changed_components: ComponentMask,
 
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_changes`].
@@ -138,8 +142,8 @@ impl Updates {
     /// See [`Self::add_changed_entity`] and [`Self::add_inserted_component`].
     pub(crate) fn start_entity_changes(&mut self) {
         debug_assert!(
-            self.changed_entity_ids.is_empty(),
-            "changed IDs should be drained before next entity is written"
+            self.changed_components.is_empty(),
+            "changed components should be taken before next entity is written"
         );
         self.changed_entity_added = false;
     }
@@ -164,7 +168,7 @@ impl Updates {
     pub(crate) fn add_inserted_component(
         &mut self,
         component: Range<usize>,
-        component_id: ComponentId,
+        index: ComponentIndex,
     ) {
         debug_assert!(self.changed_entity_added);
         let changes = self
@@ -173,7 +177,7 @@ impl Updates {
             .expect("entity should be written before adding insertions");
 
         changes.add_component(component);
-        self.changed_entity_ids.push(component_id);
+        self.changed_components.set(index, true);
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.
@@ -190,14 +194,14 @@ impl Updates {
             entity_mutations.ranges.components.clear();
             pools.ranges.push(entity_mutations.ranges.components);
 
-            self.changed_entity_ids.append(&mut entity_mutations.ids);
-            pools.components.push(entity_mutations.ids);
+            self.changed_components |= &entity_mutations.components;
+            pools.push_components(entity_mutations.components);
         }
     }
 
-    /// Drains all component IDs for the last changed entity that was written.
-    pub(crate) fn drain_changed_entity_ids(&mut self) -> impl Iterator<Item = ComponentId> {
-        self.changed_entity_ids.drain(..)
+    /// Takes all changed components for the last changed entity that was written.
+    pub(crate) fn take_changed_components(&mut self) -> ComponentMask {
+        mem::take(&mut self.changed_components)
     }
 
     pub(crate) fn is_empty(&self) -> bool {

@@ -1,9 +1,6 @@
 use core::{cmp::Ordering, iter, mem, ops::Range, time::Duration};
 
-use bevy::{
-    ecs::component::{ComponentId, Tick},
-    prelude::*,
-};
+use bevy::{ecs::component::Tick, prelude::*};
 use log::trace;
 use postcard::experimental::{max_size::MaxSize, serialized_size};
 
@@ -17,6 +14,7 @@ use crate::{
         replication::{
             client_ticks::{ClientTicks, MutateInfo},
             mutate_index::MutateIndex,
+            registry::component_mask::ComponentMask,
         },
     },
 };
@@ -75,7 +73,7 @@ impl Mutations {
                 components_len: 0,
                 components,
             },
-            ids: pools.components.pop().unwrap_or_default(),
+            components: pools.components.pop().unwrap_or_default(),
         };
 
         match graph_index {
@@ -197,7 +195,7 @@ impl Mutations {
             mutate_info.entities.extend(
                 chunk
                     .iter_mut()
-                    .map(|mutations| (mutations.entity, mem::take(&mut mutations.ids))),
+                    .map(|mutations| (mutations.entity, mem::take(&mut mutations.components))),
             );
             chunks_range.end += 1;
             body_size += mutations_size;
@@ -270,7 +268,7 @@ impl Mutations {
                 mutations.ranges.components
             });
             pools.ranges.extend(ranges);
-            // We don't take component IDs because they moved to `MutateInfo` during sending.
+            // We don't take component masks because they moved to `MutateInfo` during sending.
         }
     }
 
@@ -314,10 +312,10 @@ pub(crate) struct EntityMutations {
     /// the client acknowledges them).
     pub(super) ranges: ChangeRanges,
 
-    /// Component IDs from [`Self::ranges`].
+    /// Components written in [`Self::ranges`].
     ///
     /// Like [`Self::entity`], used for later component acknowledgement.
-    pub(super) ids: Vec<ComponentId>,
+    pub(super) components: ComponentMask,
 }
 
 #[derive(Clone, Copy)]
