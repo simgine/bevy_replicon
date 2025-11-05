@@ -26,11 +26,8 @@ pub(super) struct ClientPools {
 
 impl ClientPools {
     pub(super) fn recycle_entities(&mut self, mut entities: Vec<(Entity, ComponentMask)>) {
-        for (_, mut components) in entities.drain(..) {
-            if components.is_heap() {
-                components.clear();
-                self.components.push(components);
-            }
+        for (_, components) in entities.drain(..) {
+            self.recycle_components(components);
         }
         self.entities.push(entities);
     }
