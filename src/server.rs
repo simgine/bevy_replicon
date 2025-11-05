@@ -577,6 +577,8 @@ fn collect_removals(
             let mut fns_id_range = None;
             for (client_entity, mut message, .., mut ticks, _, _) in &mut *clients {
                 // Only send removals for components that were previously sent.
+                // If the entity was despawned or lost visibility, it was removed
+                // from ticks earlier during despawn collection.
                 let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
                     continue;
                 };

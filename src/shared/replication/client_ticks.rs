@@ -13,7 +13,9 @@ use crate::{prelude::*, shared::replication::registry::component_mask::Component
 /// Tracks replication ticks for a client.
 #[derive(Component, Default)]
 pub struct ClientTicks {
-    /// Acknowledged ticks and components for each visible entity.
+    /// Last acknowledged tick for each visible entity with its components.
+    ///
+    /// Used to track what the client has already received.
     pub(crate) entities: EntityHashMap<EntityTicks>,
 
     /// The last tick in which a replicated entity had an insertion, removal, or gained/lost a component from the
