@@ -1,3 +1,4 @@
+pub mod client_pools;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
@@ -29,23 +30,20 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replication_messages::mutations::{EntityMutations, MutationsSplit},
-        visibility::registry::FilterRegistry,
+        replication_messages::mutations::MutationsSplit, visibility::registry::FilterRegistry,
     },
     shared::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{
-                FnsId, ReplicationRegistry, component_mask::ComponentMask, ctx::SerializeCtx,
-                serde_fns::SerdeFns,
-            },
+            registry::{FnsId, ReplicationRegistry, ctx::SerializeCtx, serde_fns::SerdeFns},
             rules::{ReplicationRules, component::ComponentRule},
             track_mutate_messages::TrackMutateMessages,
         },
     },
 };
+use client_pools::ClientPools;
 use related_entities::RelatedEntities;
 use removal_buffer::{RemovalBuffer, RemovalReader};
 use replication_messages::{
@@ -242,7 +240,7 @@ fn cleanup_acks(
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
             ticks.cleanup_older_mutations(min_timestamp, |mutate_info| {
-                pools.push_entities(mem::take(&mut mutate_info.entities));
+                pools.recycle_entities(mem::take(&mut mutate_info.entities));
             });
         }
     }
@@ -263,7 +261,7 @@ fn receive_acks(
                         )
                     });
                     if let Some(entities) = ticks.ack_mutate_message(client, mutate_index) {
-                        pools.push_entities(entities);
+                        pools.recycle_entities(entities);
                     }
                 }
                 Err(e) => {
@@ -532,7 +530,7 @@ fn collect_despawns(
                 // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client_entity}`");
                 message.add_despawn(entity_range.clone());
-                pools.push_components(entity_ticks.components);
+                pools.recycle_components(entity_ticks.components);
             }
             visibility.remove_despawned(entity);
             priority.remove(&entity);
@@ -545,7 +543,7 @@ fn collect_despawns(
                 trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
                 let entity_range = serialized.write_entity(entity)?;
                 message.add_despawn(entity_range);
-                pools.push_components(entity_ticks.components);
+                pools.recycle_components(entity_ticks.components);
             }
             priority.remove(&entity);
         }
@@ -753,7 +751,7 @@ fn collect_changes(
                             entity_ticks.system_tick = change_tick.this_run();
                             entity_ticks.server_tick = server_tick;
                             entity_ticks.components |= &components;
-                            pools.push_components(components);
+                            pools.recycle_components(components);
                         }
                         Entry::Vacant(entry) => {
                             entry.insert(EntityTicks {
@@ -960,41 +958,3 @@ pub struct AuthorizedClient;
 /// See its documentation for more details.
 #[derive(Component, Deref, DerefMut, Debug, Default, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);
-
-/// Pools for various client components to reuse allocated capacity.
-///
-/// All data is cleared before the insertion.
-#[derive(Resource, Default)]
-struct ClientPools {
-    /// Entities with bitvecs for components from
-    /// [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo).
-    entities: Vec<Vec<(Entity, ComponentMask)>>,
-    /// Bitvecs for components from [`Updates`], [`Mutations`] and
-    /// [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo).
-    ///
-    /// Only heap-allocated instances are stored.
-    components: Vec<ComponentMask>,
-    /// Ranges from [`Updates`] and [`Mutations`].
-    ranges: Vec<Vec<Range<usize>>>,
-    /// Entities from [`Mutations`].
-    mutations: Vec<Vec<EntityMutations>>,
-}
-
-impl ClientPools {
-    fn push_entities(&mut self, mut entities: Vec<(Entity, ComponentMask)>) {
-        for (_, mut components) in entities.drain(..) {
-            if components.is_heap() {
-                components.clear();
-                self.components.push(components);
-            }
-        }
-        self.entities.push(entities);
-    }
-
-    fn push_components(&mut self, mut components: ComponentMask) {
-        if components.is_heap() {
-            components.clear();
-            self.components.push(components);
-        }
-    }
-}

@@ -65,15 +65,14 @@ impl Mutations {
         graph_index: Option<usize>,
         entity_range: Range<usize>,
     ) {
-        let components = pools.ranges.pop().unwrap_or_default();
         let mutations = EntityMutations {
             entity,
             ranges: ChangeRanges {
                 entity: entity_range,
                 components_len: 0,
-                components,
+                components: pools.take_ranges(),
             },
-            components: pools.components.pop().unwrap_or_default(),
+            components: pools.take_components(),
         };
 
         match graph_index {
@@ -155,7 +154,7 @@ impl Mutations {
             server_tick,
             system_tick,
             timestamp,
-            entities: pools.entities.pop().unwrap_or_default(),
+            entities: pools.take_entities(),
         };
         let mut mutate_index = ticks.next_mutate_index();
         let mut chunks = EntityChunks::new(&mut self.related, &mut self.standalone);
@@ -185,7 +184,7 @@ impl Mutations {
                     server_tick,
                     system_tick,
                     timestamp,
-                    entities: pools.entities.pop().unwrap_or_default(),
+                    entities: pools.take_entities(),
                 };
                 chunks_range.start = chunks_range.end;
                 header_size = metadata_size + serialized_size(&mutate_index)?; // Recalculate since the mutate index changed.
@@ -263,11 +262,7 @@ impl Mutations {
             .iter_mut()
             .chain(iter::once(&mut self.standalone))
         {
-            let ranges = entities.drain(..).map(|mut mutations| {
-                mutations.ranges.components.clear();
-                mutations.ranges.components
-            });
-            pools.ranges.extend(ranges);
+            pools.recycle_ranges(entities.drain(..).map(|m| m.ranges.components));
             // We don't take component masks because they are moved to `MutateInfo` during sending.
         }
     }
@@ -279,14 +274,8 @@ impl Mutations {
         match self.related.len().cmp(&graphs_count) {
             Ordering::Less => self
                 .related
-                .resize_with(graphs_count, || pools.mutations.pop().unwrap_or_default()),
-            Ordering::Greater => {
-                let mutations = self.related.drain(graphs_count..).map(|mut mutations| {
-                    mutations.clear();
-                    mutations
-                });
-                pools.mutations.extend(mutations);
-            }
+                .resize_with(graphs_count, || pools.take_mutations()),
+            Ordering::Greater => pools.recycle_mutations(self.related.drain(graphs_count..)),
             Ordering::Equal => (),
         }
     }

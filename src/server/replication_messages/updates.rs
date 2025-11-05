@@ -1,4 +1,4 @@
-use core::{mem, ops::Range};
+use core::{iter, mem, ops::Range};
 
 use bevy::prelude::*;
 use postcard::experimental::serialized_size;
@@ -120,7 +120,7 @@ impl Updates {
         self.removals.push(RemovalRanges {
             entity,
             ids_len: 0,
-            ids: pools.ranges.pop().unwrap_or_default(),
+            ids: pools.take_ranges(),
         });
         self.removals_entity_added = true;
     }
@@ -159,7 +159,7 @@ impl Updates {
         self.changes.push(ChangeRanges {
             entity,
             components_len: 0,
-            components: pools.ranges.pop().unwrap_or_default(),
+            components: pools.take_ranges(),
         });
         self.changed_entity_added = true;
     }
@@ -183,7 +183,7 @@ impl Updates {
     /// Takes last mutated entity with its component chunks from the mutate message.
     pub(crate) fn take_added_entity(&mut self, pools: &mut ClientPools, mutations: &mut Mutations) {
         debug_assert!(mutations.entity_added());
-        let mut entity_mutations = mutations.pop().expect("entity should be written");
+        let entity_mutations = mutations.pop().expect("entity should be written");
 
         if !self.changed_entity_added {
             self.changes.push(entity_mutations.ranges);
@@ -191,11 +191,10 @@ impl Updates {
             let changes = self.changes.last_mut().expect("entity should be written");
             debug_assert_eq!(entity_mutations.ranges.entity, changes.entity);
             changes.extend(&entity_mutations.ranges);
-            entity_mutations.ranges.components.clear();
-            pools.ranges.push(entity_mutations.ranges.components);
+            pools.recycle_ranges(iter::once(entity_mutations.ranges.components));
 
             self.changed_components |= &entity_mutations.components;
-            pools.push_components(entity_mutations.components);
+            pools.recycle_components(entity_mutations.components);
         }
     }
 
@@ -358,15 +357,8 @@ impl Updates {
         self.despawns.clear();
         self.despawns_len = 0;
 
-        let change_ranges = self.changes.drain(..).map(|mut changes| {
-            changes.components.clear();
-            changes.components
-        });
-        let removal_ranges = self.removals.drain(..).map(|mut removals| {
-            removals.ids.clear();
-            removals.ids
-        });
-        pools.ranges.extend(change_ranges.chain(removal_ranges));
+        pools.recycle_ranges(self.changes.drain(..).map(|c| c.components));
+        pools.recycle_ranges(self.removals.drain(..).map(|c| c.ids));
     }
 }
 
