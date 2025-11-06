@@ -307,14 +307,22 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
     let mut signature = entity.get_mut::<Signature>().unwrap();
     signature.hash = hash;
 
-    world
-        .resource_mut::<SignatureMap>()
-        .insert(ctx.entity, hash);
+    if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
+        map.insert(ctx.entity, hash);
+    } else {
+        // Can't be handled manually like with unregistering below.
+        // However, when it's inserted during replication, entities
+        // don't need to be mapped. For example, the signature could
+        // be a required component to map local player entities,
+        // but ignored for remote ones.
+        debug!("ignoring hash 0x{hash:016x} for `{}`", ctx.entity);
+    }
 }
 
 fn unregister_hash(mut world: DeferredWorld, ctx: HookContext) {
     // The map will be unavailable during replication because the
-    // resource will be temporarily removed from the world.
+    // resource will be temporarily removed from the world,
+    // so it's handled manually there.
     if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
         map.remove(ctx.entity);
     }
@@ -394,6 +402,12 @@ variadics_please::all_tuples!(impl_signature_components, 0, 6, C);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_panic_without_map() {
+        let mut world = World::new();
+        world.spawn(Signature::from(0)).despawn();
+    }
 
     #[test]
     fn single_component() {
