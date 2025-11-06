@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Avoid sending despawn for entities that weren't sent.
+- Avoid panicking when `Signature` inserted during replication.
 
 ### Removed
 
