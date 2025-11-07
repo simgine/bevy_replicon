@@ -12,8 +12,8 @@ use core::{mem, ops::Range, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::CheckChangeTicks,
-        entity::{Entities, EntityHashMap},
+        component::{CheckChangeTicks, Tick},
+        entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
         system::SystemChangeTick,
@@ -37,7 +37,10 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{FnsId, ReplicationRegistry, ctx::SerializeCtx, serde_fns::SerdeFns},
+            registry::{
+                FnsId, ReplicationRegistry, component_mask::ComponentMask, ctx::SerializeCtx,
+                serde_fns::SerdeFns,
+            },
             rules::{ReplicationRules, component::ComponentRule},
             track_mutate_messages::TrackMutateMessages,
         },
@@ -730,8 +733,8 @@ fn collect_changes(
                     continue;
                 }
 
-                let entity_entry = ticks.entities.entry(entity.id());
-                let new_for_client = matches!(entity_entry, Entry::Vacant(_));
+                let entity_ticks = ticks.entities.entry(entity.id());
+                let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
                 if new_for_client
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
@@ -746,23 +749,13 @@ fn collect_changes(
                         updates.take_added_entity(pools, &mut mutations);
                     }
 
-                    match entity_entry {
-                        Entry::Occupied(entry) => {
-                            let entity_ticks = entry.into_mut();
-                            let components = updates.take_changed_components();
-                            entity_ticks.system_tick = change_tick.this_run();
-                            entity_ticks.server_tick = server_tick;
-                            entity_ticks.components |= &components;
-                            pools.recycle_components(components);
-                        }
-                        Entry::Vacant(entry) => {
-                            entry.insert(EntityTicks {
-                                server_tick,
-                                system_tick: change_tick.this_run(),
-                                components: updates.take_changed_components(),
-                            });
-                        }
-                    }
+                    update_ticks(
+                        entity_ticks,
+                        pools,
+                        change_tick.this_run(),
+                        server_tick,
+                        updates.take_changed_components(),
+                    );
                 }
 
                 if new_for_client && !updates.changed_entity_added() {
@@ -781,6 +774,31 @@ fn collect_changes(
     }
 
     Ok(())
+}
+
+fn update_ticks(
+    entity_ticks: Entry<Entity, EntityTicks, EntityHash>,
+    pools: &mut ClientPools,
+    system_tick: Tick,
+    server_tick: RepliconTick,
+    components: ComponentMask,
+) {
+    match entity_ticks {
+        Entry::Occupied(entry) => {
+            let entity_ticks = entry.into_mut();
+            entity_ticks.system_tick = system_tick;
+            entity_ticks.server_tick = server_tick;
+            entity_ticks.components |= &components;
+            pools.recycle_components(components);
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(EntityTicks {
+                server_tick,
+                system_tick,
+                components,
+            });
+        }
+    }
 }
 
 fn should_send_mapping(
