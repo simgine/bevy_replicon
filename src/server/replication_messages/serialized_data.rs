@@ -85,7 +85,6 @@ impl MessageWrite for WritableComponent<'_> {
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct EntityMapping {
     pub(crate) entity: Entity,
     pub(crate) hash: u64,
