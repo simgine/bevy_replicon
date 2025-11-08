@@ -25,7 +25,7 @@ rustdoc-args = ["-Zunstable-options", "--cfg", "docsrs"]
 all-features = true
 
 [workspace]
-members = ["bevy_replicon_example_backend"]
+members = ["example_backend"]
 
 [dependencies]
 bevy = { version = "0.17", default-features = false, features = ["bevy_state"] }
