@@ -1,4 +1,4 @@
-use core::{cmp::Ordering, iter, ops::Range, time::Duration};
+use core::{cmp::Ordering, iter, mem, ops::Range, time::Duration};
 
 use bevy::{ecs::component::Tick, prelude::*};
 use log::trace;
@@ -14,6 +14,7 @@ use crate::{
         replication::{
             client_ticks::{ClientTicks, MutateInfo},
             mutate_index::MutateIndex,
+            registry::component_mask::ComponentMask,
         },
     },
 };
@@ -64,14 +65,14 @@ impl Mutations {
         graph_index: Option<usize>,
         entity_range: Range<usize>,
     ) {
-        let components = pools.ranges.pop().unwrap_or_default();
         let mutations = EntityMutations {
             entity,
             ranges: ChangeRanges {
                 entity: entity_range,
                 components_len: 0,
-                components,
+                components: pools.take_ranges(),
             },
+            components: pools.take_components(),
         };
 
         match graph_index {
@@ -99,15 +100,14 @@ impl Mutations {
         mutations.ranges.add_component(component);
     }
 
-    /// Removes last added entity from [`Self::add_entity`] and returns its components.
-    pub(super) fn pop(&mut self) -> Option<ChangeRanges> {
+    /// Removes last added entity from [`Self::add_entity`] and returns it.
+    pub(super) fn pop(&mut self) -> Option<EntityMutations> {
         self.entity_location
             .take()
             .and_then(|location| match location {
                 EntityLocation::Related { index } => self.related[index].pop(),
                 EntityLocation::Standalone => self.standalone.pop(),
             })
-            .map(|mutations| mutations.ranges)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -154,16 +154,16 @@ impl Mutations {
             server_tick,
             system_tick,
             timestamp,
-            entities: pools.entities.pop().unwrap_or_default(),
+            entities: pools.take_entities(),
         };
         let mut mutate_index = ticks.next_mutate_index();
-        let chunks = EntityChunks::new(&self.related, &self.standalone);
+        let mut chunks = EntityChunks::new(&mut self.related, &mut self.standalone);
         let mut header_size = metadata_size + serialized_size(&mutate_index)?;
         let mut body_size = 0;
         let mut chunks_range = Range::<usize>::default();
-        for chunk in chunks.iter() {
+        for chunk in chunks.iter_mut() {
             let mut mutations_size = 0;
-            for mutations in chunk {
+            for mutations in &mut *chunk {
                 mutations_size += mutations.ranges.size_with_components_size()?;
             }
 
@@ -184,16 +184,18 @@ impl Mutations {
                     server_tick,
                     system_tick,
                     timestamp,
-                    entities: pools.entities.pop().unwrap_or_default(),
+                    entities: pools.take_entities(),
                 };
                 chunks_range.start = chunks_range.end;
                 header_size = metadata_size + serialized_size(&mutate_index)?; // Recalculate since the mutate index changed.
                 body_size = 0;
             }
 
-            mutate_info
-                .entities
-                .extend(chunk.iter().map(|mutations| mutations.entity));
+            mutate_info.entities.extend(
+                chunk
+                    .iter_mut()
+                    .map(|mutations| (mutations.entity, mem::take(&mut mutations.components))),
+            );
             chunks_range.end += 1;
             body_size += mutations_size;
         }
@@ -260,11 +262,8 @@ impl Mutations {
             .iter_mut()
             .chain(iter::once(&mut self.standalone))
         {
-            let ranges = entities.drain(..).map(|mut mutations| {
-                mutations.ranges.components.clear();
-                mutations.ranges.components
-            });
-            pools.ranges.extend(ranges);
+            pools.recycle_ranges(entities.drain(..).map(|m| m.ranges.components));
+            // We don't take component masks because they are moved to `MutateInfo` during sending.
         }
     }
 
@@ -275,14 +274,8 @@ impl Mutations {
         match self.related.len().cmp(&graphs_count) {
             Ordering::Less => self
                 .related
-                .resize_with(graphs_count, || pools.mutations.pop().unwrap_or_default()),
-            Ordering::Greater => {
-                let mutations = self.related.drain(graphs_count..).map(|mut mutations| {
-                    mutations.clear();
-                    mutations
-                });
-                pools.mutations.extend(mutations);
-            }
+                .resize_with(graphs_count, || pools.take_mutations()),
+            Ordering::Greater => pools.recycle_mutations(self.related.drain(graphs_count..)),
             Ordering::Equal => (),
         }
     }
@@ -306,7 +299,12 @@ pub(crate) struct EntityMutations {
     /// of chunk bytes instead of the number of components. This is because, during deserialization,
     /// some entities may be skipped if they have already been updated (as mutations are sent until
     /// the client acknowledges them).
-    ranges: ChangeRanges,
+    pub(super) ranges: ChangeRanges,
+
+    /// Components written in [`Self::ranges`].
+    ///
+    /// Like [`Self::entity`], used for later component acknowledgement.
+    pub(super) components: ComponentMask,
 }
 
 #[derive(Clone, Copy)]
@@ -318,12 +316,12 @@ enum EntityLocation {
 /// Treats related and standalone entity mutations as a single continuous buffer,
 /// with related entities first, followed by standalone ones.
 struct EntityChunks<'a> {
-    related: &'a [Vec<EntityMutations>],
-    standalone: &'a [EntityMutations],
+    related: &'a mut [Vec<EntityMutations>],
+    standalone: &'a mut [EntityMutations],
 }
 
 impl<'a> EntityChunks<'a> {
-    fn new(related: &'a [Vec<EntityMutations>], standalone: &'a [EntityMutations]) -> Self {
+    fn new(related: &'a mut [Vec<EntityMutations>], standalone: &'a mut [EntityMutations]) -> Self {
         Self {
             related,
             standalone,
@@ -333,11 +331,11 @@ impl<'a> EntityChunks<'a> {
     /// Returns an iterator over slices of related entities.
     ///
     /// Standalone entities are represented as single-element slices.
-    fn iter(&self) -> impl Iterator<Item = &[EntityMutations]> {
+    fn iter_mut(&mut self) -> impl Iterator<Item = &mut [EntityMutations]> {
         self.related
-            .iter()
-            .map(Vec::as_slice)
-            .chain(self.standalone.chunks(1))
+            .iter_mut()
+            .map(Vec::as_mut_slice)
+            .chain(self.standalone.chunks_mut(1))
     }
 
     /// Returns an iterator over flattened slices of entity mutations within the specified range.

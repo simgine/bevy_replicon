@@ -77,7 +77,8 @@ impl ComponentFns {
         self.commands = command_fns;
     }
 
-    /// Restores erased type from `ptr` and `rule_fns` to the type for which this instance was created.
+    /// Restores erased type from `ptr` and `rule_fns` to the type for which this instance was created,
+    /// then serializes it.
     ///
     /// # Safety
     ///

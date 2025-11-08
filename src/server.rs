@@ -1,3 +1,4 @@
+pub mod client_pools;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
@@ -11,12 +12,13 @@ use core::{mem, ops::Range, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::CheckChangeTicks,
-        entity::{Entities, EntityHashMap},
+        component::{CheckChangeTicks, Tick},
+        entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
         system::SystemChangeTick,
     },
+    platform::collections::hash_map::Entry,
     prelude::*,
     ptr::Ptr,
     time::common_conditions::on_timer,
@@ -28,23 +30,23 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replication_messages::mutations::{EntityMutations, MutationsSplit},
-        visibility::registry::FilterRegistry,
+        replication_messages::mutations::MutationsSplit, visibility::registry::FilterRegistry,
     },
     shared::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
         replication::{
-            client_ticks::ClientTicks,
+            client_ticks::{ClientTicks, EntityTicks},
             registry::{
-                ReplicationRegistry, component_fns::ComponentFns, ctx::SerializeCtx,
-                rule_fns::UntypedRuleFns,
+                FnsId, ReplicationRegistry, component_mask::ComponentMask, ctx::SerializeCtx,
+                serde_fns::SerdeFns,
             },
             rules::{ReplicationRules, component::ComponentRule},
             track_mutate_messages::TrackMutateMessages,
         },
     },
 };
+use client_pools::ClientPools;
 use related_entities::RelatedEntities;
 use removal_buffer::{RemovalBuffer, RemovalReader};
 use replication_messages::{
@@ -241,8 +243,7 @@ fn cleanup_acks(
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
             ticks.cleanup_older_mutations(min_timestamp, |mutate_info| {
-                mutate_info.entities.clear();
-                pools.entities.push(mem::take(&mut mutate_info.entities));
+                pools.recycle_entities(mem::take(&mut mutate_info.entities));
             });
         }
     }
@@ -262,9 +263,8 @@ fn receive_acks(
                             "messages from client `{client}` should have been removed on disconnect"
                         )
                     });
-                    if let Some(mut entities) = ticks.ack_mutate_message(client, mutate_index) {
-                        entities.clear();
-                        pools.entities.push(entities);
+                    if let Some(entities) = ticks.ack_mutate_message(client, mutate_index) {
+                        pools.recycle_entities(entities);
                     }
                 }
                 Err(e) => {
@@ -292,6 +292,7 @@ fn buffer_removals(
     mut removal_reader: RemovalReader,
     mut removal_buffer: ResMut<RemovalBuffer>,
     rules: Res<ReplicationRules>,
+    registry: Res<ReplicationRegistry>,
 ) {
     for (&entity, removed_components) in removal_reader.read() {
         let location = entities
@@ -299,7 +300,7 @@ fn buffer_removals(
             .expect("removals count only existing entities");
         let archetype = archetypes.get(location.archetype_id).unwrap();
 
-        removal_buffer.update(&rules, archetype, entity, removed_components);
+        removal_buffer.update(&rules, &registry, archetype, entity, removed_components);
     }
 }
 
@@ -309,7 +310,9 @@ fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut Cli
         check.present_tick()
     );
     for mut ticks in &mut clients {
-        ticks.check_mutation_ticks(*check);
+        for entity_ticks in ticks.entities.values_mut() {
+            entity_ticks.system_tick.check_tick(*check);
+        }
     }
 }
 
@@ -349,8 +352,13 @@ fn send_replication(
     }
 
     collect_mappings(&mut serialized, &mut clients, &despawn_buffer, &entities)?;
-    collect_despawns(&mut serialized, &mut clients, &mut despawn_buffer)?;
-    collect_removals(&mut serialized, &mut clients, &removal_buffer)?;
+    collect_despawns(
+        &mut serialized,
+        &mut pools,
+        &mut clients,
+        &mut despawn_buffer,
+    )?;
+    collect_removals(&mut serialized, &mut pools, &mut clients, &removal_buffer)?;
     collect_changes(
         &mut serialized,
         &mut pools,
@@ -503,6 +511,7 @@ fn collect_mappings(
 /// Collect entity despawns from this tick into update messages.
 fn collect_despawns(
     serialized: &mut SerializedData,
+    pools: &mut ClientPools,
     clients: &mut Query<(
         Entity,
         &mut Updates,
@@ -519,11 +528,12 @@ fn collect_despawns(
         for (client_entity, mut message, .., mut ticks, mut priority, mut visibility) in
             &mut *clients
         {
-            if ticks.remove_entity(entity) {
+            if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 // Write despawn only if the entity was previously sent because
                 // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client_entity}`");
                 message.add_despawn(entity_range.clone());
+                pools.recycle_components(entity_ticks.components);
             }
             visibility.remove_despawned(entity);
             priority.remove(&entity);
@@ -532,10 +542,11 @@ fn collect_despawns(
 
     for (client_entity, mut message, .., mut ticks, mut priority, mut visibility) in clients {
         for entity in visibility.drain_lost() {
-            if ticks.remove_entity(entity) {
+            if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
                 let entity_range = serialized.write_entity(entity)?;
                 message.add_despawn(entity_range);
+                pools.recycle_components(entity_ticks.components);
             }
             priority.remove(&entity);
         }
@@ -547,6 +558,7 @@ fn collect_despawns(
 /// Collects component removals from this tick into update messages.
 fn collect_removals(
     serialized: &mut SerializedData,
+    pools: &mut ClientPools,
     clients: &mut Query<(
         Entity,
         &mut Updates,
@@ -559,15 +571,32 @@ fn collect_removals(
     removal_buffer: &RemovalBuffer,
 ) -> Result<()> {
     for (&entity, remove_ids) in removal_buffer.iter() {
-        let entity_range = serialized.write_entity(entity)?;
-        let ids_len = remove_ids.len();
-        let fn_ids = serialized.write_fn_ids(remove_ids.iter().map(|&(_, fns_id)| fns_id))?;
-        for (client_entity, mut message, .., visibility) in &mut *clients {
-            if !visibility.is_hidden(entity) {
-                trace!(
-                    "writing removals for `{entity}` with `{remove_ids:?}` for client `{client_entity}`"
-                );
-                message.add_removals(entity_range.clone(), ids_len, fn_ids.clone());
+        let mut entity_range = None;
+        for (_, mut message, ..) in &mut *clients {
+            message.start_entity_removals();
+        }
+
+        for &(component_index, fns_id) in remove_ids {
+            let mut fns_id_range = None;
+            for (client_entity, mut message, .., mut ticks, _, _) in &mut *clients {
+                // Only send removals for components that were previously sent.
+                // If the entity was despawned or lost visibility, it was removed
+                // from ticks earlier during despawn collection.
+                let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
+                    continue;
+                };
+                if !entity_ticks.components.get(component_index) {
+                    continue;
+                }
+
+                trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client_entity}`");
+                if !message.removals_entity_added() {
+                    let entity_range = write_entity_cached(&mut entity_range, serialized, entity)?;
+                    message.add_removals_entity(pools, entity_range);
+                }
+                let fns_id_range = write_fns_id_cached(&mut fns_id_range, serialized, fns_id)?;
+                message.add_removal(fns_id_range);
+                entity_ticks.components.set(component_index, false);
             }
         }
     }
@@ -605,7 +634,7 @@ fn collect_changes(
             }
 
             for &(rule, storage) in &replicated_archetype.components {
-                let (component_id, component_fns, rule_fns) = registry.get(rule.fns_id);
+                let (component_index, component_id, fns) = registry.get(rule.fns_id);
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (component, ticks) = unsafe {
@@ -637,16 +666,15 @@ fn collect_changes(
                         continue;
                     }
 
-                    if let Some((last_system_tick, last_server_tick)) =
-                        client_ticks.mutation_tick(entity.id())
-                        && !ticks.is_added(change_tick.last_run(), change_tick.this_run())
+                    if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
+                        && entity_ticks.components.get(component_index)
                     {
                         let base_priority = priority.get(&entity.id()).copied().unwrap_or(1.0);
 
-                        let tick_diff = server_tick - last_server_tick;
+                        let tick_diff = server_tick - entity_ticks.server_tick;
                         if rule.mode != ReplicationMode::Once
                             && base_priority * tick_diff as f32 >= 1.0
-                            && ticks.is_changed(last_system_tick, change_tick.this_run())
+                            && ticks.is_changed(entity_ticks.system_tick, change_tick.this_run())
                         {
                             trace!(
                                 "writing `{:?}` mutation for `{}` for client `{client_entity}`",
@@ -666,8 +694,7 @@ fn collect_changes(
                             let component_range = write_component_cached(
                                 &mut component_range,
                                 serialized,
-                                rule_fns,
-                                component_fns,
+                                &fns,
                                 &ctx,
                                 rule,
                                 component,
@@ -689,13 +716,12 @@ fn collect_changes(
                         let component_range = write_component_cached(
                             &mut component_range,
                             serialized,
-                            rule_fns,
-                            component_fns,
+                            &fns,
                             &ctx,
                             rule,
                             component,
                         )?;
-                        updates.add_inserted_component(component_range);
+                        updates.add_inserted_component(component_range, component_index);
                     }
                 }
             }
@@ -706,8 +732,9 @@ fn collect_changes(
                 if visibility.is_hidden(entity.id()) {
                     continue;
                 }
-                let new_for_client = ticks.is_new_for_client(entity.id());
 
+                let entity_ticks = ticks.entities.entry(entity.id());
+                let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
                 if new_for_client
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
@@ -721,7 +748,14 @@ fn collect_changes(
                         );
                         updates.take_added_entity(pools, &mut mutations);
                     }
-                    ticks.set_mutation_tick(entity.id(), change_tick.this_run(), server_tick);
+
+                    update_ticks(
+                        entity_ticks,
+                        pools,
+                        change_tick.this_run(),
+                        server_tick,
+                        updates.take_changed_components(),
+                    );
                 }
 
                 if new_for_client && !updates.changed_entity_added() {
@@ -742,6 +776,31 @@ fn collect_changes(
     Ok(())
 }
 
+fn update_ticks(
+    entity_ticks: Entry<Entity, EntityTicks, EntityHash>,
+    pools: &mut ClientPools,
+    system_tick: Tick,
+    server_tick: RepliconTick,
+    components: ComponentMask,
+) {
+    match entity_ticks {
+        Entry::Occupied(entry) => {
+            let entity_ticks = entry.into_mut();
+            entity_ticks.system_tick = system_tick;
+            entity_ticks.server_tick = server_tick;
+            entity_ticks.components |= &components;
+            pools.recycle_components(components);
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(EntityTicks {
+                server_tick,
+                system_tick,
+                components,
+            });
+        }
+    }
+}
+
 fn should_send_mapping(
     entity: Entity,
     despawn_buffer: &DespawnBuffer,
@@ -755,7 +814,7 @@ fn should_send_mapping(
         return false;
     }
 
-    signature.is_added() || ticks.is_new_for_client(entity)
+    signature.is_added() || !ticks.entities.contains_key(&entity)
 }
 
 /// Writes a mapping or re-uses previously written range if exists.
@@ -791,12 +850,27 @@ fn write_entity_cached(
     Ok(range)
 }
 
+/// Writes an ID or re-uses previously written range if exists.
+fn write_fns_id_cached(
+    fns_id_range: &mut Option<Range<usize>>,
+    serialized: &mut SerializedData,
+    fns_id: FnsId,
+) -> Result<Range<usize>> {
+    if let Some(range) = fns_id_range.clone() {
+        return Ok(range);
+    }
+
+    let range = serialized.write_fns_id(fns_id)?;
+    *fns_id_range = Some(range.clone());
+
+    Ok(range)
+}
+
 /// Writes a component or re-uses previously written range if exists.
 fn write_component_cached(
     component_range: &mut Option<Range<usize>>,
     serialized: &mut SerializedData,
-    rule_fns: &UntypedRuleFns,
-    component_fns: &ComponentFns,
+    fns: &SerdeFns,
     ctx: &SerializeCtx,
     rule: ComponentRule,
     component: Ptr<'_>,
@@ -805,7 +879,7 @@ fn write_component_cached(
         return Ok(component_range);
     }
 
-    let range = serialized.write_component(rule_fns, component_fns, ctx, rule.fns_id, component)?;
+    let range = serialized.write_component(fns, ctx, rule.fns_id, component)?;
     *component_range = Some(range.clone());
 
     Ok(range)
@@ -904,16 +978,3 @@ pub struct AuthorizedClient;
 /// See its documentation for more details.
 #[derive(Component, Deref, DerefMut, Debug, Default, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);
-
-/// Pools for various client components to reuse allocated capacity.
-///
-/// All data is cleared before the insertion.
-#[derive(Resource, Default)]
-struct ClientPools {
-    /// Entities from [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo)s.
-    entities: Vec<Vec<Entity>>,
-    /// Ranges from [`Updates`] and [`Mutations`].
-    ranges: Vec<Vec<Range<usize>>>,
-    /// Entities from [`Mutations`].
-    mutations: Vec<Vec<EntityMutations>>,
-}

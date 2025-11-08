@@ -489,7 +489,7 @@ fn apply_removals(
 
     let len = apply_array(ArrayKind::Sized, message, |message| {
         let fns_id = postcard_utils::from_buf(message)?;
-        let (component_id, component_fns, _) = params.registry.get(fns_id);
+        let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = RemoveCtx {
             message_tick,
             component_id,
@@ -499,7 +499,7 @@ fn apply_removals(
             client_entity.id()
         );
 
-        component_fns.remove(&mut ctx, params.entity_markers, &mut client_entity);
+        fns.remove(&mut ctx, params.entity_markers, &mut client_entity);
 
         Ok(())
     })?;
@@ -548,7 +548,7 @@ fn apply_changes(
 
     let len = apply_array(ArrayKind::Sized, message, |message| {
         let fns_id = postcard_utils::from_buf(message)?;
-        let (component_id, component_fns, rule_fns) = params.registry.get(fns_id);
+        let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
             entity_map: params.entity_map,
             type_registry: params.type_registry,
@@ -562,16 +562,7 @@ fn apply_changes(
             client_entity.id(),
         );
 
-        // SAFETY: `rule_fns` and `component_fns` were created for the same type.
-        unsafe {
-            component_fns.write(
-                &mut ctx,
-                rule_fns,
-                params.entity_markers,
-                &mut client_entity,
-                message,
-            )?;
-        }
+        fns.write(&mut ctx, params.entity_markers, &mut client_entity, message)?;
 
         Ok(())
     })?;
@@ -704,7 +695,7 @@ fn apply_mutations(
     let mut components_count = 0;
     while data.has_remaining() {
         let fns_id = postcard_utils::from_buf(&mut data)?;
-        let (component_id, component_fns, rule_fns) = params.registry.get(fns_id);
+        let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
             entity_map: params.entity_map,
             type_registry: params.type_registry,
@@ -718,26 +709,21 @@ fn apply_mutations(
             client_entity.id(),
         );
 
-        // SAFETY: `rule_fns` and `component_fns` were created for the same type.
-        unsafe {
-            if new_tick {
-                component_fns.write(
-                    &mut ctx,
-                    rule_fns,
-                    params.entity_markers,
-                    &mut client_entity,
-                    &mut data,
-                )?;
-            } else {
-                component_fns.consume_or_write(
-                    &mut ctx,
-                    rule_fns,
-                    params.entity_markers,
-                    params.command_markers,
-                    &mut client_entity,
-                    &mut data,
-                )?;
-            }
+        if new_tick {
+            fns.write(
+                &mut ctx,
+                params.entity_markers,
+                &mut client_entity,
+                &mut data,
+            )?;
+        } else {
+            fns.consume_or_write(
+                &mut ctx,
+                params.entity_markers,
+                params.command_markers,
+                &mut client_entity,
+                &mut data,
+            )?;
         }
 
         components_count += 1;
