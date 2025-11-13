@@ -2,6 +2,7 @@ pub mod client_pools;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
+pub mod replicated_archetypes;
 pub(super) mod replication_messages;
 pub mod server_tick;
 mod server_world;
@@ -29,6 +30,7 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
+        replicated_archetypes::ReplicatedArchetypes,
         replication_messages::{
             mutations::MutationsSplit,
             serialized_data::{EntityMapping, MessageWrite, WritableComponent},
@@ -116,6 +118,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<ClientPools>()
+            .init_resource::<ReplicatedArchetypes>()
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .init_resource::<FilterRegistry>()
@@ -318,10 +321,9 @@ fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut Cli
 
 /// Collects [`ReplicationMessages`] and sends them.
 fn send_replication(
-    mut serialized: Local<SerializedData>,
-    mut split_buffer: Local<Vec<MutationsSplit>>,
-    change_tick: SystemChangeTick,
-    world: ServerWorld,
+    mut buffers: Local<(SerializedData, Vec<MutationsSplit>)>,
+    world_and_tick: (ServerWorld, SystemChangeTick),
+    archetypes: &Archetypes,
     mut clients: Query<(
         Entity,
         &mut Updates,
@@ -332,17 +334,24 @@ fn send_replication(
         &mut ClientVisibility,
     )>,
     entities: Query<(Entity, Ref<Signature>)>,
+    mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut related_entities: ResMut<RelatedEntities>,
-    mut removal_buffer: ResMut<RemovalBuffer>,
-    mut despawn_buffer: ResMut<DespawnBuffer>,
+    removal_and_despawn_buffers: (ResMut<RemovalBuffer>, ResMut<DespawnBuffer>),
     mut messages: ResMut<ServerMessages>,
     mut pools: ResMut<ClientPools>,
+    rules: Res<ReplicationRules>,
     track_mutate_messages: Res<TrackMutateMessages>,
     registry: Res<ReplicationRegistry>,
     type_registry: Res<AppTypeRegistry>,
     server_tick: Res<ServerTick>,
     time: Res<Time>,
 ) -> Result<()> {
+    // We're hitting the system parameter limit, so some parameters are grouped together.
+    let (world, change_tick) = world_and_tick;
+    let (mut removal_buffer, mut despawn_buffer) = removal_and_despawn_buffers;
+    let (serialized, split_buffer) = &mut *buffers;
+
+    replicated_archetypes.update(archetypes, &rules);
     related_entities.rebuild_graphs();
 
     for (_, mut updates, mut mutations, ..) in &mut clients {
@@ -351,18 +360,15 @@ fn send_replication(
         mutations.resize_related(&mut pools, related_entities.graphs_count());
     }
 
-    collect_mappings(&mut serialized, &mut clients, &despawn_buffer, &entities)?;
-    collect_despawns(
-        &mut serialized,
-        &mut pools,
-        &mut clients,
-        &mut despawn_buffer,
-    )?;
-    collect_removals(&mut serialized, &mut pools, &mut clients, &removal_buffer)?;
+    collect_mappings(serialized, &mut clients, &despawn_buffer, &entities)?;
+    collect_despawns(serialized, &mut pools, &mut clients, &mut despawn_buffer)?;
+    collect_removals(serialized, &mut pools, &mut clients, &removal_buffer)?;
     collect_changes(
-        &mut serialized,
+        archetypes,
+        serialized,
         &mut pools,
         &mut clients,
+        &replicated_archetypes,
         &registry,
         &type_registry,
         &related_entities,
@@ -378,8 +384,8 @@ fn send_replication(
         &mut messages,
         **server_tick,
         **track_mutate_messages,
-        &mut serialized,
-        &mut split_buffer,
+        serialized,
+        split_buffer,
         &mut pools,
         change_tick,
         &time,
@@ -603,6 +609,7 @@ fn collect_removals(
 
 /// Collects component changes from this tick into update and mutate messages since the last entity tick.
 fn collect_changes(
+    archetypes: &Archetypes,
     serialized: &mut SerializedData,
     pools: &mut ClientPools,
     clients: &mut Query<(
@@ -614,6 +621,7 @@ fn collect_changes(
         &mut PriorityMap,
         &mut ClientVisibility,
     )>,
+    replicated_archetypes: &ReplicatedArchetypes,
     registry: &ReplicationRegistry,
     type_registry: &AppTypeRegistry,
     related_entities: &RelatedEntities,
@@ -622,7 +630,10 @@ fn collect_changes(
     change_tick: &SystemChangeTick,
     server_tick: RepliconTick,
 ) -> Result<()> {
-    for (archetype, replicated_archetype) in world.iter_archetypes() {
+    for replicated_archetype in replicated_archetypes.iter() {
+        // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
+        let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
+
         for entity in archetype.entities() {
             let mut entity_range = None;
             for (_, mut updates, mut mutations, ..) in &mut *clients {
