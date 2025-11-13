@@ -2,6 +2,7 @@ pub mod client_pools;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
+pub mod replicated_archetypes;
 pub(super) mod replication_messages;
 pub mod server_tick;
 mod server_world;
@@ -29,6 +30,7 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
+        replicated_archetypes::ReplicatedArchetypes,
         replication_messages::{
             mutations::MutationsSplit,
             serialized_data::{EntityMapping, MessageWrite, WritableComponent},
@@ -118,6 +120,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerTick>()
             .init_resource::<ServerChangeTick>()
             .init_resource::<ClientPools>()
+            .init_resource::<ReplicatedArchetypes>()
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .init_resource::<FilterRegistry>()
@@ -493,12 +496,15 @@ fn collect_removals(
 
 /// Collects component changes from this tick into update and mutate messages since the last entity tick.
 fn collect_changes(
+    archetypes: &Archetypes,
     world: ServerWorld,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     registry: Res<ReplicationRegistry>,
     type_registry: Res<AppTypeRegistry>,
     related_entities: Res<RelatedEntities>,
+    rules: Res<ReplicationRules>,
+    mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
     mut removal_buffer: ResMut<RemovalBuffer>,
@@ -511,7 +517,12 @@ fn collect_changes(
         &mut ClientVisibility,
     )>,
 ) -> Result<()> {
-    for (archetype, replicated_archetype) in world.iter_archetypes() {
+    replicated_archetypes.update(archetypes, &rules);
+
+    for replicated_archetype in replicated_archetypes.iter() {
+        // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
+        let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
+
         for entity in archetype.entities() {
             let mut entity_range = None;
             for (_, mut updates, mut mutations, ..) in &mut clients {
