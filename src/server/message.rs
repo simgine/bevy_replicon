@@ -109,7 +109,7 @@ impl Plugin for ServerMessagePlugin {
                     send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .after(super::send_replication)
+                    .after(super::send_messages)
                     .in_set(ServerSystems::Send),
             );
     }
