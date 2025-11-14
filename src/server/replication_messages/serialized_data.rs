@@ -12,7 +12,7 @@ use crate::{
 ///
 /// See [`Updates`](super::updates::Updates) and
 /// [`MutateMessage`](super::mutations::MutateMessage).
-#[derive(Default, Deref, DerefMut)]
+#[derive(Resource, Default, Deref, DerefMut)]
 pub(crate) struct SerializedData(Vec<u8>);
 
 /// Custom serialization for replication messages.
