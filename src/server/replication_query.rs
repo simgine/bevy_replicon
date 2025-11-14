@@ -14,16 +14,16 @@ use log::debug;
 
 use crate::{prelude::*, shared::replication::rules::ReplicationRules};
 
-/// A [`SystemParam`] that wraps [`World`], but provides access only for replicated components.
+/// Like [`Query`], but provides dynamic access only for replicated components.
 ///
 /// We don't use [`FilteredEntityRef`](bevy::ecs::world::FilteredEntityRef) to avoid access checks
 /// and [`StorageType`] fetch (we cache this information on replicated archetypes).
-pub(crate) struct ServerWorld<'w, 's> {
+pub(crate) struct ReplicationQuery<'w, 's> {
     world: UnsafeWorldCell<'w>,
-    state: &'s ReplicationReadState,
+    state: &'s ReplicationQueryState,
 }
 
-impl<'w> ServerWorld<'w, '_> {
+impl<'w> ReplicationQuery<'w, '_> {
     /// Extracts a component as [`Ptr`] and its ticks from a table or sparse set, depending on its storage type.
     ///
     /// # Safety
@@ -69,9 +69,9 @@ impl<'w> ServerWorld<'w, '_> {
     }
 }
 
-unsafe impl SystemParam for ServerWorld<'_, '_> {
-    type State = ReplicationReadState;
-    type Item<'w, 's> = ServerWorld<'w, 's>;
+unsafe impl SystemParam for ReplicationQuery<'_, '_> {
+    type State = ReplicationQueryState;
+    type Item<'w, 's> = ReplicationQuery<'w, 's>;
 
     fn init_state(world: &mut World) -> Self::State {
         let mut component_access = FilteredAccess::default();
@@ -113,13 +113,13 @@ unsafe impl SystemParam for ServerWorld<'_, '_> {
         world: UnsafeWorldCell<'world>,
         _change_tick: Tick,
     ) -> Self::Item<'world, 'state> {
-        ServerWorld { world, state }
+        ReplicationQuery { world, state }
     }
 }
 
-unsafe impl ReadOnlySystemParam for ServerWorld<'_, '_> {}
+unsafe impl ReadOnlySystemParam for ReplicationQuery<'_, '_> {}
 
-pub(crate) struct ReplicationReadState {
+pub(crate) struct ReplicationQueryState {
     /// All replicated components.
     ///
     /// Used only in debug to check component access.
@@ -142,7 +142,7 @@ mod tests {
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .replicate::<Test>()
-            .add_systems(Update, |_: ServerWorld, _: Query<&mut Test>| {});
+            .add_systems(Update, |_: ReplicationQuery, _: Query<&mut Test>| {});
 
         app.update();
     }
@@ -155,7 +155,7 @@ mod tests {
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRules>()
             .replicate::<Test>()
-            .add_systems(Update, |_: Query<&mut Test>, _: ServerWorld| {});
+            .add_systems(Update, |_: Query<&mut Test>, _: ReplicationQuery| {});
 
         app.update();
     }
@@ -167,7 +167,7 @@ mod tests {
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
             .replicate::<Test>()
-            .add_systems(Update, |_: ServerWorld, _: Query<&Test>| {});
+            .add_systems(Update, |_: ReplicationQuery, _: Query<&Test>| {});
 
         app.update();
     }
@@ -176,7 +176,7 @@ mod tests {
     fn not_replicated() {
         let mut app = App::new();
         app.init_resource::<ReplicationRules>()
-            .add_systems(Update, |_: ServerWorld, _: Query<&mut Test>| {});
+            .add_systems(Update, |_: ReplicationQuery, _: Query<&mut Test>| {});
 
         app.update();
     }

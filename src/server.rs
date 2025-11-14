@@ -4,8 +4,8 @@ pub mod related_entities;
 pub(super) mod removal_buffer;
 pub mod replicated_archetypes;
 pub(super) mod replication_messages;
+mod replication_query;
 pub mod server_tick;
-mod server_world;
 pub mod visibility;
 
 use core::{mem, time::Duration};
@@ -54,8 +54,8 @@ use removal_buffer::{RemovalBuffer, RemovalReader};
 use replication_messages::{
     mutations::Mutations, serialized_data::SerializedData, updates::Updates,
 };
+use replication_query::ReplicationQuery;
 use server_tick::ServerTick;
-use server_world::ServerWorld;
 use visibility::client_visibility::ClientVisibility;
 
 pub struct ServerPlugin {
@@ -497,7 +497,7 @@ fn collect_removals(
 /// Collects component changes from this tick into update and mutate messages since the last entity tick.
 fn collect_changes(
     archetypes: &Archetypes,
-    world: ServerWorld,
+    query: ReplicationQuery,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     registry: Res<ReplicationRegistry>,
@@ -535,7 +535,7 @@ fn collect_changes(
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (ptr, ticks) = unsafe {
-                    world.get_component_unchecked(
+                    query.get_component_unchecked(
                         entity,
                         archetype.table_id(),
                         storage,
