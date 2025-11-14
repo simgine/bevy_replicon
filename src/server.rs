@@ -204,12 +204,6 @@ impl Plugin for ServerPlugin {
     }
 }
 
-/// Increments current server tick which causes the server to replicate this frame.
-fn increment_tick(mut server_tick: ResMut<ServerTick>) {
-    trace!("incrementing `{:?}`", *server_tick);
-    server_tick.increment();
-}
-
 fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
     debug!("client `{}` connected", add.entity);
     message_buffer.exclude_client(add.entity);
@@ -218,6 +212,29 @@ fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<Mes
 fn handle_disconnects(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
     debug!("client `{}` disconnected", remove.entity);
     messages.remove_client(remove.entity);
+}
+
+fn buffer_despawns(
+    remove: On<Remove, Replicated>,
+    mut despawn_buffer: ResMut<DespawnBuffer>,
+    state: Res<State<ServerState>>,
+) {
+    if *state == ServerState::Running {
+        trace!("buffering despawn of `{}`", remove.entity);
+        despawn_buffer.push(remove.entity);
+    }
+}
+
+fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
+    debug!(
+        "checking mutation ticks for overflow for {:?}",
+        check.present_tick()
+    );
+    for mut ticks in &mut clients {
+        for entity_ticks in ticks.entities.values_mut() {
+            entity_ticks.system_tick.check_tick(*check);
+        }
+    }
 }
 
 fn check_protocol(
@@ -245,6 +262,12 @@ fn check_protocol(
         });
         disconnects.write(DisconnectRequest { client });
     }
+}
+
+/// Increments current server tick which causes the server to replicate this frame.
+fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+    trace!("incrementing `{:?}`", *server_tick);
+    server_tick.increment();
 }
 
 fn cleanup_acks(
@@ -286,17 +309,6 @@ fn receive_acks(
     }
 }
 
-fn buffer_despawns(
-    remove: On<Remove, Replicated>,
-    mut despawn_buffer: ResMut<DespawnBuffer>,
-    state: Res<State<ServerState>>,
-) {
-    if *state == ServerState::Running {
-        trace!("buffering despawn of `{}`", remove.entity);
-        despawn_buffer.push(remove.entity);
-    }
-}
-
 fn buffer_removals(
     entities: &Entities,
     archetypes: &Archetypes,
@@ -315,18 +327,6 @@ fn buffer_removals(
     }
 }
 
-fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
-    debug!(
-        "checking mutation ticks for overflow for {:?}",
-        check.present_tick()
-    );
-    for mut ticks in &mut clients {
-        for entity_ticks in ticks.entities.values_mut() {
-            entity_ticks.system_tick.check_tick(*check);
-        }
-    }
-}
-
 fn prepare_messages(
     change_tick: SystemChangeTick,
     mut related_entities: ResMut<RelatedEntities>,
@@ -342,77 +342,6 @@ fn prepare_messages(
         mutations.clear(&mut pools);
         mutations.resize_related(&mut pools, related_entities.graphs_count());
     }
-}
-
-fn reset(
-    mut commands: Commands,
-    mut messages: ResMut<ServerMessages>,
-    mut server_tick: ResMut<ServerTick>,
-    mut related_entities: ResMut<RelatedEntities>,
-    clients: Query<Entity, With<ConnectedClient>>,
-    mut message_buffer: ResMut<MessageBuffer>,
-) {
-    messages.clear();
-    *server_tick = Default::default();
-    message_buffer.clear();
-    related_entities.clear();
-    for entity in &clients {
-        commands.entity(entity).despawn();
-    }
-}
-
-/// Sends previously constructed [`Updates`] and [`Mutations`].
-fn send_messages(
-    mut split_buffer: Local<Vec<MutationsSplit>>,
-    time: Res<Time>,
-    server_tick: Res<ServerTick>,
-    change_tick: Res<ServerChangeTick>,
-    track_mutate_messages: Res<TrackMutateMessages>,
-    mut serialized: ResMut<SerializedData>,
-    mut pools: ResMut<ClientPools>,
-    mut messages: ResMut<ServerMessages>,
-    mut clients: Query<(
-        Entity,
-        &mut Updates,
-        &mut Mutations,
-        &ConnectedClient,
-        &mut ClientTicks,
-    )>,
-) -> Result<()> {
-    let mut server_tick_range = None;
-    for (client_entity, updates, mut mutations, client, mut ticks) in &mut clients {
-        if !updates.is_empty() {
-            ticks.update_tick = **server_tick;
-            let server_tick_range =
-                server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
-
-            updates.send(&mut messages, client_entity, &serialized, server_tick_range)?;
-        }
-
-        if !mutations.is_empty() || **track_mutate_messages {
-            let server_tick_range =
-                server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
-
-            mutations.send(
-                &mut messages,
-                client_entity,
-                &mut ticks,
-                &mut split_buffer,
-                &mut pools,
-                &serialized,
-                **track_mutate_messages,
-                server_tick_range,
-                **server_tick,
-                **change_tick,
-                time.elapsed(),
-                client.max_size,
-            )?;
-        }
-    }
-
-    serialized.clear();
-
-    Ok(())
 }
 
 /// Collects and writes any new entity mappings that happened in this tick.
@@ -460,6 +389,22 @@ fn collect_mappings(
     Ok(())
 }
 
+fn should_send_mapping(
+    entity: Entity,
+    despawn_buffer: &DespawnBuffer,
+    signature: &Ref<Signature>,
+    visibility: &ClientVisibility,
+    ticks: &ClientTicks,
+) -> bool {
+    // Since despawns processed later, we need to explicitly check for them here
+    // because we can't distinguish between a despawn and removal of a visibility filter.
+    if visibility.is_hidden(entity) || despawn_buffer.contains(&entity) {
+        return false;
+    }
+
+    signature.is_added() || !ticks.entities.contains_key(&entity)
+}
+
 /// Collect entity despawns from this tick into update messages.
 fn collect_despawns(
     mut serialized: ResMut<SerializedData>,
@@ -505,7 +450,7 @@ fn collect_despawns(
 
 /// Collects component removals from this tick into update messages.
 ///
-/// The removal buffer will be cleaned later in `collect_changes`.
+/// The removal buffer will be cleaned later in [`collect_changes`].
 fn collect_removals(
     removal_buffer: Res<RemovalBuffer>,
     mut serialized: ResMut<SerializedData>,
@@ -743,20 +688,75 @@ fn update_ticks(
     }
 }
 
-fn should_send_mapping(
-    entity: Entity,
-    despawn_buffer: &DespawnBuffer,
-    signature: &Ref<Signature>,
-    visibility: &ClientVisibility,
-    ticks: &ClientTicks,
-) -> bool {
-    // Since despawns processed later, we need to explicitly check for them here
-    // because we can't distinguish between a despawn and removal of a visibility filter.
-    if visibility.is_hidden(entity) || despawn_buffer.contains(&entity) {
-        return false;
+/// Sends previously constructed [`Updates`] and [`Mutations`].
+fn send_messages(
+    mut split_buffer: Local<Vec<MutationsSplit>>,
+    time: Res<Time>,
+    server_tick: Res<ServerTick>,
+    change_tick: Res<ServerChangeTick>,
+    track_mutate_messages: Res<TrackMutateMessages>,
+    mut serialized: ResMut<SerializedData>,
+    mut pools: ResMut<ClientPools>,
+    mut messages: ResMut<ServerMessages>,
+    mut clients: Query<(
+        Entity,
+        &mut Updates,
+        &mut Mutations,
+        &ConnectedClient,
+        &mut ClientTicks,
+    )>,
+) -> Result<()> {
+    let mut server_tick_range = None;
+    for (client_entity, updates, mut mutations, client, mut ticks) in &mut clients {
+        if !updates.is_empty() {
+            ticks.update_tick = **server_tick;
+            let server_tick_range =
+                server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
+
+            updates.send(&mut messages, client_entity, &serialized, server_tick_range)?;
+        }
+
+        if !mutations.is_empty() || **track_mutate_messages {
+            let server_tick_range =
+                server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
+
+            mutations.send(
+                &mut messages,
+                client_entity,
+                &mut ticks,
+                &mut split_buffer,
+                &mut pools,
+                &serialized,
+                **track_mutate_messages,
+                server_tick_range,
+                **server_tick,
+                **change_tick,
+                time.elapsed(),
+                client.max_size,
+            )?;
+        }
     }
 
-    signature.is_added() || !ticks.entities.contains_key(&entity)
+    serialized.clear();
+
+    Ok(())
+}
+
+fn reset(
+    mut commands: Commands,
+    mut messages: ResMut<ServerMessages>,
+    mut server_tick: ResMut<ServerTick>,
+    mut related_entities: ResMut<RelatedEntities>,
+    clients: Query<Entity, With<ConnectedClient>>,
+    mut message_buffer: ResMut<MessageBuffer>,
+) {
+    messages.clear();
+    *server_tick = Default::default();
+    message_buffer.clear();
+    related_entities.clear();
+    for entity in &clients {
+        commands.entity(entity).despawn();
+    }
 }
 
 /// Set with replication and event systems related to server.
