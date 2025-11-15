@@ -173,7 +173,7 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Test
-        run: cargo tarpaulin --workspace --all-features --all-targets --engine llvm --out lcov --exclude-files benches/*
+        run: cargo tarpaulin --workspace --all-features --all-targets --engine llvm --out lcov --exclude-files benches/* example_backend/examples/* example_backend/tests/*
 
       - name: Upload code coverage results
         if: github.actor != 'dependabot[bot]'
