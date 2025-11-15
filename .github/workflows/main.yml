@@ -149,6 +149,14 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
+      # We're running into a space limit,
+      # which causes `ld` to terminate with a bus error.
+      - name: Free disk space
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          rm_cmd: "rmz"
+
       - name: Clone repo
         uses: actions/checkout@v5
 
