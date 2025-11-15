@@ -297,6 +297,47 @@ fn signature_before_connection() {
 }
 
 #[test]
+fn signature_before_replication() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
+    let server_entity = server_app.world_mut().spawn(Signature::from(0)).id();
+
+    server_app.update();
+
+    let mut server_messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(server_messages.drain_sent().count(), 0);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(
+        client_app
+            .world()
+            .get::<Replicated>(client_entity)
+            .is_some()
+    );
+}
+
+#[test]
 fn signature_for_client() {
     let mut server_app = App::new();
     let mut client_app1 = App::new();
