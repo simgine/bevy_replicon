@@ -33,6 +33,7 @@ bevy = { version = "0.17", default-features = false, features = [
   "bevy_ui_render",
   "bevy_window",
   "default_font",
+  "debug",
   "serialize",
   "x11",
 ] }

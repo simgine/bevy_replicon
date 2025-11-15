@@ -54,6 +54,7 @@ bytes = { version = "1.10", default-features = false, features = [
 bevy = { version = "0.17", default-features = false, features = [
   "bevy_log",
   "bevy_sprite_render",
+  "debug",
   "serialize",
 ] }
 test-log = "0.2"
