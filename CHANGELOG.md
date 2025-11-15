@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Component-based visibility API, which works similarly to layers in physics. See `AppVisibilityExt` for more details.
+- `EntityEvent` impl for `ToClients` and `FromClient`.
 
 ### Changed
 

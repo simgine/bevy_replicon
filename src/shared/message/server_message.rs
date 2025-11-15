@@ -672,9 +672,20 @@ type ResetFn = unsafe fn(PtrMut);
 pub struct ToClients<T> {
     /// Recipients.
     pub mode: SendMode,
+
     /// Transmitted message.
     #[deref]
     pub message: T,
+}
+
+impl<E: EntityEvent> EntityEvent for ToClients<E> {
+    fn event_target(&self) -> Entity {
+        self.message.event_target()
+    }
+
+    fn event_target_mut(&mut self) -> &mut Entity {
+        self.message.event_target_mut()
+    }
 }
 
 /// Type of server message sending.
