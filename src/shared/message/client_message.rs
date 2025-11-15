@@ -466,6 +466,16 @@ pub struct FromClient<T> {
     pub message: T,
 }
 
+impl<E: EntityEvent> EntityEvent for FromClient<E> {
+    fn event_target(&self) -> Entity {
+        self.message.event_target()
+    }
+
+    fn event_target_mut(&mut self) -> &mut Entity {
+        self.message.event_target_mut()
+    }
+}
+
 /// Default message serialization function.
 pub fn default_serialize<M: Serialize>(
     _ctx: &mut ClientSendCtx,
