@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Avoid sending despawn for entities that weren't sent.
 - Replication for rules with multiple components when their insertions were split across multiple ticks.
 - Avoid panicking when `Signature` inserted during replication.
+- Send mappings only for entities with `Replicated`.
 
 ### Removed
 

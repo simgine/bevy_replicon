@@ -351,7 +351,7 @@ fn prepare_messages(
 fn collect_mappings(
     despawn_buffer: Res<DespawnBuffer>,
     mut serialized: ResMut<SerializedData>,
-    entities: Query<(Entity, Ref<Signature>)>,
+    entities: Query<(Entity, &Signature), With<Replicated>>,
     mut clients: Query<(
         Entity,
         &mut Updates,
@@ -368,7 +368,7 @@ fn collect_mappings(
             let Ok((_, mut message, ticks, visibility)) = clients.get_mut(client_entity) else {
                 continue;
             };
-            if should_send_mapping(entity, &despawn_buffer, &signature, &visibility, &ticks) {
+            if should_send_mapping(entity, &despawn_buffer, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
                 );
@@ -377,7 +377,7 @@ fn collect_mappings(
             }
         } else {
             for (client_entity, mut message, ticks, visibility) in &mut clients {
-                if should_send_mapping(entity, &despawn_buffer, &signature, &visibility, &ticks) {
+                if should_send_mapping(entity, &despawn_buffer, &visibility, &ticks) {
                     trace!(
                         "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
                     );
@@ -395,7 +395,6 @@ fn collect_mappings(
 fn should_send_mapping(
     entity: Entity,
     despawn_buffer: &DespawnBuffer,
-    signature: &Ref<Signature>,
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
@@ -405,7 +404,8 @@ fn should_send_mapping(
         return false;
     }
 
-    signature.is_added() || !ticks.entities.contains_key(&entity)
+    // Check if the client already received the entity.
+    !ticks.entities.contains_key(&entity)
 }
 
 /// Collect entity despawns from this tick into update messages.
