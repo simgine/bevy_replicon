@@ -173,12 +173,7 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Test
-        run: cargo tarpaulin --all-features --tests --benches --engine llvm --out lcov --exclude-files benches/*
-
-        # Can't collect coverage from the example backend,
-        # it crashes tarpaulin due to TCP usage.
-      - name: Test backend
-        run: cargo test -p bevy_replicon_example_backend
+        run: cargo tarpaulin --workspace --all-features --all-targets --engine llvm --out lcov --exclude-files benches/*
 
       - name: Upload code coverage results
         if: github.actor != 'dependabot[bot]'
