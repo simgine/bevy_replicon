@@ -19,7 +19,7 @@ use bevy::{
         schedule::ScheduleLabel,
         system::SystemChangeTick,
     },
-    platform::collections::hash_map::Entry,
+    platform::collections::{HashSet, hash_map::Entry},
     prelude::*,
     time::common_conditions::on_timer,
 };
@@ -50,7 +50,7 @@ use crate::{
 };
 use client_pools::ClientPools;
 use related_entities::RelatedEntities;
-use removal_buffer::{RemovalBuffer, RemovalReader};
+use removal_buffer::RemovalBuffer;
 use replication_messages::{
     mutations::Mutations, serialized_data::SerializedData, updates::Updates,
 };
@@ -155,19 +155,15 @@ impl Plugin for ServerPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    buffer_removals,
-                    (
-                        prepare_messages,
-                        collect_mappings,
-                        collect_despawns,
-                        collect_removals,
-                        collect_changes,
-                        send_messages,
-                    )
-                        .chain()
-                        .run_if(resource_changed::<ServerTick>),
+                    prepare_messages,
+                    collect_mappings,
+                    collect_despawns,
+                    collect_removals,
+                    collect_changes,
+                    send_messages,
                 )
                     .chain()
+                    .run_if(resource_changed::<ServerTick>)
                     .in_set(ServerSystems::Send)
                     .run_if(in_state(ServerState::Running)),
             );
@@ -199,12 +195,69 @@ impl Plugin for ServerPlugin {
     }
 
     fn finish(&self, app: &mut App) {
+        // Multiple rules can include components with the same ID,
+        // we collect them here to deduplicate.
+        let rules = app.world().resource::<ReplicationRules>();
+        let replicated_ids: HashSet<_> = rules
+            .iter()
+            .flat_map(|rule| &rule.components)
+            .map(|component| component.id)
+            .collect();
+
+        // Removal observer without any components will trigger on any removal.
+        if !replicated_ids.is_empty() {
+            let mut remove_observer = Observer::new(buffer_removals);
+            for id in replicated_ids {
+                remove_observer = remove_observer.with_component(id);
+            }
+            app.world_mut().spawn(remove_observer);
+        }
+
         app.world_mut()
             .resource_scope(|world, mut messages: Mut<ServerMessages>| {
                 let channels = world.resource::<RepliconChannels>();
                 messages.setup_client_channels(channels.client_channels().len());
             });
     }
+}
+
+fn buffer_removals(
+    remove: On<Remove>,
+    entities: &Entities,
+    archetypes: &Archetypes,
+    state: Res<State<ServerState>>,
+    mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
+    rules: Res<ReplicationRules>,
+    registry: Option<Res<ReplicationRegistry>>,
+    mut removals: ResMut<RemovalBuffer>,
+) {
+    if *state != ServerState::Running {
+        return;
+    }
+
+    let components = remove.trigger().components;
+    if components.contains(&replicated_archetypes.marker_id()) {
+        trace!("ignoring removals for despawned `{}`", remove.entity);
+        return;
+    }
+
+    // Observers can't use run conditions. We return early on the client, but system parameters
+    // are validated before the observer runs. Because of this, the registry may not be present
+    // in the world during replication receive, so it needs to be optional.
+    let registry = registry.expect("registry should always exist on the server");
+
+    replicated_archetypes.update(archetypes, &rules);
+    let location = entities.get(remove.entity).unwrap();
+    let Some(archetype) = replicated_archetypes.get(location.archetype_id) else {
+        // `Replicated` component is missing.
+        trace!(
+            "ignoring `{components:?}` removal for non-replicated `{}`",
+            remove.entity
+        );
+        return;
+    };
+
+    removals.insert(remove.entity, components, archetype, &registry);
 }
 
 fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
@@ -309,24 +362,6 @@ fn receive_acks(
                 }
             }
         }
-    }
-}
-
-fn buffer_removals(
-    entities: &Entities,
-    archetypes: &Archetypes,
-    mut removal_reader: RemovalReader,
-    mut removal_buffer: ResMut<RemovalBuffer>,
-    rules: Res<ReplicationRules>,
-    registry: Res<ReplicationRegistry>,
-) {
-    for (&entity, removed_components) in removal_reader.read() {
-        let location = entities
-            .get(entity)
-            .expect("removals count only existing entities");
-        let archetype = archetypes.get(location.archetype_id).unwrap();
-
-        removal_buffer.update(&rules, &registry, archetype, entity, removed_components);
     }
 }
 

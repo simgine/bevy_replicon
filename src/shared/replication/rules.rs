@@ -3,11 +3,7 @@ pub mod filter;
 
 use core::cmp::Reverse;
 
-use bevy::{
-    ecs::{archetype::Archetype, component::ComponentId},
-    platform::collections::HashSet,
-    prelude::*,
-};
+use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, command_fns::MutWrite};
@@ -916,29 +912,6 @@ impl ReplicationRule {
         self.components
             .iter()
             .all(|component| archetype.contains(component.id))
-    }
-
-    /// Determines whether the rule is applicable to an archetype with removals included and contains at least one removal.
-    ///
-    /// Returns `true` if all components in this rule are found in either `removed_components` or the
-    /// `post_removal_archetype`, and at least one component is found in `removed_components`.
-    /// Returning true means the entity with this archetype satisfied this
-    /// rule in the previous tick, but then a component within this rule was removed from the entity.
-    pub(crate) fn matches_removals(
-        &self,
-        post_removal_archetype: &Archetype,
-        removed_components: &HashSet<ComponentId>,
-    ) -> bool {
-        let mut matches = false;
-        for component in &self.components {
-            if removed_components.contains(&component.id) {
-                matches = true;
-            } else if !post_removal_archetype.contains(component.id) {
-                return false;
-            }
-        }
-
-        matches
     }
 }
 
