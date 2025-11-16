@@ -5,6 +5,7 @@ use bevy::{
         archetype::{ArchetypeGeneration, ArchetypeId, Archetypes},
         component::{ComponentId, StorageType},
     },
+    platform::collections::HashMap,
     prelude::*,
 };
 use log::trace;
@@ -21,6 +22,9 @@ pub(super) struct ReplicatedArchetypes {
 
     /// Highest processed archetype ID.
     generation: ArchetypeGeneration,
+
+    /// Maps a Bevy archetype ID to an index in [`Self::list`].
+    ids_map: HashMap<ArchetypeId, usize>,
 
     /// Archetypes marked as replicated.
     list: Vec<ReplicatedArchetype>,
@@ -55,8 +59,18 @@ impl ReplicatedArchetypes {
                 }
             }
 
+            self.ids_map.insert(archetype.id(), self.list.len());
             self.list.push(replicated_archetype);
         }
+    }
+
+    pub(super) fn marker_id(&self) -> ComponentId {
+        self.marker_id
+    }
+
+    pub(super) fn get(&self, id: ArchetypeId) -> Option<&ReplicatedArchetype> {
+        let index = *self.ids_map.get(&id)?;
+        self.list.get(index)
     }
 
     pub(super) fn iter(&self) -> impl Iterator<Item = &ReplicatedArchetype> {
@@ -69,6 +83,7 @@ impl FromWorld for ReplicatedArchetypes {
         Self {
             marker_id: world.register_component::<Replicated>(),
             generation: ArchetypeGeneration::initial(),
+            ids_map: Default::default(),
             list: Default::default(),
         }
     }
@@ -89,6 +104,10 @@ impl ReplicatedArchetype {
             id,
             components: Default::default(),
         }
+    }
+
+    pub(super) fn find_rule(&self, id: ComponentId) -> Option<&ComponentRule> {
+        self.components.iter().map(|(r, _)| r).find(|r| r.id == id)
     }
 }
 

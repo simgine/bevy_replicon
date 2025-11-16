@@ -1,112 +1,15 @@
 use bevy::{
-    ecs::{
-        archetype::Archetype,
-        component::ComponentId,
-        entity::hash_map::EntityHashMap,
-        lifecycle::{RemovedComponentEntity, RemovedComponentMessages},
-        message::MessageCursor,
-        system::SystemParam,
-    },
-    platform::collections::{HashMap, HashSet},
+    ecs::{component::ComponentId, entity::hash_map::EntityHashMap},
     prelude::*,
 };
+use log::trace;
 
 use crate::{
-    prelude::*,
-    shared::replication::{
-        registry::{ComponentIndex, FnsId, ReplicationRegistry},
-        rules::ReplicationRules,
-    },
+    server::replicated_archetypes::ReplicatedArchetype,
+    shared::replication::registry::{ComponentIndex, FnsId, ReplicationRegistry},
 };
 
-/// Reader for removed components.
-///
-/// Like [`RemovedComponentMessages`], but reads them in per-entity format.
-#[derive(SystemParam)]
-pub(super) struct RemovalReader<'w, 's> {
-    /// Cached components list from [`ReplicationRules`].
-    components: Local<'s, ReplicatedComponents>,
-
-    /// Individual readers for each component.
-    readers: Local<'s, HashMap<ComponentId, MessageCursor<RemovedComponentEntity>>>,
-
-    /// Component removals grouped by entity.
-    removals: Local<'s, EntityHashMap<HashSet<ComponentId>>>,
-
-    /// [`HashSet`]'s from removals.
-    ///
-    /// All data is cleared before the insertion.
-    /// Stored to reuse allocated capacity.
-    ids_pool: Local<'s, Vec<HashSet<ComponentId>>>,
-
-    /// Component removals grouped by [`ComponentId`].
-    remove_messages: &'w RemovedComponentMessages,
-
-    /// Filter for replicated and valid entities.
-    replicated: Query<'w, 's, (), With<Replicated>>,
-}
-
-impl RemovalReader<'_, '_> {
-    /// Returns iterator over all components removed since the last call.
-    ///
-    /// Only replicated entities taken into account.
-    pub(super) fn read(&mut self) -> impl Iterator<Item = (&Entity, &HashSet<ComponentId>)> {
-        self.clear();
-
-        for (&component_id, component_messages) in self
-            .remove_messages
-            .iter()
-            .filter(|(component_id, _)| self.components.contains(*component_id))
-        {
-            // Removed components are grouped by type, not by entity, so we need an intermediate container.
-            let reader = self.readers.entry(component_id).or_default();
-            for entity in reader
-                .read(component_messages)
-                .cloned()
-                .map(Into::into)
-                .filter(|&entity| self.replicated.get(entity).is_ok())
-            {
-                self.removals
-                    .entry(entity)
-                    .or_insert_with(|| self.ids_pool.pop().unwrap_or_default())
-                    .insert(component_id);
-            }
-        }
-
-        self.removals.iter()
-    }
-
-    /// Clears all removals.
-    ///
-    /// Keeps the allocated memory for reuse.
-    fn clear(&mut self) {
-        self.ids_pool
-            .extend(self.removals.drain().map(|(_, mut components)| {
-                components.clear();
-                components
-            }));
-    }
-}
-
-#[derive(Deref)]
-struct ReplicatedComponents(HashSet<ComponentId>);
-
-impl FromWorld for ReplicatedComponents {
-    fn from_world(world: &mut World) -> Self {
-        let rules = world.resource::<ReplicationRules>();
-        let component_ids = rules
-            .iter()
-            .flat_map(|rule| &rule.components)
-            .map(|component| component.id)
-            .collect();
-
-        Self(component_ids)
-    }
-}
-
-/// Buffer with removed components.
-///
-/// Used to avoid missing messages.
+/// Buffer with removed components for the current tick.
 #[derive(Default, Resource, Deref)]
 pub(super) struct RemovalBuffer {
     /// Component removals grouped by entity.
@@ -121,38 +24,27 @@ pub(super) struct RemovalBuffer {
 }
 
 impl RemovalBuffer {
-    /// Registers component removals that match replication rules for an entity.
-    pub(super) fn update(
+    pub(super) fn insert(
         &mut self,
-        rules: &ReplicationRules,
-        registry: &ReplicationRegistry,
-        archetype: &Archetype,
         entity: Entity,
-        removed_components: &HashSet<ComponentId>,
+        components: &[ComponentId],
+        archetype: &ReplicatedArchetype,
+        registry: &ReplicationRegistry,
     ) {
-        let mut entity_removals = self.pool.pop().unwrap_or_default();
-        for rule in rules
-            .iter()
-            .filter(|rule| rule.matches_removals(archetype, removed_components))
-        {
-            for component in &rule.components {
-                let (component_index, ..) = registry.get(component.fns_id);
-                // Since rules are sorted by priority,
-                // we are inserting only new components that aren't present.
-                if entity_removals
-                    .iter()
-                    .all(|&(index, _)| index != component_index)
-                    && removed_components.contains(&component.id)
-                {
-                    entity_removals.push((component_index, component.fns_id));
-                }
-            }
-        }
+        let entity_removals = self
+            .removals
+            .entry(entity)
+            .or_insert_with(|| self.pool.pop().unwrap_or_default());
 
-        if entity_removals.is_empty() {
-            self.pool.push(entity_removals);
-        } else {
-            self.removals.insert(entity, entity_removals);
+        for &id in components {
+            let Some(rule) = archetype.find_rule(id) else {
+                trace!("skipping non-replicated `{id:?}` removal for `{entity}`");
+                continue;
+            };
+
+            let (component_index, ..) = registry.get(rule.fns_id);
+            trace!("buffering `{:?}` removal for `{entity}`", rule.fns_id);
+            entity_removals.push((component_index, rule.fns_id));
         }
     }
 
@@ -170,62 +62,60 @@ impl RemovalBuffer {
 
 #[cfg(test)]
 mod tests {
+    use bevy::state::app::StatesPlugin;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{server, shared::replication::registry::ReplicationRegistry};
+    use crate::{prelude::*, shared::replication::rules::ReplicationRules};
 
     #[test]
     fn not_replicated() {
         let mut app = App::new();
-        app.init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals);
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         app.world_mut().spawn((Replicated, A)).remove::<A>();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
-        assert!(removal_buffer.removals.is_empty());
+        assert!(removal_buffer.is_empty());
     }
 
     #[test]
     fn component() {
         let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals)
-            .replicate::<A>();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .replicate::<A>()
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         let entity = app.world_mut().spawn((Replicated, A)).remove::<A>().id();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
-        assert_eq!(removal_buffer.removals.len(), 1);
+        assert_eq!(removal_buffer.len(), 1);
 
-        let removal_ids = removal_buffer.removals.get(&entity).unwrap();
+        let removal_ids = removal_buffer.get(&entity).unwrap();
         assert_eq!(removal_ids.len(), 1);
     }
 
     #[test]
     fn bundle() {
         let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals)
-            .replicate_bundle::<(A, B)>();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .replicate_bundle::<(A, B)>()
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         let entity = app
@@ -234,49 +124,45 @@ mod tests {
             .remove::<(A, B)>()
             .id();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
-        assert_eq!(removal_buffer.removals.len(), 1);
+        assert_eq!(removal_buffer.len(), 1);
 
-        let removal_ids = removal_buffer.removals.get(&entity).unwrap();
+        let removal_ids = removal_buffer.get(&entity).unwrap();
         assert_eq!(removal_ids.len(), 2);
     }
 
     #[test]
     fn part_of_bundle() {
         let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals)
-            .replicate_bundle::<(A, B)>();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .replicate_bundle::<(A, B)>()
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         let entity = app.world_mut().spawn((Replicated, A, B)).remove::<A>().id();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
-        assert_eq!(removal_buffer.removals.len(), 1);
+        assert_eq!(removal_buffer.len(), 1);
 
-        let removal_ids = removal_buffer.removals.get(&entity).unwrap();
+        let removal_ids = removal_buffer.get(&entity).unwrap();
         assert_eq!(removal_ids.len(), 1);
     }
 
     #[test]
     fn bundle_with_subset() {
         let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals)
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .replicate::<A>()
-            .replicate_bundle::<(A, B)>();
+            .replicate_bundle::<(A, B)>()
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         let entity = app
@@ -285,58 +171,59 @@ mod tests {
             .remove::<(A, B)>()
             .id();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
-        assert_eq!(removal_buffer.removals.len(), 1);
+        assert_eq!(removal_buffer.len(), 1);
 
-        let removal_ids = removal_buffer.removals.get(&entity).unwrap();
+        let removal_ids = removal_buffer.get(&entity).unwrap();
         assert_eq!(removal_ids.len(), 2);
     }
 
     #[test]
     fn part_of_bundle_with_subset() {
         let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals)
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .replicate::<A>()
-            .replicate_bundle::<(A, B)>();
+            .replicate_bundle::<(A, B)>()
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         let entity = app.world_mut().spawn((Replicated, A, B)).remove::<A>().id();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
-        assert_eq!(removal_buffer.removals.len(), 1);
+        assert_eq!(removal_buffer.len(), 1);
 
-        let removal_ids = removal_buffer.removals.get(&entity).unwrap();
-        assert_eq!(removal_ids.len(), 1);
+        let removal_ids = removal_buffer.get(&entity).unwrap();
+        let [(_, fns_id)] = removal_ids.as_slice().try_into().unwrap();
+
+        let rules = app.world().resource::<ReplicationRules>();
+        let bundle_rule = rules.iter().find(|r| r.components.len() == 2).unwrap();
+        assert!(
+            bundle_rule.components.iter().any(|r| r.fns_id == fns_id),
+            "removal should be long to the bundle"
+        );
     }
 
     #[test]
     fn despawn() {
         let mut app = App::new();
-        app.init_resource::<ProtocolHasher>()
-            .init_resource::<ReplicationRules>()
-            .init_resource::<ReplicationRegistry>()
-            .init_resource::<RemovalBuffer>()
-            .add_systems(PostUpdate, server::buffer_removals)
-            .replicate::<A>();
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .replicate::<A>()
+            .finish();
 
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
         app.update();
 
         app.world_mut().spawn((Replicated, A)).despawn();
 
-        app.update();
-
         let removal_buffer = app.world().resource::<RemovalBuffer>();
         assert!(
-            removal_buffer.removals.is_empty(),
+            removal_buffer.is_empty(),
             "despawns shouldn't be counted as removals"
         );
     }
