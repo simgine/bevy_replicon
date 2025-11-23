@@ -177,7 +177,7 @@ impl Updates {
             .expect("entity should be written before adding insertions");
 
         changes.add_component(component);
-        self.changed_components.set(index, true);
+        self.changed_components.insert(index);
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.

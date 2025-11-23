@@ -510,7 +510,7 @@ fn collect_removals(
                 let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
                     continue;
                 };
-                if !entity_ticks.components.get(component_index) {
+                if !entity_ticks.components.contains(component_index) {
                     continue;
                 }
 
@@ -521,7 +521,7 @@ fn collect_removals(
                 }
                 let fns_id_range = fns_id.write_cached(&mut serialized, &mut fns_id_range)?;
                 message.add_removal(fns_id_range);
-                entity_ticks.components.set(component_index, false);
+                entity_ticks.components.remove(component_index);
             }
         }
     }
@@ -605,7 +605,7 @@ fn collect_changes(
                     }
 
                     if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
-                        && entity_ticks.components.get(component_index)
+                        && entity_ticks.components.contains(component_index)
                     {
                         let base_priority = priority.get(&entity.id()).copied().unwrap_or(1.0);
 
