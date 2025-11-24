@@ -122,7 +122,7 @@ impl ReplicationRegistry {
     ///
     /// If a [`ComponentFns`] has already been created for this component,
     /// then it returns its index instead of creating a new one.
-    fn init_component_fns<C: Component<Mutability: MutWrite<C>>>(
+    pub(crate) fn init_component_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         world: &mut World,
     ) -> (ComponentIndex, ComponentId) {
@@ -140,7 +140,7 @@ impl ReplicationRegistry {
         (ComponentIndex(index), component_id)
     }
 
-    /// Returns associates functions and associated data.
+    /// Returns replication functions and associated data for a rule.
     ///
     /// See also [`Self::register_rule_fns`].
     pub(crate) fn get<'a>(&'a self, fns_id: FnsId) -> (ComponentIndex, ComponentId, SerdeFns<'a>) {
@@ -150,12 +150,20 @@ impl ReplicationRegistry {
             .unwrap_or_else(|| panic!("replication `{fns_id:?}` should be registered first"));
 
         // SAFETY: index obtained from `rules` is always valid.
-        let (component_id, component_fns) = unsafe { self.components.get_unchecked(index.0) };
+        let (component_id, component_fns) = unsafe { self.get_by_index(*index).unwrap_unchecked() };
 
         // SAFETY: `RuleFns` and `ComponentFns` belong to the same type.
         let fns = unsafe { SerdeFns::new(component_fns, rule_fns) };
 
         (*index, *component_id, fns)
+    }
+
+    /// Returns component ID and its functions from the index.
+    pub(crate) fn get_by_index(
+        &self,
+        index: ComponentIndex,
+    ) -> Option<&(ComponentId, ComponentFns)> {
+        self.components.get(index.0)
     }
 }
 

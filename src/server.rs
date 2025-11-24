@@ -385,6 +385,7 @@ fn prepare_messages(
 /// Collects and writes any new entity mappings that happened in this tick.
 fn collect_mappings(
     despawn_buffer: Res<DespawnBuffer>,
+    registry: Res<FilterRegistry>,
     mut serialized: ResMut<SerializedData>,
     entities: Query<(Entity, &Signature), With<Replicated>>,
     mut clients: Query<(
@@ -403,7 +404,7 @@ fn collect_mappings(
             let Ok((_, mut message, ticks, visibility)) = clients.get_mut(client_entity) else {
                 continue;
             };
-            if should_send_mapping(entity, &despawn_buffer, &visibility, &ticks) {
+            if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
                 );
@@ -412,7 +413,7 @@ fn collect_mappings(
             }
         } else {
             for (client_entity, mut message, ticks, visibility) in &mut clients {
-                if should_send_mapping(entity, &despawn_buffer, &visibility, &ticks) {
+                if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                     trace!(
                         "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
                     );
@@ -430,12 +431,13 @@ fn collect_mappings(
 fn should_send_mapping(
     entity: Entity,
     despawn_buffer: &DespawnBuffer,
+    registry: &FilterRegistry,
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
     // Since despawns processed later, we need to explicitly check for them here
     // because we can't distinguish between a despawn and removal of a visibility filter.
-    if visibility.is_hidden(entity) || despawn_buffer.contains(&entity) {
+    if visibility.get(entity).is_hidden(registry) || despawn_buffer.contains(&entity) {
         return false;
     }
 
@@ -445,6 +447,7 @@ fn should_send_mapping(
 
 /// Collect entity despawns from this tick into update messages.
 fn collect_despawns(
+    registry: Res<FilterRegistry>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
@@ -471,8 +474,13 @@ fn collect_despawns(
         }
     }
 
-    for (client_entity, mut message, mut ticks, mut priority, mut visibility) in clients {
-        for entity in visibility.drain_lost() {
+    for (client_entity, mut message, mut ticks, mut priority, visibility) in clients {
+        for (entity, filter_mask) in visibility.iter_lost() {
+            // Skip visibility changes that hide only components.
+            if !filter_mask.is_hidden(&registry) {
+                continue;
+            }
+
             if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
                 let entity_range = entity.write(&mut serialized)?;
@@ -490,20 +498,33 @@ fn collect_despawns(
 ///
 /// The removal buffer will be cleaned later in [`collect_changes`].
 fn collect_removals(
+    archetypes: &Archetypes,
+    entities: &Entities,
     removal_buffer: Res<RemovalBuffer>,
+    rules: Res<ReplicationRules>,
+    registry: Res<ReplicationRegistry>,
+    filter_registry: Res<FilterRegistry>,
+    mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
-    mut clients: Query<(Entity, &mut Updates, &mut ClientTicks)>,
+    mut clients: Query<(
+        Entity,
+        &mut Updates,
+        &mut ClientTicks,
+        &mut ClientVisibility,
+    )>,
 ) -> Result<()> {
+    replicated_archetypes.update(archetypes, &rules);
+
     for (&entity, remove_ids) in removal_buffer.iter() {
         let mut entity_range = None;
-        for (_, mut message, _) in &mut clients {
+        for (_, mut message, _, _) in &mut clients {
             message.start_entity_removals();
         }
 
         for &(component_index, fns_id) in remove_ids {
             let mut fns_id_range = None;
-            for (client_entity, mut message, mut ticks) in &mut clients {
+            for (client_entity, mut message, mut ticks, _) in &mut clients {
                 // Only send removals for components that were previously sent.
                 // If the entity was despawned or lost visibility, it was removed
                 // from ticks earlier during despawn collection.
@@ -526,6 +547,62 @@ fn collect_removals(
         }
     }
 
+    for (client_entity, mut message, mut ticks, mut visibility) in &mut clients {
+        for (entity, filter_mask) in visibility.drain_lost() {
+            if filter_mask.is_hidden(&filter_registry) {
+                // Was processed earlier during collecting despawns.
+                continue;
+            }
+            let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
+                // The client didn't see this entity.
+                continue;
+            };
+            let Some(location) = entities.get(entity) else {
+                // Despawned after despawn processing but before this system.
+                continue;
+            };
+            let archetype = replicated_archetypes
+                .get(location.archetype_id)
+                .unwrap_or_else(|| {
+                    panic!("`{entity}` should be replicated because the client knows about it")
+                });
+
+            let mut entity_range = None;
+            message.start_entity_removals();
+
+            for components in filter_mask.hidden_components(&filter_registry) {
+                for component_index in components.iter() {
+                    if !entity_ticks.components.contains(component_index) {
+                        // The client didn't see this component.
+                        continue;
+                    }
+
+                    let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
+                        panic!(
+                            "`{component_index:?}` should've been registered to be marked as lost"
+                        )
+                    });
+                    let rule = archetype.find_rule(id).unwrap_or_else(|| {
+                        panic!("`{id:?}` should match a rule since the client knows about it")
+                    });
+
+                    trace!(
+                        "writing `{:?}` lost for `{entity}` for client `{client_entity}`",
+                        rule.fns_id
+                    );
+                    if !message.removals_entity_added() {
+                        let entity_range =
+                            entity.write_cached(&mut serialized, &mut entity_range)?;
+                        message.add_removals_entity(&mut pools, entity_range);
+                    }
+                    let fns_id_range = rule.fns_id.write(&mut serialized)?;
+                    message.add_removal(fns_id_range);
+                    entity_ticks.components.remove(component_index);
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -536,6 +613,7 @@ fn collect_changes(
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     registry: Res<ReplicationRegistry>,
+    filter_registry: Res<FilterRegistry>,
     type_registry: Res<AppTypeRegistry>,
     related_entities: Res<RelatedEntities>,
     rules: Res<ReplicationRules>,
@@ -600,7 +678,10 @@ fn collect_changes(
                     visibility,
                 ) in &mut clients
                 {
-                    if visibility.is_hidden(entity.id()) {
+                    if visibility
+                        .get(entity.id())
+                        .is_component_hidden(&filter_registry, component_index)
+                    {
                         continue;
                     }
 
@@ -659,7 +740,7 @@ fn collect_changes(
             for (client_entity, mut updates, mut mutations, mut ticks, _, visibility) in
                 &mut clients
             {
-                if visibility.is_hidden(entity.id()) {
+                if visibility.get(entity.id()).is_hidden(&filter_registry) {
                     continue;
                 }
 

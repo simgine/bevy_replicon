@@ -1,27 +1,37 @@
-use bevy::{
-    ecs::entity::{EntityHashMap, EntityHashSet},
-    platform::collections::hash_map::Entry,
-    prelude::*,
-};
+use bevy::{ecs::entity::EntityHashMap, platform::collections::hash_map::Entry, prelude::*};
 
-/// Cached visibility information for a client.
+use super::filters_mask::{FilterBit, FiltersMask};
+
+/// Cached visibility as masks for a client.
+///
+/// Each bit in the [`FiltersMask`] corresponds to a visibility filter
+/// registered in the [`FilterRegistry`](super::registry::FilterRegistry).
+/// This allows us to avoid storing the filter data for every client,
+/// which would be expensive in memory-wise.
+///
+/// Stores only entities that have some hidden data.
 ///
 /// Automatically updated by observers from [`AppVisibilityExt`](super::AppVisibilityExt).
 #[derive(Component, Default)]
-pub struct ClientVisibility {
-    /// List of hidden entities and the filters that block their visibility.
-    ///
-    /// Filters are stored as a bitmask, with bit indices assigned by the
-    /// [`FilterRegistry`](super::registry::FilterRegistry).
-    hidden: EntityHashMap<u32>,
+pub(crate) struct ClientVisibility {
+    /// Entities with hidden data.
+    hidden: EntityHashMap<FiltersMask>,
 
-    /// All entities that lost visibility in this tick.
-    lost: EntityHashSet,
+    /// Entities and bits that became set during this tick.
+    ///
+    /// Stored redundantly to quickly iterate only over entities
+    /// with newly hidden data.
+    lost: EntityHashMap<FiltersMask>,
 }
 
 impl ClientVisibility {
-    /// Clears all lost entities during this tick, returning them as an iterator.
-    pub(crate) fn drain_lost(&mut self) -> impl Iterator<Item = Entity> + '_ {
+    /// Returns iterator over all entities that lose any visibility during this tick.
+    pub(crate) fn iter_lost(&self) -> impl Iterator<Item = (Entity, FiltersMask)> {
+        self.lost.iter().map(|(&e, &m)| (e, m))
+    }
+
+    /// Clears all entities that lost any visibility during this tick, returning them as an iterator.
+    pub(crate) fn drain_lost(&mut self) -> impl Iterator<Item = (Entity, FiltersMask)> {
         self.lost.drain()
     }
 
@@ -36,29 +46,34 @@ impl ClientVisibility {
         self.lost.remove(&entity);
     }
 
-    /// Sets visibility of an entity for a filter.
-    pub(super) fn set_visibility(&mut self, entity: Entity, filter_bit: u8, visible: bool) {
+    /// Sets visibility of an entity for the given filter bit.
+    pub(super) fn set(&mut self, entity: Entity, bit: FilterBit, visible: bool) {
         if visible {
-            if let Entry::Occupied(mut filters) = self.hidden.entry(entity) {
-                *filters.get_mut() &= !(1 << filter_bit);
-                if *filters.get() == 0 {
-                    filters.remove();
-                    self.lost.remove(&entity);
+            if let Entry::Occupied(mut mask) = self.hidden.entry(entity) {
+                mask.get_mut().remove(bit);
+                if mask.get().is_empty() {
+                    mask.remove();
+                }
+
+                if let Entry::Occupied(mut lost_mask) = self.lost.entry(entity) {
+                    lost_mask.get_mut().remove(bit);
+                    if lost_mask.get().is_empty() {
+                        lost_mask.remove();
+                    }
                 }
             }
         } else {
-            let filters = self.hidden.entry(entity).or_default();
-
-            if *filters == 0 {
-                self.lost.insert(entity);
+            let mask = self.hidden.entry(entity).or_default();
+            if !mask.contains(bit) {
+                mask.insert(bit);
+                self.lost.entry(entity).or_default().insert(bit);
             }
-            *filters |= 1 << filter_bit;
         }
     }
 
-    /// Returns `true` if the entity is hidden from this client.
-    pub fn is_hidden(&self, entity: Entity) -> bool {
-        self.hidden.contains_key(&entity)
+    /// Returns bits for all filters that affect visibility of the given entity.
+    pub(crate) fn get(&self, entity: Entity) -> FiltersMask {
+        self.hidden.get(&entity).copied().unwrap_or_default()
     }
 }
 
@@ -70,40 +85,40 @@ mod tests {
     fn single() {
         let mut visibility = ClientVisibility::default();
 
-        visibility.set_visibility(Entity::PLACEHOLDER, 0, false);
-        assert!(visibility.is_hidden(Entity::PLACEHOLDER));
-        assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_some());
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(0), false);
+        assert!(!visibility.get(Entity::PLACEHOLDER).is_empty());
+        assert!(visibility.lost.contains_key(&Entity::PLACEHOLDER));
 
-        visibility.set_visibility(Entity::PLACEHOLDER, 0, true);
-        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
-        assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_none());
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(0), true);
+        assert!(visibility.get(Entity::PLACEHOLDER).is_empty());
+        assert!(!visibility.lost.contains_key(&Entity::PLACEHOLDER));
     }
 
     #[test]
     fn multiple() {
         let mut visibility = ClientVisibility::default();
 
-        visibility.set_visibility(Entity::PLACEHOLDER, 0, false);
-        visibility.set_visibility(Entity::PLACEHOLDER, 1, false);
-        assert!(visibility.is_hidden(Entity::PLACEHOLDER));
-        assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_some());
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(0), false);
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(1), false);
+        assert!(!visibility.get(Entity::PLACEHOLDER).is_empty());
+        assert!(visibility.lost.contains_key(&Entity::PLACEHOLDER));
 
-        visibility.set_visibility(Entity::PLACEHOLDER, 0, true);
-        assert!(visibility.is_hidden(Entity::PLACEHOLDER));
-        assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_some());
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(0), true);
+        assert!(!visibility.get(Entity::PLACEHOLDER).is_empty());
+        assert!(visibility.lost.contains_key(&Entity::PLACEHOLDER));
 
-        visibility.set_visibility(Entity::PLACEHOLDER, 1, true);
-        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
-        assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_none());
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(1), true);
+        assert!(visibility.get(Entity::PLACEHOLDER).is_empty());
+        assert!(!visibility.lost.contains_key(&Entity::PLACEHOLDER));
     }
 
     #[test]
     fn already_visible() {
         let mut visibility = ClientVisibility::default();
-        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
+        assert!(visibility.get(Entity::PLACEHOLDER).is_empty());
 
-        visibility.set_visibility(Entity::PLACEHOLDER, 0, true);
-        assert!(!visibility.is_hidden(Entity::PLACEHOLDER));
-        assert!(visibility.lost.get(&Entity::PLACEHOLDER).is_none());
+        visibility.set(Entity::PLACEHOLDER, FilterBit::new(0), true);
+        assert!(visibility.get(Entity::PLACEHOLDER).is_empty());
+        assert!(!visibility.lost.contains_key(&Entity::PLACEHOLDER));
     }
 }

@@ -543,7 +543,7 @@ have many entities with mutating components. The [`PriorityMap`] component lets 
 how often mutations are sent for each entity on authorized clients. See its documentation for
 more details.
 
-In addition, [`ClientVisibility`] can be used to further reduce bandwidth by hiding entities
+In addition, [client visibility](#client-visibility) can be used to further reduce bandwidth by hiding entities
 that are irrelevant to a given client.
 
 ### Interpolation and/or client-side prediction
@@ -728,7 +728,7 @@ pub mod prelude {
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
-        visibility::{AppVisibilityExt, VisibilityFilter, client_visibility::ClientVisibility},
+        visibility::{AppVisibilityExt, ComponentScope, VisibilityFilter},
     };
 
     #[cfg(feature = "client_diagnostics")]

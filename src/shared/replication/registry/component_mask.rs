@@ -4,11 +4,10 @@ use smallbitvec::SmallBitVec;
 
 use super::ComponentIndex;
 
-/// Wraps a bitvec to provide a dynamically growing bitmask.
-///
-/// Each bit corresponds to a [`ComponentIndex`].
-#[derive(Default, Debug)]
-pub(crate) struct ComponentMask {
+/// Wraps a bitvec to provide a dynamically growing bitmask for compactly storing component IDs.
+#[derive(Default, Debug, Clone)]
+pub struct ComponentMask {
+    /// Each bit corresponds to a [`ComponentIndex`].
     bits: SmallBitVec,
 }
 
@@ -38,6 +37,13 @@ impl ComponentMask {
 
     pub(crate) fn clear(&mut self) {
         self.bits.clear();
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = ComponentIndex> {
+        self.bits
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| value.then_some(ComponentIndex(index)))
     }
 }
 
