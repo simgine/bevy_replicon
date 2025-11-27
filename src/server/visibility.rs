@@ -84,12 +84,10 @@ impl AppVisibilityExt for App {
         debug!("adding visibility filter `{}`", ShortName::of::<F>());
 
         self.world_mut()
-            .resource_scope(|world, mut registry: Mut<FilterRegistry>| {
-                world.resource_scope(
-                    |world, mut replication_registry: Mut<ReplicationRegistry>| {
-                        registry.register::<F>(world, &mut replication_registry);
-                    },
-                )
+            .resource_scope(|world, mut filter_registry: Mut<FilterRegistry>| {
+                world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                    filter_registry.register::<F>(world, &mut registry);
+                })
             });
 
         self.add_observer(hide_for_new_clients::<F>)
