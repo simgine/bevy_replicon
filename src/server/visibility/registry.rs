@@ -11,42 +11,54 @@ use crate::{
 
 /// Maps visibility filters data to [`FilterBit`]s.
 ///
-/// This allows entities to store their active filters in a compact
-/// [`FiltersMask`](super::filters_mask::FiltersMask) rather than in an
-/// allocation-heavy `HashSet<TypeId>`.
+/// This allows entities to store their active filters as a mask
+/// rather than in an allocation-heavy `HashSet<TypeId>`.
 ///
 /// This greatly reduces per-entity memory usage when many entities
 /// affected by filters.
 #[derive(Resource, Default)]
-pub(crate) struct FilterRegistry {
+pub struct FilterRegistry {
     bits: TypeIdMap<FilterBit>,
     scopes: Vec<VisibilityScope>,
 }
 
 impl FilterRegistry {
-    pub(super) fn register<F: VisibilityFilter>(
+    pub(super) fn register_filter<F: VisibilityFilter>(
         &mut self,
         world: &mut World,
         registry: &mut ReplicationRegistry,
     ) {
-        if self.scopes.len() >= u8::BITS as usize {
-            panic!(
-                "`{}` can't be registered because the number of filters can't exceed {}",
-                ShortName::of::<F>(),
-                u32::BITS
-            );
-        }
-
-        let bit = FilterBit::new(self.scopes.len() as u8);
+        let bit = self.register_scope::<F::Scope>(world, registry);
         if self.bits.insert_type::<F>(bit).is_some() {
             panic!(
                 "`{}` can't be registered more than once",
                 ShortName::of::<F>()
             )
         }
+    }
 
-        let scope = F::Scope::visibility_scope(world, registry);
+    /// Registers a new visibility scope and returns the [`FilterBit`] assigned to it.
+    ///
+    /// The returned bit should be managed manually via
+    /// [`ClientVisibility::set`](super::client_visibility::ClientVisibility::set) to
+    /// control visibility.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of registered visibility scopes exceeds [`u32::BITS`].
+    pub fn register_scope<S: FilterScope>(
+        &mut self,
+        world: &mut World,
+        registry: &mut ReplicationRegistry,
+    ) -> FilterBit {
+        if self.scopes.len() >= u8::BITS as usize {
+            panic!("number of visibility scopes can't exceed {}", u32::BITS);
+        }
+
+        let bit = FilterBit::new(self.scopes.len() as u8);
+        let scope = S::visibility_scope(world, registry);
         self.scopes.push(scope);
+        bit
     }
 
     pub(super) fn bit<F: VisibilityFilter>(&self) -> FilterBit {
@@ -61,7 +73,7 @@ impl FilterRegistry {
     pub(super) fn scope(&self, bit: FilterBit) -> &VisibilityScope {
         self.scopes
             .get(*bit as usize)
-            .unwrap_or_else(|| panic!("component for `{bit:?}` should've been registered"))
+            .unwrap_or_else(|| panic!("scope for `{bit:?}` should've been registered"))
     }
 }
 
@@ -84,9 +96,9 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry::default();
-        filter_registry.register::<EntityVisibility>(&mut world, &mut registry);
-        filter_registry.register::<ComponentVisibility>(&mut world, &mut registry);
-        filter_registry.register::<MultiComponentVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<ComponentVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<MultiComponentVisibility>(&mut world, &mut registry);
 
         let entity_bit = filter_registry.bit::<EntityVisibility>();
         let component_bit = filter_registry.bit::<ComponentVisibility>();
@@ -118,7 +130,7 @@ mod tests {
             scopes: vec![VisibilityScope::Entity; 32],
             ..Default::default()
         };
-        filter_registry.register::<EntityVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
     }
 
     #[test]
@@ -127,8 +139,8 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry::default();
-        filter_registry.register::<EntityVisibility>(&mut world, &mut registry);
-        filter_registry.register::<EntityVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
     }
 
     #[test]
@@ -136,7 +148,7 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry::default();
-        filter_registry.register::<EntityVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
 
         let bit = filter_registry.bit::<EntityVisibility>();
         let mut mask = FiltersMask::default();
@@ -153,7 +165,7 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry::default();
-        filter_registry.register::<ComponentVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<ComponentVisibility>(&mut world, &mut registry);
 
         let bit = filter_registry.bit::<ComponentVisibility>();
         let mut mask = FiltersMask::default();
@@ -179,7 +191,7 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry::default();
-        filter_registry.register::<MultiComponentVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<MultiComponentVisibility>(&mut world, &mut registry);
 
         let bit = filter_registry.bit::<MultiComponentVisibility>();
         let mut mask = FiltersMask::default();

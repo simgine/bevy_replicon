@@ -728,7 +728,7 @@ pub mod prelude {
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
-        visibility::{AppVisibilityExt, ComponentScope, VisibilityFilter},
+        visibility::{AppVisibilityExt, ComponentScope, FilterScope, VisibilityFilter},
     };
 
     #[cfg(feature = "client_diagnostics")]

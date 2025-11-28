@@ -32,6 +32,8 @@ pub trait AppVisibilityExt {
     To keep the representation compact, the total number of registered filters cannot exceed [`u32::MAX`].
     But a filter can itself represent multiple flags using a bitmask. See the example in [`VisibilityFilter`].
 
+    See also [`ClientVisibility::set`] for manual visibility control.
+
     # Examples
 
     ```
@@ -86,7 +88,7 @@ impl AppVisibilityExt for App {
         self.world_mut()
             .resource_scope(|world, mut filter_registry: Mut<FilterRegistry>| {
                 world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
-                    filter_registry.register::<F>(world, &mut registry);
+                    filter_registry.register_filter::<F>(world, &mut registry);
                 })
             });
 

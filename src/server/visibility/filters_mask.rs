@@ -77,12 +77,13 @@ impl FiltersMask {
 }
 
 /// Bit that represents a visibility filter from [`FilterRegistry`].
-///
-/// Valid values are in the range `0..32` and map directly to bits in [`FiltersMask`].
 #[derive(Deref, Default, Debug, PartialEq, Clone, Copy)]
-pub(crate) struct FilterBit(u8);
+pub struct FilterBit(u8);
 
 impl FilterBit {
+    /// Creates a new instance for the given bit index.
+    ///
+    /// Valid values are in the range `0..32` that map directly to bits in [`FiltersMask`].
     pub(super) fn new(value: u8) -> Self {
         debug_assert!(value < 32, "filter bit must be less than {}", u32::BITS);
         Self(value)
