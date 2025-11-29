@@ -3,6 +3,7 @@ use core::{
     ops::{Add, AddAssign, Sub, SubAssign},
 };
 
+use bevy::prelude::*;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +13,9 @@ use serde::{Deserialize, Serialize};
 ///
 /// See also [`ServerUpdateTick`](crate::client::ServerUpdateTick) and
 /// [`ServerTick`](crate::server::server_tick::ServerTick).
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, MaxSize)]
+#[derive(
+    Reflect, Debug, Default, Serialize, Deserialize, Eq, Hash, PartialEq, MaxSize, Clone, Copy,
+)]
 pub struct RepliconTick(u32);
 
 impl RepliconTick {
