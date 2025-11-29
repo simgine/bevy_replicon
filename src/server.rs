@@ -844,7 +844,7 @@ pub enum ServerSystems {
 /// System tick used for change detection as the current tick.
 ///
 /// Used to share the same tick in [`collect_changes`] and [`send_messages`].
-#[derive(Resource, Default, Deref, DerefMut)]
+#[derive(Resource, Deref, DerefMut, Default)]
 struct ServerChangeTick(Tick);
 
 /// Buffer with all despawned entities.
@@ -852,7 +852,7 @@ struct ServerChangeTick(Tick);
 /// We treat removals of [`Replicated`] component as despawns
 /// to avoid missing events in case the server's tick policy is
 /// not [`TickPolicy::EveryFrame`].
-#[derive(Default, Resource, Deref, DerefMut)]
+#[derive(Resource, Deref, DerefMut, Default)]
 struct DespawnBuffer(Vec<Entity>);
 
 /// Marker that enables replication and all events for a client.
