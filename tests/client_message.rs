@@ -130,6 +130,32 @@ fn local_sending() {
     assert_eq!(client_messages.len(), 1);
 }
 
+#[test]
+fn with_disconnect() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .add_client_message::<Test>(Channel::Ordered)
+            .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    client_app.world_mut().write_message(Test);
+
+    server_app.disconnect_client(&mut client_app);
+
+    let messages = client_app.world().resource::<Messages<Test>>();
+    assert!(messages.is_empty());
+
+    let server_messages = client_app.world().resource::<Messages<FromClient<Test>>>();
+    assert!(
+        server_messages.is_empty(),
+        "client shouldn't resend messages locally after disconnect"
+    );
+}
+
 #[derive(Deserialize, Message, Serialize)]
 struct Test;
 

@@ -142,13 +142,14 @@ impl Plugin for ClientMessagePlugin {
             )
             .add_systems(
                 OnEnter(ClientState::Connected),
-                (
-                    reset_fn.in_set(ClientSystems::ResetEvents),
-                    (enter_receive_fn, enter_trigger_fn)
-                        .chain()
-                        .after(super::receive_replication)
-                        .in_set(ClientSystems::Receive),
-                ),
+                (enter_receive_fn, enter_trigger_fn)
+                    .chain()
+                    .after(super::receive_replication)
+                    .in_set(ClientSystems::Receive),
+            )
+            .add_systems(
+                OnExit(ClientState::Connected),
+                reset_fn.in_set(ClientSystems::Reset),
             )
             .add_systems(
                 PostUpdate,
