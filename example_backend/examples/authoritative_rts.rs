@@ -12,6 +12,7 @@
 
 use std::{
     f32::consts::TAU,
+    iter,
     net::{IpAddr, Ipv4Addr},
 };
 
@@ -40,10 +41,11 @@ fn main() {
             RepliconExampleBackendPlugins,
         ))
         .init_resource::<Selection>()
-        .init_resource::<ClientTeams>()
         .replicate::<Unit>()
+        .replicate::<Team>()
         .replicate::<Command>()
         .replicate_as::<Transform, Transform2DWithoutScale>()
+        .add_visibility_filter::<Team>()
         .add_client_event::<TeamRequest>(Channel::Unordered)
         .add_client_event::<UnitSpawn>(Channel::Unordered)
         .add_mapped_client_event::<MoveUnits>(Channel::Unordered)
@@ -101,10 +103,6 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
 
-            // The server can also trigger client events.
-            // These are re-emitted as `FromClient` with `ClientId::Server`.
-            // This allows the code to work simultaneously in both client and listen-server modes.
-            commands.client_trigger(TeamRequest { team });
             commands.insert_resource(team);
             commands.spawn(Text::new("Server"));
         }
@@ -132,28 +130,32 @@ fn trigger_team_request(mut commands: Commands, team: Res<Team>) {
 /// Assigns a team to a player.
 fn apply_team_request(
     team_request: On<FromClient<TeamRequest>>,
+    mut commands: Commands,
     mut disconnects: MessageWriter<DisconnectRequest>,
-    mut teams: ResMut<ClientTeams>,
+    server_team: Res<Team>,
+    teams: Query<(Entity, &Team)>,
 ) {
-    if let Some((client_id, team)) = teams.iter().find(|&(_, team)| *team == team_request.team) {
+    let client = team_request
+        .client_id
+        .entity()
+        .expect("server never requests a team");
+
+    if let Some((client_id, team)) = teams
+        .iter()
+        .map(|(client, team)| (ClientId::Client(client), *team))
+        .chain(iter::once((ClientId::Server, *server_team)))
+        .find(|&(_, team)| team == team_request.team)
+    {
         error!(
             "`{}` requested team `{team:?}`, but it's already taken by `{client_id}`",
             team_request.client_id,
         );
-        let client = team_request
-            .client_id
-            .entity()
-            .expect("server can't request an invalid team");
         disconnects.write(DisconnectRequest { client });
         return;
     }
 
-    info!(
-        "associating `{}` with team `{:?}`",
-        team_request.client_id, team_request.team
-    );
-
-    teams.insert(team_request.client_id, team_request.team);
+    info!("associating `{client}` with team `{:?}`", team_request.team);
+    commands.entity(client).insert((Player, team_request.team));
 }
 
 /// Requests spawning a unit at the click location.
@@ -188,9 +190,10 @@ fn trigger_unit_spawn(
 fn apply_unit_spawn(
     spawn: On<FromClient<UnitSpawn>>,
     mut commands: Commands,
-    teams: Res<ClientTeams>,
+    server_team: Res<Team>,
+    teams: Query<&Team>,
 ) {
-    let Some(&team) = teams.get(&spawn.client_id) else {
+    let Some(team) = select_team(spawn.client_id, &server_team, teams) else {
         error!(
             "`{}` attempted to spawn a unit but has no team",
             spawn.client_id
@@ -199,7 +202,8 @@ fn apply_unit_spawn(
     };
 
     commands.spawn((
-        Unit { team },
+        Unit,
+        team,
         Transform::from_translation(spawn.position.extend(0.0)),
     ));
 }
@@ -218,11 +222,11 @@ fn init_unit(
     insert: On<Insert, Unit>,
     unit_mesh: Local<UnitMesh>,
     unit_materials: Local<UnitMaterials>,
-    mut units: Query<(&Unit, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,
+    mut units: Query<(&Team, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,
 ) {
-    let (unit, mut mesh, mut material) = units.get_mut(insert.entity).unwrap();
+    let (team, mut mesh, mut material) = units.get_mut(insert.entity).unwrap();
     **mesh = unit_mesh.0.clone();
-    **material = unit_materials.get(&unit.team).unwrap().clone();
+    **material = unit_materials.get(team).unwrap().clone();
 }
 
 /// Selects the player's units within a selection rectangle.
@@ -234,7 +238,7 @@ fn select_units(
     mut selection: ResMut<Selection>,
     team: Res<Team>,
     camera: Single<(&Camera, &GlobalTransform)>,
-    units: Query<(Entity, &Unit, &GlobalTransform, &Aabb, Has<Selected>)>,
+    units: Query<(Entity, &Team, &GlobalTransform, &Aabb, Has<Selected>)>,
 ) -> Result<()> {
     if drag.button != PointerButton::Primary {
         return Ok(());
@@ -249,12 +253,12 @@ fn select_units(
     selection.rect = Rect::from_corners(origin, end);
     selection.active = true;
 
-    for (unit_entity, unit, transform, aabb, prev_selected) in &units {
+    for (unit_entity, &unit_team, transform, aabb, prev_selected) in &units {
         let center = transform.translation_vec3a() + aabb.center;
         let rect = Rect::from_center_half_size(center.truncate(), aabb.half_extents.truncate());
         let selected = !selection.rect.intersect(rect).is_empty();
         if selected != prev_selected {
-            if selected && unit.team == *team {
+            if selected && unit_team == *team {
                 commands.entity(unit_entity).insert(Selected);
             } else {
                 commands.entity(unit_entity).remove::<Selected>();
@@ -313,10 +317,11 @@ const MOVE_SPACING: f32 = 30.0;
 /// centered on the requested position. The grid is oriented toward that position.
 fn apply_units_move(
     move_units: On<FromClient<MoveUnits>>,
-    teams: Res<ClientTeams>,
     mut slots: Local<Vec<Vec2>>,
     mut positions: Local<Vec<Vec2>>,
-    mut units: Query<(&Unit, &GlobalTransform, &mut Command)>,
+    server_team: Res<Team>,
+    teams: Query<&Team>,
+    mut units: Query<(&Team, &GlobalTransform, &mut Command)>,
 ) {
     // Validate the received data since the client could be malicious.
     // For example, on the client side we skip empty selections, but a modified
@@ -326,7 +331,7 @@ fn apply_units_move(
         return;
     }
 
-    let Some(&client_team) = teams.get(&move_units.client_id) else {
+    let Some(team) = select_team(move_units.client_id, &server_team, teams) else {
         error!(
             "`{}` attempted to move units but has no team",
             move_units.client_id
@@ -336,11 +341,11 @@ fn apply_units_move(
 
     positions.clear();
     positions.reserve(move_units.units.len());
-    for (unit, transform, _) in units.iter_many(&move_units.units) {
-        if unit.team != client_team {
+    for (&unit_team, transform, _) in units.iter_many(&move_units.units) {
+        if unit_team != team {
             error!(
-                "`{}` has team `{client_team:?}`, but tried to move unit with team `{:?}`",
-                move_units.client_id, unit.team
+                "`{}` has team `{team:?}`, but tried to move unit with team `{unit_team:?}`",
+                move_units.client_id,
             );
             return;
         }
@@ -555,6 +560,18 @@ fn draw_selected(mut gizmos: Gizmos, units: Query<(&GlobalTransform, &Command), 
     }
 }
 
+/// Picks a team by ID.
+///
+/// If it's [`ClientId::Server`], uses the value from resource.
+/// Should be called only on server.
+fn select_team(client_id: ClientId, server_team: &Res<Team>, teams: Query<&Team>) -> Option<Team> {
+    if let ClientId::Client(client) = client_id {
+        teams.get(client).copied().ok()
+    } else {
+        Some(**server_team)
+    }
+}
+
 const DEFAULT_PORT: u16 = 5000;
 
 /// An RTS demo.
@@ -670,17 +687,21 @@ struct MoveUnits {
 #[derive(Component, Serialize, Deserialize)]
 #[component(immutable)]
 #[require(Replicated, Command, Mesh2d, MeshMaterial2d<ColorMaterial>)]
-struct Unit {
-    team: Team,
-}
+struct Unit;
+
+#[derive(Component)]
+struct Player;
 
 /// Team color.
 ///
 /// This palette matches the team colors from Warcraft III.
 ///
 /// When used as a resource, it represents the local player's team.
+/// Also present on player entities and units as component to associate
+/// them with teams.
 #[derive(
     Resource,
+    Component,
     Serialize,
     Deserialize,
     Debug,
@@ -693,6 +714,7 @@ struct Unit {
     Clone,
     Copy,
 )]
+#[component(immutable)]
 enum Team {
     Blue,
     Red,
@@ -721,9 +743,14 @@ impl Team {
     }
 }
 
-/// Associated team for each player.
-#[derive(Resource, Default, Deref, DerefMut)]
-struct ClientTeams(HashMap<ClientId, Team>);
+/// Replicate commands only for units owned by the player.
+impl VisibilityFilter for Team {
+    type Scope = ComponentScope<Command>;
+
+    fn is_visible(&self, entity_filter: &Self) -> bool {
+        self == entity_filter
+    }
+}
 
 /// Current command for a [`Unit`].
 #[derive(Component, Serialize, Deserialize, Default, Clone, Copy)]
