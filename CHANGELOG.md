@@ -24,10 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replication for rules with multiple components when their insertions were split across multiple ticks.
 - Avoid panicking when `Signature` inserted during replication.
 - Send mappings only for entities with `Replicated`.
+- After disconnecting, clients no longer resend buffered messages locally.
 
 ### Removed
 
 - `VisibilityPolicy`. No longer needed because visibility is now ergonomically controlled by components.
+- `ClientSystems::ResetEvents`. Events now reset during `ClientSystems::Reset` like everything else.
 
 ## [0.36.1] - 2025-10-11
 

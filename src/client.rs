@@ -57,12 +57,7 @@ impl Plugin for ClientPlugin {
             )
             .configure_sets(
                 OnEnter(ClientState::Connected),
-                (
-                    ClientSystems::ResetEvents,
-                    ClientSystems::Receive,
-                    ClientSystems::Diagnostics,
-                )
-                    .chain(),
+                (ClientSystems::Receive, ClientSystems::Diagnostics).chain(),
             )
             .configure_sets(
                 PostUpdate,
@@ -785,12 +780,6 @@ pub enum ClientSystems {
     ///
     /// Runs in [`PostUpdate`].
     SendPackets,
-    /// Systems that reset queued server events.
-    ///
-    /// This is a separate set from [`ClientSystems::Reset`] to avoid sending events that were sent before the connection.
-    ///
-    /// Runs in [`OnEnter`] for [`ClientState::Connected`].
-    ResetEvents,
     /// Systems that reset the client.
     ///
     /// Runs in [`OnExit`] for [`ClientState::Connected`].

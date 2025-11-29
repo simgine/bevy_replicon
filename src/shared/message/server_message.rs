@@ -586,8 +586,9 @@ impl ServerMessage {
         let queue: &mut MessageQueue<M> = unsafe { queue.deref_mut() };
         if !queue.is_empty() {
             warn!(
-                "discarding {} queued messages due to a disconnect",
-                queue.len()
+                "discarding {} queued messages of type `{}` due to a disconnect",
+                queue.len(),
+                ShortName::of::<M>()
             );
         }
         queue.clear();

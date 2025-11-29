@@ -130,6 +130,30 @@ fn local_sending() {
     assert_eq!(reader.events.len(), 1);
 }
 
+#[test]
+fn with_disconnect() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .add_client_event::<Test>(Channel::Ordered)
+            .finish();
+    }
+    client_app.init_resource::<EventReader<Test>>();
+
+    server_app.connect_client(&mut client_app);
+
+    client_app.world_mut().client_trigger(Test);
+
+    server_app.disconnect_client(&mut client_app);
+
+    let reader = client_app.world().resource::<EventReader<Test>>();
+    assert!(
+        reader.events.is_empty(),
+        "client shouldn't resend events locally after disconnect"
+    );
+}
+
 #[derive(Deserialize, Event, Serialize, Clone)]
 struct Test;
 
