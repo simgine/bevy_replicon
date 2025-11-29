@@ -138,7 +138,7 @@ impl Plugin for RepliconSharedPlugin {
 /// Configures the insertion of [`AuthorizedClient`].
 ///
 /// Can be set via [`RepliconSharedPlugin::auth_method`].
-#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Resource, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AuthMethod {
     /// Wait for receiving [`ProtocolHash`] event from the client.
     ///

@@ -23,7 +23,7 @@ use crate::{
 /// from [`SerializedData`].
 ///
 /// Can be packed into a message using [`Self::send`].
-#[derive(Default, Component)]
+#[derive(Component, Default)]
 pub(crate) struct Updates {
     /// Entity mappings for newly visible server entities and their hashes calculated from the [`Signature`] component.
     ///

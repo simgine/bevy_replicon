@@ -803,11 +803,11 @@ pub enum ClientSystems {
 /// This value is not updated when mutation messages are received from the server.
 ///
 /// See also [`ServerMutateTicks`].
-#[derive(Clone, Copy, Debug, Default, Deref, Resource)]
+#[derive(Resource, Deref, Default, Reflect, Debug, Clone, Copy)]
 pub struct ServerUpdateTick(RepliconTick);
 
 /// Cached buffered mutate messages, used to synchronize mutations with update messages.
-#[derive(Default, Resource)]
+#[derive(Resource, Default)]
 pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
 
 impl BufferedMutations {
@@ -850,7 +850,7 @@ pub(super) struct BufferedMutate {
 ///
 /// See also [`ClientDiagnosticsPlugin`]
 /// for automatic integration with Bevy diagnostics.
-#[derive(Clone, Copy, Default, Resource, Debug)]
+#[derive(Resource, Default, Reflect, Debug, Clone, Copy)]
 pub struct ClientReplicationStats {
     /// Incremented per entity that changes.
     pub entities_changed: usize,

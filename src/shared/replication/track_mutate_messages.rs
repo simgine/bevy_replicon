@@ -29,5 +29,5 @@ impl TrackAppExt for App {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Resource, Deref)]
+#[derive(Resource, Deref, Default, Debug, Clone, Copy)]
 pub(crate) struct TrackMutateMessages(bool);

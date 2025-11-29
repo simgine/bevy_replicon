@@ -862,7 +862,7 @@ impl AppRuleExt for App {
 }
 
 /// All registered rules for components replication.
-#[derive(Default, Deref, Resource, Clone)]
+#[derive(Resource, Deref, Default, Clone)]
 pub struct ReplicationRules(Vec<ReplicationRule>);
 
 impl ReplicationRules {

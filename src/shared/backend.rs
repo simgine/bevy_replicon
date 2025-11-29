@@ -87,7 +87,7 @@ pub struct DisconnectRequest {
 /// Should only be modified from the messaging backend.
 ///
 /// </div>
-#[derive(Resource, Component, Debug, Clone, Copy, Default, Reflect)]
+#[derive(Resource, Component, Default, Reflect, Debug, Clone, Copy)]
 pub struct ClientStats {
     /// Round-time trip in seconds for the connection.
     pub rtt: f64,

@@ -140,7 +140,7 @@ enum ProtocolPart {
 /// Used to verify compatibility between client and server.
 ///
 /// Calculated by [`ProtocolHasher`] and available only after [`Plugin::finish`].
-#[derive(Resource, Event, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Resource, Event, Serialize, Deserialize, Reflect, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ProtocolHash(u64);
 
 /// A server event to notify client for the protocol mismatch.

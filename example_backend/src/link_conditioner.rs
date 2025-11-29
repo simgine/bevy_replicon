@@ -96,7 +96,7 @@ impl PartialOrd for TimedMessage {
 /// You can also insert this as a component on a connected entity.
 /// This will affect only that specific entity and take priority over
 /// the resource configuration.
-#[derive(Resource, Component, Debug, Clone, Copy, Reflect)]
+#[derive(Resource, Component, Reflect, Debug, Clone, Copy)]
 pub struct ConditionerConfig {
     /// Base delay for incoming messages in milliseconds.
     pub latency: u16,

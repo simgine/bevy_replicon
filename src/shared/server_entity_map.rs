@@ -8,7 +8,7 @@ use log::{error, warn};
 /// Maps server entities to client entities and vice versa.
 ///
 /// Inserted as resource by [`ClientPlugin`](crate::client::ClientPlugin).
-#[derive(Default, Resource)]
+#[derive(Resource, Default)]
 pub struct ServerEntityMap {
     server_to_client: EntityHashMap<Entity>,
     client_to_server: EntityHashMap<Entity>,

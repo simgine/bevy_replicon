@@ -19,7 +19,7 @@ use crate::prelude::*;
 ///
 /// See [`ServerUpdateTick`](crate::client::ServerUpdateTick) for tracking the last received
 /// tick on clients.
-#[derive(Clone, Copy, Deref, Debug, Default, Deserialize, Resource, Serialize)]
+#[derive(Resource, Deref, Default, Serialize, Deserialize, Reflect, Debug, Clone, Copy)]
 pub struct ServerTick(RepliconTick);
 
 impl ServerTick {
