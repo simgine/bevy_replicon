@@ -11,6 +11,6 @@ pub mod update_message_flags;
 use bevy::prelude::*;
 
 /// Marks entity for replication.
-#[derive(Component, Clone, Copy, Default, Reflect, Debug)]
+#[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Replicated;
