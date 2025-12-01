@@ -9,7 +9,7 @@ use crate::{
     shared::replication::registry::{ReplicationRegistry, component_mask::ComponentMask},
 };
 
-/// Maps visibility filters data to [`FilterBit`]s.
+/// Maps the [`VisibilityScope`] of each filter to a [`FilterBit`].
 ///
 /// This allows entities to store their active filters as a mask
 /// rather than in an allocation-heavy `HashSet<TypeId>`.
