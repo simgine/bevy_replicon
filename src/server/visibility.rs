@@ -21,8 +21,8 @@ pub trait AppVisibilityExt {
     /**
     Registers a component as a remote visibility filter.
 
-    This component needs to be inserted on both the client entity and replicated entities.
-    If [`VisibilityFilter::is_visible`] on the client;s component returns `false` for the
+    This component needs to be inserted on both the server's client entity and replicated entities.
+    If [`VisibilityFilter::is_visible`] on the client's component returns `false` for the
     corresponding component on a replicated entity, the associated [`VisibilityFilter::Scope`]
     (entity or components) becomes hidden for the client.
 

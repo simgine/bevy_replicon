@@ -6,8 +6,7 @@ use super::filters_mask::{FilterBit, FiltersMask};
 ///
 /// Each bit corresponds to a visibility filter registered in the
 /// [`FilterRegistry`](super::registry::FilterRegistry). This allows
-/// us to avoid storing the filter data for every client, which would
-/// be expensive in memory-wise.
+/// us to avoid storing the filter data for every client.
 ///
 /// Stores only entities that have some hidden data.
 ///
