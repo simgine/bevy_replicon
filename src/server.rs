@@ -558,7 +558,12 @@ fn collect_removals(
                 continue;
             };
             let Some(location) = entities.get(entity) else {
-                // Despawned after despawn processing but before this system.
+                warn!(
+                    "`{entity}` was despawned after despawn processing but before sending, \
+                     so the despawn will be sent on the next tick; \
+                     consider ordering your despawn before `{:?}`",
+                    ServerSystems::Send
+                );
                 continue;
             };
             let archetype = replicated_archetypes
