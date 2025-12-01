@@ -30,7 +30,7 @@ pub trait AppVisibilityExt {
     [`VisibilityFilter::is_visible`] would return `false`.
 
     If multiple filters that affect components overlap on an entity, this will work as logical AND:
-    [`Self::is_visible`] should return `true` for all of them, otherwise the component will be hidden.
+    [`VisibilityFilter::is_visible`] should return `true` for all of them, otherwise the component will be hidden.
     If any of the filters hide the entity itself, no components will be replicated.
 
     If the [`VisibilityFilter::Scope`] was previously visible, it will be despawned (for entities) or
