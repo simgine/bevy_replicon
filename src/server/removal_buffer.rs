@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// Buffer with removed components for the current tick.
-#[derive(Default, Resource, Deref)]
+#[derive(Resource, Deref, Default)]
 pub(super) struct RemovalBuffer {
     /// Component removals grouped by entity.
     #[deref]

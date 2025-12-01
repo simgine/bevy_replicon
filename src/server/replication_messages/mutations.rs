@@ -25,7 +25,7 @@ use crate::{
 /// from [`SerializedData`].
 ///
 /// Can be packed into messages using [`Self::send`].
-#[derive(Default, Component)]
+#[derive(Component, Default)]
 pub(crate) struct Mutations {
     /// Entities that are related to each other and should be replicated in sync.
     ///

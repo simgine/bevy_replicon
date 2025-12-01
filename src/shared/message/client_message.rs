@@ -372,7 +372,7 @@ impl ClientMessage {
         let drained_count = messages.drain().count();
         if drained_count > 0 {
             warn!(
-                "discarded {drained_count} messages of type `{}` that were buffered before the connection",
+                "discarded {drained_count} messages of type `{}` due to a disconnect",
                 ShortName::of::<M>()
             );
         }

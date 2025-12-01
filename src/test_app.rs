@@ -154,5 +154,5 @@ impl ServerTestAppExt for App {
 ///
 /// Inserted in [`ServerTestAppExt::connect_client`] and removed by [`ServerTestAppExt::disconnect_client`].
 /// Used to track which client corresponds to which connection.
-#[derive(Resource, Deref, Clone, Copy, Debug)]
+#[derive(Resource, Deref, Debug, Clone, Copy)]
 pub struct TestClientEntity(Entity);

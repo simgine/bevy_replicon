@@ -47,7 +47,7 @@ pub struct ConnectedClient {
 /// Maps [`NetworkId`] to its associated entity.
 ///
 /// Automatically updated on client entity spawns and despawns.
-#[derive(Resource, Reflect, Default, Deref)]
+#[derive(Resource, Default, Reflect, Deref)]
 pub struct NetworkIdMap(HashMap<NetworkId, Entity>);
 
 /// A unique and persistent client ID provided by a messaging backend.

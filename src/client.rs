@@ -57,12 +57,7 @@ impl Plugin for ClientPlugin {
             )
             .configure_sets(
                 OnEnter(ClientState::Connected),
-                (
-                    ClientSystems::ResetEvents,
-                    ClientSystems::Receive,
-                    ClientSystems::Diagnostics,
-                )
-                    .chain(),
+                (ClientSystems::Receive, ClientSystems::Diagnostics).chain(),
             )
             .configure_sets(
                 PostUpdate,
@@ -785,12 +780,6 @@ pub enum ClientSystems {
     ///
     /// Runs in [`PostUpdate`].
     SendPackets,
-    /// Systems that reset queued server events.
-    ///
-    /// This is a separate set from [`ClientSystems::Reset`] to avoid sending events that were sent before the connection.
-    ///
-    /// Runs in [`OnEnter`] for [`ClientState::Connected`].
-    ResetEvents,
     /// Systems that reset the client.
     ///
     /// Runs in [`OnExit`] for [`ClientState::Connected`].
@@ -803,11 +792,11 @@ pub enum ClientSystems {
 /// This value is not updated when mutation messages are received from the server.
 ///
 /// See also [`ServerMutateTicks`].
-#[derive(Clone, Copy, Debug, Default, Deref, Resource)]
+#[derive(Resource, Deref, Default, Reflect, Debug, Clone, Copy)]
 pub struct ServerUpdateTick(RepliconTick);
 
 /// Cached buffered mutate messages, used to synchronize mutations with update messages.
-#[derive(Default, Resource)]
+#[derive(Resource, Default)]
 pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
 
 impl BufferedMutations {
@@ -850,7 +839,7 @@ pub(super) struct BufferedMutate {
 ///
 /// See also [`ClientDiagnosticsPlugin`]
 /// for automatic integration with Bevy diagnostics.
-#[derive(Clone, Copy, Default, Resource, Debug)]
+#[derive(Resource, Default, Reflect, Debug, Clone, Copy)]
 pub struct ClientReplicationStats {
     /// Incremented per entity that changes.
     pub entities_changed: usize,

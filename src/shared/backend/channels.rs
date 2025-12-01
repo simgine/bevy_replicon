@@ -26,7 +26,7 @@ use log::debug;
 /// The backend needs to provide an API for creating its own channels. This can be done
 /// by writing an extension trait for this struct. Created channels should have the defined
 /// delivery guarantee or stronger.
-#[derive(Clone, Resource)]
+#[derive(Resource, Clone)]
 pub struct RepliconChannels {
     /// Stores settings for each server channel.
     server: Vec<Channel>,

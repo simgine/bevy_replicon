@@ -20,17 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check typos
-        uses: crate-ci/typos@v1.39.0
+        uses: crate-ci/typos@v1.39.2
 
   format:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Instal stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Instal stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Instal stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       # Use the same target platform as Bevy (Game Boy Advance).
       - name: Instal stable toolchain
@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Instal stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -158,7 +158,7 @@ jobs:
           rm_cmd: "rmz"
 
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Instal stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download code coverage results
         uses: actions/download-artifact@v6
