@@ -24,7 +24,7 @@ use bevy::{
     time::common_conditions::on_timer,
 };
 use bytes::Buf;
-use log::{Level, debug, log_enabled, trace};
+use log::{Level, debug, log_enabled, trace, warn};
 
 use crate::{
     postcard_utils,
