@@ -26,8 +26,15 @@ pub trait AppVisibilityExt {
     corresponding component on a replicated entity, the associated [`VisibilityFilter::Scope`]
     (entity or components) becomes hidden for the client.
 
-    If the data was previously visible, it will be despawned or removed. If the component is
-    missing on either the client or a replicated entity, it is treated as evaluating to `false`.
+    If the component is missing on either the client or a replicated entity, it is treated as if
+    [`VisibilityFilter::is_visible`] would return `false`.
+
+    If multiple filters that affect components overlap on an entity, this will work as logical AND:
+    [`Self::is_visible`] should return `true` for all of them, otherwise the component will be hidden.
+    If any of the filters hide the entity itself, no components will be replicated.
+
+    If the [`VisibilityFilter::Scope`] was previously visible, it will be despawned (for entities) or
+    removed (for components).
 
     To keep the representation compact, the total number of registered filters cannot exceed [`u32::MAX`].
     But a filter can itself represent multiple flags using a bitmask. See the example in [`VisibilityFilter`].
