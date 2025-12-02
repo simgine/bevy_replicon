@@ -10,7 +10,7 @@ use bevy_replicon::{
         },
         server_entity_map::ServerEntityMap,
     },
-    test_app::ServerTestAppExt,
+    test_app::{ServerTestAppExt, TestClientEntity},
 };
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -602,6 +602,128 @@ fn confirm_history() {
     assert_eq!(replicated.tick, tick);
 }
 
+#[test]
+fn hidden_entity() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .add_visibility_filter::<EntityVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibility))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    server_app.world_mut().entity_mut(server_entity).insert(A);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().count(),
+        0,
+        "client shouldn't receive insertion for a hidden entity"
+    );
+}
+
+#[test]
+fn hidden_component() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .add_visibility_filter::<ComponentVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibility))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    server_app.world_mut().entity_mut(server_entity).insert(A);
+
+    server_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().count(),
+        0,
+        "client shouldn't receive insertion for a hidden component"
+    );
+}
+
+#[test]
+fn visibility_gain() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .add_visibility_filter::<ComponentVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, ComponentVisibility));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).count(), 0);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(ComponentVisibility);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).count(), 1);
+}
+
 #[derive(Component, Deserialize, Serialize)]
 #[component(storage = "Table")]
 struct Table;
@@ -631,6 +753,30 @@ struct Original;
 
 #[derive(Component, Deserialize, Serialize)]
 struct Replaced;
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibility;
+
+impl VisibilityFilter for EntityVisibility {
+    type Scope = Entity;
+
+    fn is_visible(&self, _entity_filter: &Self) -> bool {
+        true
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibility;
+
+impl VisibilityFilter for ComponentVisibility {
+    type Scope = ComponentScope<A>;
+
+    fn is_visible(&self, _entity_filter: &Self) -> bool {
+        true
+    }
+}
 
 /// Deserializes [`OriginalComponent`], but ignores it and inserts [`ReplacedComponent`].
 fn replace(

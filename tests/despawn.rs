@@ -157,7 +157,7 @@ fn signature() {
 }
 
 #[test]
-fn remove_visibility() {
+fn hidden_entity() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -166,7 +166,45 @@ fn remove_visibility() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_visibility_filter::<TestVisibility>()
+        .add_visibility_filter::<EntityVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibility))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    server_app.world_mut().entity_mut(server_entity).despawn();
+
+    server_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().count(),
+        0,
+        "client shouldn't receive anything for a hidden entity"
+    );
+}
+
+#[test]
+fn visibility_lose() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_visibility_filter::<EntityVisibility>()
         .finish();
     }
 
@@ -176,9 +214,9 @@ fn remove_visibility() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(TestVisibility);
+        .insert(EntityVisibility);
 
-    server_app.world_mut().spawn((Replicated, TestVisibility));
+    server_app.world_mut().spawn((Replicated, EntityVisibility));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -191,7 +229,7 @@ fn remove_visibility() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .remove::<TestVisibility>();
+        .remove::<EntityVisibility>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -201,7 +239,7 @@ fn remove_visibility() {
 }
 
 #[test]
-fn with_add_visibility_and_signature() {
+fn visibility_lose_with_component_scope() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -210,7 +248,58 @@ fn with_add_visibility_and_signature() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_visibility_filter::<TestVisibility>()
+        .replicate::<TestComponent>()
+        .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<ComponentVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert((EntityVisibility, ComponentVisibility));
+
+    server_app.world_mut().spawn((
+        Replicated,
+        TestComponent,
+        EntityVisibility,
+        ComponentVisibility,
+    ));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query::<&TestComponent>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<(EntityVisibility, ComponentVisibility)>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 0);
+}
+
+#[test]
+fn with_visibility_gain_and_signature() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_visibility_filter::<EntityVisibility>()
         .finish();
     }
 
@@ -219,8 +308,8 @@ fn with_add_visibility_and_signature() {
     // Remove visibility filter to make the entity visible and unreplicate.
     server_app
         .world_mut()
-        .spawn((Replicated, TestVisibility, Signature::from(0)))
-        .remove::<(Replicated, TestVisibility)>();
+        .spawn((Replicated, EntityVisibility, Signature::from(0)))
+        .remove::<(Replicated, EntityVisibility)>();
 
     server_app.update();
 
@@ -228,45 +317,28 @@ fn with_add_visibility_and_signature() {
     assert_eq!(messages.drain_sent().count(), 0);
 }
 
-#[test]
-fn hidden() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .add_visibility_filter::<TestVisibility>()
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    server_app
-        .world_mut()
-        .spawn((Replicated, TestVisibility))
-        .remove::<Replicated>();
-
-    server_app.update();
-
-    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(
-        messages.drain_sent().count(),
-        0,
-        "client shouldn't receive anything for a hidden entity"
-    );
-}
-
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
 #[derive(Component)]
 #[component(immutable)]
-struct TestVisibility;
+struct EntityVisibility;
 
-impl VisibilityFilter for TestVisibility {
+impl VisibilityFilter for EntityVisibility {
+    type Scope = Entity;
+
+    fn is_visible(&self, _entity_filter: &Self) -> bool {
+        true
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibility;
+
+impl VisibilityFilter for ComponentVisibility {
+    type Scope = ComponentScope<TestComponent>;
+
     fn is_visible(&self, _entity_filter: &Self) -> bool {
         true
     }

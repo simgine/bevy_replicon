@@ -464,7 +464,34 @@ fn after_started_replication() {
 }
 
 #[test]
-fn add_visibility() {
+fn hidden_entity() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_visibility_filter::<EntityVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.world_mut().spawn((Replicated, EntityVisibility));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+}
+
+#[test]
+fn visibility_gain() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -474,7 +501,7 @@ fn add_visibility() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
-        .add_visibility_filter::<TestVisibility>()
+        .add_visibility_filter::<EntityVisibility>()
         .finish();
     }
 
@@ -482,29 +509,28 @@ fn add_visibility() {
 
     server_app
         .world_mut()
-        .spawn((Replicated, TestVisibility, A));
+        .spawn((Replicated, EntityVisibility, A));
 
     server_app.update();
 
-    let mut server_messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(server_messages.drain_sent().count(), 0);
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 
     let client = **client_app.world().resource::<TestClientEntity>();
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(TestVisibility);
+        .insert(EntityVisibility);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
-fn add_visibility_with_signature() {
+fn visibility_gain_with_signature() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -514,7 +540,7 @@ fn add_visibility_with_signature() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
-        .add_visibility_filter::<TestVisibility>()
+        .add_visibility_filter::<EntityVisibility>()
         .finish();
     }
 
@@ -523,7 +549,7 @@ fn add_visibility_with_signature() {
     let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
     server_app
         .world_mut()
-        .spawn((Replicated, TestVisibility, Signature::from(0), A));
+        .spawn((Replicated, EntityVisibility, Signature::from(0), A));
 
     server_app.update();
 
@@ -534,7 +560,7 @@ fn add_visibility_with_signature() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(TestVisibility);
+        .insert(EntityVisibility);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -551,9 +577,11 @@ struct B;
 
 #[derive(Component)]
 #[component(immutable)]
-struct TestVisibility;
+struct EntityVisibility;
 
-impl VisibilityFilter for TestVisibility {
+impl VisibilityFilter for EntityVisibility {
+    type Scope = Entity;
+
     fn is_visible(&self, _entity_filter: &Self) -> bool {
         true
     }

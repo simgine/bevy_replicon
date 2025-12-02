@@ -2,26 +2,29 @@ use core::ops::BitOrAssign;
 
 use smallbitvec::SmallBitVec;
 
-use crate::shared::replication::registry::ComponentIndex;
+use super::ComponentIndex;
 
-/// Wraps a bitvec to provide a dynamically growing bitmask.
-///
-/// Each bit corresponds to a [`ComponentIndex`](crate::shared::replication::registry::ComponentIndex).
-#[derive(Default, Debug)]
-pub(crate) struct ComponentMask {
+/// Wraps a bitvec to provide a dynamically growing bitmask for compactly storing component IDs.
+#[derive(Default, Debug, Clone)]
+pub struct ComponentMask {
+    /// Each bit corresponds to a [`ComponentIndex`].
     bits: SmallBitVec,
 }
 
 impl ComponentMask {
-    pub(crate) fn get(&self, index: ComponentIndex) -> bool {
+    pub(crate) fn contains(&self, index: ComponentIndex) -> bool {
         self.bits.get(index.0).unwrap_or(false)
     }
 
-    pub(crate) fn set(&mut self, index: ComponentIndex, value: bool) {
+    pub(crate) fn insert(&mut self, index: ComponentIndex) {
         if index.0 >= self.bits.len() {
             self.bits.resize(index.0 + 1, false);
         }
-        self.bits.set(index.0, value);
+        self.bits.set(index.0, true);
+    }
+
+    pub(crate) fn remove(&mut self, index: ComponentIndex) {
+        self.bits.set(index.0, false);
     }
 
     pub(crate) fn is_heap(&self) -> bool {
@@ -34,6 +37,13 @@ impl ComponentMask {
 
     pub(crate) fn clear(&mut self) {
         self.bits.clear();
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = ComponentIndex> {
+        self.bits
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| value.then_some(ComponentIndex(index)))
     }
 }
 
@@ -62,23 +72,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn set_get() {
+    fn insert_remove() {
         let mut mask = ComponentMask {
             bits: sbvec![false; 3],
         };
 
-        mask.set(ComponentIndex(0), true);
-        mask.set(ComponentIndex(2), true);
-        mask.set(ComponentIndex(10), true);
+        mask.insert(ComponentIndex(0));
+        mask.insert(ComponentIndex(2));
+        mask.insert(ComponentIndex(10));
 
-        assert!(mask.get(ComponentIndex(0)));
-        assert!(!mask.get(ComponentIndex(1)));
-        assert!(mask.get(ComponentIndex(2)));
-        assert!(mask.get(ComponentIndex(10)));
-        assert!(!mask.get(ComponentIndex(100)));
+        assert!(mask.contains(ComponentIndex(0)));
+        assert!(!mask.contains(ComponentIndex(1)));
+        assert!(mask.contains(ComponentIndex(2)));
+        assert!(mask.contains(ComponentIndex(10)));
+        assert!(!mask.contains(ComponentIndex(100)));
 
-        mask.set(ComponentIndex(2), false);
-        assert!(!mask.get(ComponentIndex(2)));
+        mask.remove(ComponentIndex(2));
+        assert!(!mask.contains(ComponentIndex(2)));
     }
 
     #[test]
