@@ -1,6 +1,6 @@
 [package]
 name = "bevy_replicon_example_backend"
-version = "0.36.0"
+version = "0.37.0"
 authors = [
   "Hennadii Chernyshchyk <genaloner@gmail.com>",
   "koe <ukoe@protonmail.com>",
@@ -22,7 +22,7 @@ include = ["/src", "../LICENSE*"]
 
 [dependencies]
 bevy = { version = "0.17", default-features = false, features = ["bevy_log"] }
-bevy_replicon = { path = "..", version = "0.36.0", default-features = false }
+bevy_replicon = { path = "..", version = "0.37.0", default-features = false }
 fastrand = "2.3"
 
 [dev-dependencies]
