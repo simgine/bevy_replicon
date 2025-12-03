@@ -15,7 +15,7 @@ If you are new to networking, see [glossary](https://gist.github.com/maniwani/f9
 - Automatic world replication.
 - Remote events and triggers.
 - Authorization support.
-- Control over client visibility of entities and events.
+- Control over client visibility of entities and components.
 - Specify which entities should be replicated in sync using ECS relationships.
 - Replication into scene to save server state.
 - Customizable serialization and deserialization even for types that don't implement `serde` traits (like `Box<dyn Reflect>`).
