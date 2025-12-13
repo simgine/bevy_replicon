@@ -875,9 +875,6 @@ fn with_client_despawn() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
-
-    let entity_map = client_app.world().resource::<ServerEntityMap>();
-    assert!(!entity_map.to_server().contains_key(&client_entity));
 }
 
 #[test]

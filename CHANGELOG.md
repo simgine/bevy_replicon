@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Ignore mutations for client-despawned entities because the client may have predicted the despawn.
+- Ignore received replication for entities that was despawned by the client.
 
 ## [0.37.0] - 2025-12-03
 
