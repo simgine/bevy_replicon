@@ -444,7 +444,7 @@ fn apply_despawn(
         .and_then(|entity| world.get_entity_mut(entity).ok())
     {
         trace!("applying despawn for `{}`", client_entity.id());
-        params.signature_map.remove(client_entity.id()); // // Requires manual removal since the map is removed from the world and inaccessible to triggers.
+        params.signature_map.remove(client_entity.id()); // Requires manual removal since the map is removed from the world and inaccessible to triggers.
         let ctx = DespawnCtx { message_tick };
         (params.registry.despawn)(&ctx, client_entity);
     }
