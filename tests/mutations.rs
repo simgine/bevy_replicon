@@ -807,6 +807,9 @@ fn with_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
+    let mut components = client_app.world_mut().query::<&BoolComponent>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
     let mut component = server_app
         .world_mut()
         .get_mut::<BoolComponent>(server_entity)
@@ -824,8 +827,7 @@ fn with_despawn() {
     server_app.exchange_with_client(&mut client_app);
     server_app.update(); // Let server receive an update to trigger acknowledgment.
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 }
 
 #[test]
