@@ -829,6 +829,54 @@ fn with_despawn() {
 }
 
 #[test]
+fn with_client_despawn() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), Signature::from(0)))
+        .id();
+
+    let client_entity = client_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap();
+    component.0 = true;
+
+    // Despawn the entity that should receive the mutation on the client.
+    client_app.world_mut().despawn(client_entity);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+}
+
+#[test]
 fn buffering() {
     let mut server_app = App::new();
     let mut client_app = App::new();

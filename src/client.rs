@@ -632,7 +632,7 @@ fn apply_mutations(
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
-    let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
+    let EntityEntry::Occupied(entry) = params.entity_map.server_entry(server_entity) else {
         // Mutation could arrive after a despawn from update message.
         debug!("ignoring mutations received for unknown server's `{server_entity}`");
         message.advance(data_size);
@@ -645,8 +645,17 @@ fn apply_mutations(
     // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
     let world = unsafe { world_cell.world_mut() };
 
-    let mut client_entity =
-        DeferredEntity::new(world.get_entity_mut(client_entity)?, params.changes);
+    let Ok(mut client_entity) = world
+        .get_entity_mut(entry.get())
+        .map(|entity| DeferredEntity::new(entity, params.changes))
+    else {
+        // Client could predict despawn.
+        debug!("ignoring mutations for despawned `{}`", entry.get());
+        entry.remove();
+        message.advance(data_size);
+        return Ok(());
+    };
+
     params
         .entity_markers
         .read(params.command_markers, &*client_entity);
