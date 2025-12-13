@@ -874,6 +874,9 @@ fn with_client_despawn() {
 
     let mut replicated = client_app.world_mut().query::<&Replicated>();
     assert_eq!(replicated.iter(client_app.world()).len(), 0);
+
+    let entity_map = client_app.world().resource::<ServerEntityMap>();
+    assert!(!entity_map.to_server().contains_key(&client_entity));
 }
 
 #[test]
