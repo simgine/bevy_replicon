@@ -849,15 +849,19 @@ fn with_client_despawn() {
         .spawn((Replicated, BoolComponent(false), Signature::from(0)))
         .id();
 
-    let client_entity = client_app
-        .world_mut()
-        .spawn((Replicated, Signature::from(0)))
-        .id();
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
+
+    assert!(
+        client_app
+            .world()
+            .entity(client_entity)
+            .contains::<BoolComponent>()
+    );
 
     let mut component = server_app
         .world_mut()
