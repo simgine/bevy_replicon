@@ -653,7 +653,7 @@ fn apply_mutations(
 
     let Some(mut history) = client_entity.get_mut::<ConfirmHistory>() else {
         return Err(format!(
-            "entity `{}` missing history component inserted on the first update message",
+            "`{}` missing history component inserted on the first update message",
             client_entity.id()
         )
         .into());
