@@ -4,7 +4,7 @@ use bevy::{ecs::component::Tick, prelude::*};
 use log::trace;
 use postcard::experimental::{max_size::MaxSize, serialized_size};
 
-use super::{change_ranges::ChangeRanges, serialized_data::SerializedData};
+use super::{entity_ranges::EntityRanges, serialized_data::SerializedData};
 use crate::{
     postcard_utils,
     prelude::*,
@@ -67,10 +67,9 @@ impl Mutations {
     ) {
         let mutations = EntityMutations {
             entity,
-            ranges: ChangeRanges {
+            ranges: EntityRanges {
                 entity: entity_range,
-                components_len: 0,
-                components: pools.take_ranges(),
+                data: pools.take_ranges(),
             },
             components: pools.take_components(),
         };
@@ -97,7 +96,7 @@ impl Mutations {
             })
             .expect("entity should be written before adding components");
 
-        mutations.ranges.add_component(component);
+        mutations.ranges.add_data(component);
     }
 
     /// Removes last added entity from [`Self::add_entity`] and returns it.
@@ -164,7 +163,7 @@ impl Mutations {
         for chunk in chunks.iter_mut() {
             let mut mutations_size = 0;
             for mutations in &mut *chunk {
-                mutations_size += mutations.ranges.size_with_components_size()?;
+                mutations_size += mutations.ranges.size()?;
             }
 
             // Try to pack back first, then try to pack forward.
@@ -233,8 +232,8 @@ impl Mutations {
             postcard_utils::to_extend_mut(&split.mutate_index, &mut message)?;
             for mutations in chunks.iter_flatten(split.chunks_range.clone()) {
                 message.extend_from_slice(&serialized[mutations.ranges.entity.clone()]);
-                postcard_utils::to_extend_mut(&mutations.ranges.components_size(), &mut message)?;
-                for component in &mutations.ranges.components {
+                postcard_utils::to_extend_mut(&mutations.ranges.data_size(), &mut message)?;
+                for component in &mutations.ranges.data {
                     message.extend_from_slice(&serialized[component.clone()]);
                 }
             }
@@ -262,7 +261,7 @@ impl Mutations {
             .iter_mut()
             .chain(iter::once(&mut self.standalone))
         {
-            pools.recycle_ranges(entities.drain(..).map(|m| m.ranges.components));
+            pools.recycle_ranges(entities.drain(..).map(|m| m.ranges.data));
             // We don't take component masks because they are moved to `MutateInfo` during sending.
         }
     }
@@ -294,12 +293,7 @@ pub(crate) struct EntityMutations {
     /// Serialized as a list of pairs of entity chunk and multiple chunks with mutated components.
     /// Components are stored in multiple chunks because some clients may acknowledge mutations,
     /// while others may not.
-    ///
-    /// Unlike with [`Updates`](super::updates::Updates), we serialize the number
-    /// of chunk bytes instead of the number of components. This is because, during deserialization,
-    /// some entities may be skipped if they have already been updated (as mutations are sent until
-    /// the client acknowledges them).
-    pub(super) ranges: ChangeRanges,
+    pub(super) ranges: EntityRanges,
 
     /// Components written in [`Self::ranges`].
     ///

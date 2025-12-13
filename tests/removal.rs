@@ -275,6 +275,47 @@ fn not_replicated() {
 }
 
 #[test]
+fn with_client_despawn() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query_filtered::<Entity, With<A>>();
+    let client_entity = components.single(client_app.world()).unwrap();
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<A>();
+
+    client_app.world_mut().entity_mut(client_entity).despawn();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+}
+
+#[test]
 fn after_insertion() {
     let mut server_app = App::new();
     let mut client_app = App::new();

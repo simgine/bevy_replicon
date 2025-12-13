@@ -8,6 +8,9 @@ use log::{error, warn};
 /// Maps server entities to client entities and vice versa.
 ///
 /// Inserted as resource by [`ClientPlugin`](crate::client::ClientPlugin).
+///
+/// Automatically updated on replication receive. If the client predicts a despawn,
+/// the mapping is kept until the server also despawns the entity.
 #[derive(Resource, Default)]
 pub struct ServerEntityMap {
     server_to_client: EntityHashMap<Entity>,
