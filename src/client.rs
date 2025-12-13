@@ -696,9 +696,8 @@ fn apply_mutations(
     });
 
     let mut data = message.split_to(data_size);
-    let mut components_count = 0;
-    while data.has_remaining() {
-        let fns_id = postcard_utils::from_buf(&mut data)?;
+    let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
             entity_map: params.entity_map,
@@ -714,27 +713,22 @@ fn apply_mutations(
         );
 
         if new_tick {
-            fns.write(
-                &mut ctx,
-                params.entity_markers,
-                &mut client_entity,
-                &mut data,
-            )?;
+            fns.write(&mut ctx, params.entity_markers, &mut client_entity, data)?;
         } else {
             fns.consume_or_write(
                 &mut ctx,
                 params.entity_markers,
                 params.command_markers,
                 &mut client_entity,
-                &mut data,
+                data,
             )?;
         }
 
-        components_count += 1;
-    }
+        Ok(())
+    })?;
 
     if let Some(stats) = &mut params.stats {
-        stats.components_changed += components_count;
+        stats.components_changed += len;
     }
 
     client_entity.flush();
