@@ -846,22 +846,18 @@ fn with_client_despawn() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, BoolComponent(false), Signature::from(0)))
+        .spawn((Replicated, BoolComponent(false)))
         .id();
-
-    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    assert!(
-        client_app
-            .world()
-            .entity(client_entity)
-            .contains::<BoolComponent>()
-    );
+    let mut components = client_app
+        .world_mut()
+        .query_filtered::<Entity, With<BoolComponent>>();
+    let client_entity = components.single(client_app.world()).unwrap();
 
     let mut component = server_app
         .world_mut()
@@ -876,8 +872,7 @@ fn with_client_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 
     let entity_map = client_app.world().resource::<ServerEntityMap>();
     assert!(!entity_map.to_server().contains_key(&client_entity));
