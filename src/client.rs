@@ -634,7 +634,7 @@ fn apply_mutations(
 
     let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
         // Mutation could arrive after a despawn from update message.
-        debug!("ignoring mutations received for unknown server's {server_entity:?}");
+        debug!("ignoring mutations received for unknown server's `{server_entity}`");
         message.advance(data_size);
         return Ok(());
     };
