@@ -460,20 +460,23 @@ fn apply_removals(
     message_tick: RepliconTick,
 ) -> Result<()> {
     let server_entity = postcard_utils::entity_from_buf(message)?;
+    let data_size: usize = postcard_utils::from_buf(message)?;
 
-    let mut client_entity = match params.entity_map.server_entry(server_entity) {
-        EntityEntry::Occupied(entry) => {
-            DeferredEntity::new(world.get_entity_mut(entry.get())?, params.changes)
-        }
-        EntityEntry::Vacant(entry) => {
-            // It's possible to receive a removal when an entity is spawned and has a component removed in the same tick.
-            // We could serialize the size of the removals instead of the total number of removals and just advance the cursor,
-            // but it's a very rare case and not worth optimizing for.
-            let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
-            client_entity.insert(Replicated);
-            entry.insert(client_entity.id());
-            client_entity
-        }
+    // Server never sends removals for entities that weren't received by the client.
+    let client_entity = *params
+        .entity_map
+        .to_client()
+        .get(&server_entity)
+        .ok_or_else(|| format!("received removal for unknown server's `{server_entity}`"))?;
+
+    let Ok(mut client_entity) = world
+        .get_entity_mut(client_entity)
+        .map(|entity| DeferredEntity::new(entity, params.changes))
+    else {
+        // Client could predict despawn.
+        debug!("ignoring removals for despawned `{client_entity}`");
+        message.advance(data_size);
+        return Ok(());
     };
 
     params
@@ -482,8 +485,9 @@ fn apply_removals(
 
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
-    let len = apply_array(ArrayKind::Sized, message, |message| {
-        let fns_id = postcard_utils::from_buf(message)?;
+    let mut data = message.split_to(data_size);
+    let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = RemoveCtx {
             message_tick,
@@ -516,6 +520,7 @@ fn apply_changes(
     message_tick: RepliconTick,
 ) -> Result<()> {
     let server_entity = postcard_utils::entity_from_buf(message)?;
+    let data_size: usize = postcard_utils::from_buf(message)?;
 
     let world_cell = world.as_unsafe_world_cell();
     let entities = world_cell.entities();
@@ -525,7 +530,14 @@ fn apply_changes(
 
     let mut client_entity = match params.entity_map.server_entry(server_entity) {
         EntityEntry::Occupied(entry) => {
-            DeferredEntity::new(world.get_entity_mut(entry.get())?, params.changes)
+            let Ok(client_entity) = world.get_entity_mut(entry.get()) else {
+                // Client could predict despawn.
+                debug!("ignoring changes for despawned `{}`", entry.get());
+                message.advance(data_size);
+                return Ok(());
+            };
+
+            DeferredEntity::new(client_entity, params.changes)
         }
         EntityEntry::Vacant(entry) => {
             let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
@@ -541,8 +553,9 @@ fn apply_changes(
 
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
-    let len = apply_array(ArrayKind::Sized, message, |message| {
-        let fns_id = postcard_utils::from_buf(message)?;
+    let mut data = message.split_to(data_size);
+    let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
             entity_map: params.entity_map,
@@ -557,7 +570,7 @@ fn apply_changes(
             client_entity.id(),
         );
 
-        fns.write(&mut ctx, params.entity_markers, &mut client_entity, message)?;
+        fns.write(&mut ctx, params.entity_markers, &mut client_entity, data)?;
 
         Ok(())
     })?;
@@ -645,8 +658,16 @@ fn apply_mutations(
     // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
     let world = unsafe { world_cell.world_mut() };
 
-    let mut client_entity =
-        DeferredEntity::new(world.get_entity_mut(client_entity)?, params.changes);
+    let Ok(mut client_entity) = world
+        .get_entity_mut(client_entity)
+        .map(|entity| DeferredEntity::new(entity, params.changes))
+    else {
+        // Client could predict despawn.
+        debug!("ignoring mutations for despawned `{client_entity}`");
+        message.advance(data_size);
+        return Ok(());
+    };
+
     params
         .entity_markers
         .read(params.command_markers, &*client_entity);

@@ -3,7 +3,7 @@ use core::{iter, mem, ops::Range};
 use bevy::prelude::*;
 use postcard::experimental::serialized_size;
 
-use super::{change_ranges::ChangeRanges, mutations::Mutations, serialized_data::SerializedData};
+use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::SerializedData};
 use crate::{
     postcard_utils,
     prelude::*,
@@ -52,7 +52,7 @@ pub(crate) struct Updates {
     ///
     /// Serialized as a list of pairs of entity chunk and a multiple chunks with
     /// [`FnsId`](crate::shared::replication::registry::FnsId).
-    removals: Vec<RemovalRanges>,
+    removals: Vec<EntityRanges>,
 
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_removals`].
@@ -66,7 +66,7 @@ pub(crate) struct Updates {
     ///
     /// Usually mutations are stored in [`MutateMessage`], but if an entity has any insertions or removal,
     /// or the entity just became visible for a client, we serialize it as part of the update message to keep entity updates atomic.
-    changes: Vec<ChangeRanges>,
+    changes: Vec<EntityRanges>,
 
     /// Components written in [`Self::changes`].
     changed_components: ComponentMask,
@@ -117,10 +117,9 @@ impl Updates {
 
     /// Adds an entity chunk for removals.
     pub(crate) fn add_removals_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
-        self.removals.push(RemovalRanges {
+        self.removals.push(EntityRanges {
             entity,
-            ids_len: 0,
-            ids: pools.take_ranges(),
+            data: pools.take_ranges(),
         });
         self.removals_entity_added = true;
     }
@@ -133,7 +132,7 @@ impl Updates {
             .last_mut()
             .expect("entity should be written before adding removals");
 
-        removals.add_removal(fns_id);
+        removals.add_data(fns_id);
     }
 
     /// Updates internal state to start writing changed components for an entity.
@@ -156,10 +155,9 @@ impl Updates {
 
     /// Adds an entity chunk for insertions and mutations.
     pub(crate) fn add_changed_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
-        self.changes.push(ChangeRanges {
+        self.changes.push(EntityRanges {
             entity,
-            components_len: 0,
-            components: pools.take_ranges(),
+            data: pools.take_ranges(),
         });
         self.changed_entity_added = true;
     }
@@ -176,7 +174,7 @@ impl Updates {
             .last_mut()
             .expect("entity should be written before adding insertions");
 
-        changes.add_component(component);
+        changes.add_data(component);
         self.changed_components.insert(index);
     }
 
@@ -191,7 +189,7 @@ impl Updates {
             let changes = self.changes.last_mut().expect("entity should be written");
             debug_assert_eq!(entity_mutations.ranges.entity, changes.entity);
             changes.extend(&entity_mutations.ranges);
-            pools.recycle_ranges(iter::once(entity_mutations.ranges.components));
+            pools.recycle_ranges(iter::once(entity_mutations.ranges.data));
 
             self.changed_components |= &entity_mutations.components;
             pools.recycle_components(entity_mutations.components);
@@ -260,7 +258,7 @@ impl Updates {
                     message_size += self
                         .removals
                         .iter()
-                        .map(RemovalRanges::size)
+                        .map(EntityRanges::size)
                         .sum::<Result<usize>>()?;
                 }
                 UpdateMessageFlags::CHANGES => {
@@ -268,7 +266,7 @@ impl Updates {
                     message_size += self
                         .changes
                         .iter()
-                        .map(ChangeRanges::size)
+                        .map(EntityRanges::size)
                         .sum::<Result<usize>>()?;
                 }
                 _ => unreachable!("iteration should yield only named flags"),
@@ -302,8 +300,8 @@ impl Updates {
                     }
                     for removals in &self.removals {
                         message.extend_from_slice(&serialized[removals.entity.clone()]);
-                        postcard_utils::to_extend_mut(&removals.ids_len, &mut message)?;
-                        for fns_id in &removals.ids {
+                        postcard_utils::to_extend_mut(&removals.data_size(), &mut message)?;
+                        for fns_id in &removals.data {
                             message.extend_from_slice(&serialized[fns_id.clone()]);
                         }
                     }
@@ -312,8 +310,8 @@ impl Updates {
                     // Changes are always last, don't write len for it.
                     for changes in &self.changes {
                         message.extend_from_slice(&serialized[changes.entity.clone()]);
-                        postcard_utils::to_extend_mut(&changes.components_len, &mut message)?;
-                        for component in &changes.components {
+                        postcard_utils::to_extend_mut(&changes.data_size(), &mut message)?;
+                        for component in &changes.data {
                             message.extend_from_slice(&serialized[component.clone()]);
                         }
                     }
@@ -357,35 +355,7 @@ impl Updates {
         self.despawns.clear();
         self.despawns_len = 0;
 
-        pools.recycle_ranges(self.changes.drain(..).map(|c| c.components));
-        pools.recycle_ranges(self.removals.drain(..).map(|c| c.ids));
-    }
-}
-
-struct RemovalRanges {
-    entity: Range<usize>,
-    ids_len: usize,
-    ids: Vec<Range<usize>>,
-}
-
-impl RemovalRanges {
-    pub(super) fn add_removal(&mut self, fns_id: Range<usize>) {
-        self.ids_len += 1;
-
-        if let Some(last) = self.ids.last_mut() {
-            // Append to previous range if possible.
-            if last.end == fns_id.start {
-                last.end = fns_id.end;
-                return;
-            }
-        }
-
-        self.ids.push(fns_id);
-    }
-
-    fn size(&self) -> Result<usize> {
-        let len_size = serialized_size(&self.ids_len)?;
-        let ids_size: usize = self.ids.iter().map(|range| range.len()).sum();
-        Ok(self.entity.len() + len_size + ids_size)
+        pools.recycle_ranges(self.changes.drain(..).map(|c| c.data));
+        pools.recycle_ranges(self.removals.drain(..).map(|c| c.data));
     }
 }
