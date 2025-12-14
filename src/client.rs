@@ -462,7 +462,7 @@ fn apply_removals(
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
-    // Server never sends removals for entities that wasn't received by the client.
+    // Server never sends removals for entities that weren't received by the client.
     let client_entity = *params
         .entity_map
         .to_client()
