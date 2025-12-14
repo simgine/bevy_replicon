@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2025-12-14
+
 ### Fixed
 
 - Ignore received replication for entities that was despawned by the client.
@@ -970,7 +972,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.37.0...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.37.1...HEAD
+[0.37.1]: https://github.com/simgine/bevy_replicon/compare/v0.37.0...v0.37.1
 [0.37.0]: https://github.com/simgine/bevy_replicon/compare/v0.36.1...v0.37.0
 [0.36.1]: https://github.com/simgine/bevy_replicon/compare/v0.36.0...v0.36.1
 [0.36.0]: https://github.com/simgine/bevy_replicon/compare/v0.35.1...v0.36.0
