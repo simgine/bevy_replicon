@@ -28,7 +28,9 @@ all-features = true
 members = ["example_backend"]
 
 [dependencies]
-bevy = { version = "0.18.0-rc.1", default-features = false, features = ["bevy_state"] }
+bevy = { version = "0.18.0-rc.1", default-features = false, features = [
+  "bevy_state",
+] }
 log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `bevy_log` currently requires `std`.
 petgraph = { version = "0.8", default-features = false, features = [
   "stable_graph",
