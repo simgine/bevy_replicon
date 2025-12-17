@@ -45,7 +45,7 @@ impl EntityMapper for WriteCtx<'_, '_> {
 
         self.entity_map
             .server_entry(server_entity)
-            .or_insert_with(|| self.spawner.spawn())
+            .or_insert_with(|| self.spawner.spawn_empty())
     }
 
     fn set_mapped(&mut self, _source: Entity, _target: Entity) {
@@ -70,6 +70,7 @@ pub struct DespawnCtx {
     pub message_tick: RepliconTick,
 }
 
+/// A wrapper around [`World`] for spawning empty entities.
 pub(crate) struct EntitySpawner<'a> {
     world: &'a mut World,
 }
@@ -79,7 +80,7 @@ impl<'a> EntitySpawner<'a> {
         Self { world }
     }
 
-    pub(crate) fn spawn(&mut self) -> Entity {
+    fn spawn_empty(&mut self) -> Entity {
         self.world.spawn_empty().id()
     }
 }
