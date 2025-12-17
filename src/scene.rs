@@ -15,7 +15,7 @@ So on deserialization you need to insert it back if you want entities to continu
 # Examples
 
 ```
-use bevy::{asset::ron, prelude::*, state::app::StatesPlugin, scene::serde::SceneDeserializer};
+use bevy::{prelude::*, state::app::StatesPlugin, scene::serde::SceneDeserializer};
 use bevy_replicon::{prelude::*, scene};
 use serde::de::DeserializeSeed;
 # let mut app = App::new();

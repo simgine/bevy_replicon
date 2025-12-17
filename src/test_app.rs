@@ -83,7 +83,8 @@ impl ServerTestAppExt for App {
     fn connect_client(&mut self, client_app: &mut App) {
         self.world_mut()
             .resource_mut::<NextState<ServerState>>()
-            .set(ServerState::Running);
+            .as_mut()
+            .set_if_neq(ServerState::Running);
 
         let client_entity = self
             .world_mut()
@@ -99,7 +100,8 @@ impl ServerTestAppExt for App {
         client_app
             .world_mut()
             .resource_mut::<NextState<ClientState>>()
-            .set(ClientState::Connected);
+            .as_mut()
+            .set_if_neq(ClientState::Connected);
 
         client_app
             .world_mut()
@@ -117,7 +119,8 @@ impl ServerTestAppExt for App {
         client_app
             .world_mut()
             .resource_mut::<NextState<ClientState>>()
-            .set(ClientState::Disconnected);
+            .as_mut()
+            .set_if_neq(ClientState::Disconnected);
 
         let client_entity = *client_app
             .world_mut()

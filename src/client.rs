@@ -20,7 +20,7 @@ use crate::{
             mutate_index::MutateIndex,
             registry::{
                 ReplicationRegistry,
-                ctx::{DespawnCtx, RemoveCtx, WriteCtx},
+                ctx::{DespawnCtx, EntitySpawner, RemoveCtx, WriteCtx},
             },
             signature::SignatureMap,
             track_mutate_messages::TrackMutateMessages,
@@ -523,9 +523,9 @@ fn apply_changes(
     let data_size: usize = postcard_utils::from_buf(message)?;
 
     let world_cell = world.as_unsafe_world_cell();
-    let entities = world_cell.entities();
-    // SAFETY: split into `Entities` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
+    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
+    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
+    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
     let world = unsafe { world_cell.world_mut() };
 
     let mut client_entity = match params.entity_map.server_entry(server_entity) {
@@ -562,7 +562,7 @@ fn apply_changes(
             type_registry: params.type_registry,
             component_id,
             message_tick,
-            entities,
+            spawner: &mut spawner,
             ignore_mapping: false,
         };
         trace!(
@@ -653,9 +653,9 @@ fn apply_mutations(
     };
 
     let world_cell = world.as_unsafe_world_cell();
-    let entities = world_cell.entities();
-    // SAFETY: split into `Entities` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
+    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
+    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
+    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
     let world = unsafe { world_cell.world_mut() };
 
     let Ok(mut client_entity) = world
@@ -716,7 +716,7 @@ fn apply_mutations(
             type_registry: params.type_registry,
             component_id,
             message_tick,
-            entities,
+            spawner: &mut spawner,
             ignore_mapping: false,
         };
         trace!(
