@@ -62,8 +62,10 @@ pub struct ServerPlugin {
     /// Schedule in which [`ServerTick`] is incremented.
     ///
     /// By default it's set to [`FixedPostUpdate`].
+    /// Use [`Self::new`] to avoid calling [`ScheduleLabel::intern`].
     ///
-    /// You can also use [`Self::new`].
+    /// You can also set it to `None` to trigger replication by manually
+    /// incrementing [`ServerTick`].
     ///
     /// # Examples
     ///
@@ -84,7 +86,7 @@ pub struct ServerPlugin {
     ///     }),
     /// ));
     /// ```
-    pub tick_schedule: Interned<dyn ScheduleLabel>,
+    pub tick_schedule: Option<Interned<dyn ScheduleLabel>>,
 
     /// The time after which mutations will be considered lost if an acknowledgment is not received for them.
     ///
@@ -96,7 +98,7 @@ impl ServerPlugin {
     /// Creates a plugin with the given [`Self::tick_schedule`].
     pub fn new(tick_schedule: impl ScheduleLabel) -> Self {
         Self {
-            tick_schedule: tick_schedule.intern(),
+            tick_schedule: Some(tick_schedule.intern()),
             mutations_timeout: Duration::from_secs(10),
         }
     }
@@ -168,13 +170,15 @@ impl Plugin for ServerPlugin {
                     .run_if(in_state(ServerState::Running)),
             );
 
-        debug!("using tick schedule `{:?}`", self.tick_schedule);
-        app.add_systems(
-            self.tick_schedule,
-            increment_tick
-                .in_set(ServerSystems::IncrementTick)
-                .run_if(in_state(ServerState::Running)),
-        );
+        if let Some(tick_schedule) = self.tick_schedule {
+            debug!("using tick schedule `{tick_schedule:?}`");
+            app.add_systems(
+                tick_schedule,
+                increment_tick
+                    .in_set(ServerSystems::IncrementTick)
+                    .run_if(in_state(ServerState::Running)),
+            );
+        }
 
         let auth_method = app.world().resource::<AuthMethod>();
         debug!("using authorization method `{auth_method:?}`");
