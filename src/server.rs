@@ -81,7 +81,7 @@ pub struct ServerPlugin {
     ///     StatesPlugin,
     ///     RepliconPlugins.build().set(ServerPlugin {
     ///         // `ScheduleLabel` needs to be imported to call `intern`.
-    ///         tick_schedule: PostUpdate.intern(),
+    ///         tick_schedule: Some(PostUpdate.intern()),
     ///         ..Default::default()
     ///     }),
     /// ));
