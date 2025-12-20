@@ -4,16 +4,17 @@ use bevy::prelude::*;
 
 use crate::prelude::*;
 
-/// Received ticks from the server for an entity.
+/// Confirmed ticks from the server for an entity.
 ///
 /// For efficiency, we store only the last received tick and
 /// a bitmask indicating whether the most recent 64 ticks were received.
 ///
-/// If a tick wasn't received, it doesn't necessarily mean that the tick
-/// wasn't confirmed. It could mean that there were no mutations for this entity
-/// at that tick. To check this, use
-/// [`ServerMutateTicks::contains`](super::server_mutate_ticks::ServerMutateTicks::contains).
-/// If it returns `true`, the tick is confirmed even if this component reports `false` for it.
+/// The tick is considered confirmed when an entity receives any insertion, removal, or mutation
+/// (because entity updates are atomic). However, if there were no changes for this entity,
+/// this component will not be updated. Therefore, when the tick is not reported as confirmed, you need
+/// to check [`ServerMutateTicks::contains`](super::server_mutate_ticks::ServerMutateTicks::contains)
+/// to see whether all update messages for this tick have been received. If so, the entity is confirmed
+/// for this tick—there were simply no changes for it.
 ///
 /// See also [`EntityReplicated`] and the [ticks information](crate#ticks-information)
 /// in the quick start guide.
