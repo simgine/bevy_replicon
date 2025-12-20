@@ -606,19 +606,17 @@ This requires an understanding of how replication works. See the documentation o
 [`ServerChannel`](shared::backend::channels::ServerChannel) and [this section](#eventual-consistency) for more details.
 
 To get information about confirmed ticks for individual entities, we provide
-[`ConfirmHistory`](client::confirm_history::ConfirmHistory) along with the [`EntityReplicated`](client::confirm_history::ConfirmHistory)
-trigger. This component is updated when any replication for its entity is received. However, we don't update this component if an entity
-hasn't changed for performance reasons.
+[`ConfirmHistory`](client::confirm_history::ConfirmHistory). This component is updated when any replication for its entity is received.
+For convenience, we also trigger the [`EntityReplicated`](client::confirm_history::EntityReplicated) to ergonomically react on it.
 
-This means that to check if a tick is confirmed for an entity, you also need to check the received messages for this
-tick. The [`ServerUpdateTick`](client::ServerUpdateTick) resource stores the last received tick from an update message.
-The [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) resource and
-[`MutateTickReceived`](client::server_mutate_ticks::MutateTickReceived) trigger provide information about received mutate
-messages for the past 64 ticks.
+However, an entity might not have any mutations at a given tick. In this case, [`ConfirmHistory`] is not updated (for performance reasons).
+Because of this, you need to check whether all mutation messages were received for this tick using the
+[`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) resource. We also provide the
+[`MutateTickReceived`](client::server_mutate_ticks::MutateTickReceived) event to react when all mutation messages have been received for
+a tick.
 
-A tick for an entity is confirmed if one of the following is true:
-- [`ServerUpdateTick`](client::ServerUpdateTick) is greater than the tick.
-- [`ConfirmHistory`](client::confirm_history::ConfirmHistory) is greater than the tick.
+So, a tick for an entity is confirmed if one of the following is true:
+- [`ConfirmHistory`](client::confirm_history::ConfirmHistory) reports that the tick is received.
 - [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) reports that for at least one of the next ticks, all update
   messages have been received.
 

@@ -6,10 +6,17 @@ use crate::prelude::*;
 
 /// Received ticks from the server for an entity.
 ///
-/// For efficiency we store only the last received tick and
+/// For efficiency, we store only the last received tick and
 /// a bitmask indicating whether the most recent 64 ticks were received.
 ///
-/// See also [`EntityReplicated`].
+/// If a tick wasn't received, it doesn't necessarily mean that the tick
+/// wasn't confirmed. It could mean that there were no mutations for this entity
+/// at that tick. To check this, use
+/// [`ServerMutateTicks::contains`](super::server_mutate_ticks::ServerMutateTicks::contains).
+/// If it returns `true`, the tick is confirmed even if this component reports `false` for it.
+///
+/// See also [`EntityReplicated`] and the [ticks information](../../index.html#ticks-information)
+/// in the quick start guide.
 #[derive(Component)]
 pub struct ConfirmHistory {
     /// Previously confirmed ticks, including the last tick at position 0.
