@@ -15,7 +15,7 @@ use crate::prelude::*;
 /// [`ServerMutateTicks::contains`](super::server_mutate_ticks::ServerMutateTicks::contains).
 /// If it returns `true`, the tick is confirmed even if this component reports `false` for it.
 ///
-/// See also [`EntityReplicated`] and the [ticks information](../../index.html#ticks-information)
+/// See also [`EntityReplicated`] and the [ticks information](crate#ticks-information)
 /// in the quick start guide.
 #[derive(Component)]
 pub struct ConfirmHistory {

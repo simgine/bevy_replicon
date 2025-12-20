@@ -15,7 +15,7 @@ use crate::prelude::*;
 /// [`TrackAppExt::track_mutate_messages`](crate::shared::replication::track_mutate_messages::TrackAppExt::track_mutate_messages)
 /// were called.
 ///
-/// See also [`MutateTickReceived`] and the [ticks information](../../index.html#ticks-information)
+/// See also [`MutateTickReceived`] and the [ticks information](crate#ticks-information)
 /// in the quick start guide.
 #[derive(Debug, Resource)]
 pub struct ServerMutateTicks {
