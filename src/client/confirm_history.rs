@@ -14,7 +14,7 @@ use crate::prelude::*;
 /// this component will not be updated. Therefore, when the tick is not reported as confirmed, you need
 /// to check [`ServerMutateTicks::contains`](super::server_mutate_ticks::ServerMutateTicks::contains)
 /// to see whether all update messages for this tick have been received. If so, the entity is confirmed
-/// for this tick—there were simply no changes for it.
+/// for this tick - there were simply no changes for it.
 ///
 /// See also [`EntityReplicated`] and the [ticks information](crate#ticks-information)
 /// in the quick start guide.

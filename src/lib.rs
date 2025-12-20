@@ -609,11 +609,10 @@ To get information about confirmed ticks for individual entities, we provide
 [`ConfirmHistory`](client::confirm_history::ConfirmHistory). This component is updated when any replication for its entity is received.
 For convenience, we also trigger the [`EntityReplicated`](client::confirm_history::EntityReplicated) to ergonomically react on it.
 
-However, an entity might not have any mutations at a given tick. In this case, [`ConfirmHistory`](client::confirm_history::ConfirmHistory)
-is not updated (for performance reasons). Because of this, you need to check whether all mutation messages were received for this tick
-using the [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) resource. We also provide the
-[`MutateTickReceived`](client::server_mutate_ticks::MutateTickReceived) event to react when all mutation messages have been received for
-a tick.
+However, an entity might not have any mutations at a given tick. To address this, you need to call
+[`TrackAppExt::track_mutate_messages`](shared::replication::track_mutate_messages::TrackAppExt::track_mutate_messages) during the [`App`]
+setup and use [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) resource to check whether all mutation messages were
+received for this tick.
 
 So, a tick for an entity is confirmed if one of the following is true:
 - [`ConfirmHistory`](client::confirm_history::ConfirmHistory) reports that the tick is received.
