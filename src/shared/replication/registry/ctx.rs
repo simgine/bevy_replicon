@@ -2,7 +2,7 @@ use bevy::{
     ecs::{component::ComponentId, entity::Entities},
     prelude::*,
 };
-
+use bevy::ecs::world::unsafe_world_cell::{UnsafeWorldCell};
 use crate::{prelude::*, shared::server_entity_map::ServerEntityMap};
 
 /// Replication context for serialization function.
@@ -32,6 +32,11 @@ pub struct WriteCtx<'a> {
 
     /// Tick for the currently processing message.
     pub message_tick: RepliconTick,
+    
+    /// Unsafe access to world, provided in case you need to apply any modification to the world.
+    /// 
+    /// SAFETY: this world cell cannot be used to mutably alias `Entities`, or the `DeferredEntity`
+    pub world_cell: UnsafeWorldCell<'a>,
 
     /// World's entities to reserve IDs on new entities inside components.
     pub(crate) entities: &'a Entities,
@@ -58,12 +63,17 @@ impl EntityMapper for WriteCtx<'_> {
 
 /// Replication context for removal.
 #[non_exhaustive]
-pub struct RemoveCtx {
+pub struct RemoveCtx<'a> {
     /// ID of the removing component.
     pub component_id: ComponentId,
 
     /// Tick for the currently processing message.
     pub message_tick: RepliconTick,
+    
+    /// Unsafe access to world, provided in case you need to apply any modification to the world.
+    /// 
+    /// SAFETY: this world cell cannot be used to mutably alias the `DeferredEntity`
+    pub world_cell: UnsafeWorldCell<'a>,
 }
 
 /// Replication context for despawn.

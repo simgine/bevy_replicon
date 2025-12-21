@@ -154,6 +154,7 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                         component_id,
                         message_tick,
                         ignore_mapping: false,
+                        world_cell,
                     };
 
                     fns.write(&mut ctx, &entity_markers, &mut entity, &mut data.into())
@@ -175,6 +176,10 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
         let entity = self.id();
         self.world_scope(|world| {
             world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
+                let world_cell = world.as_unsafe_world_cell();
+                // SAFETY: split into `Entities` and `DeferredEntity`.
+                // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
+                let world = unsafe { world_cell.world_mut() };
                 let mut changes = DeferredChanges::default();
                 let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
 
@@ -182,6 +187,7 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                 let mut ctx = RemoveCtx {
                     message_tick,
                     component_id,
+                    world_cell,
                 };
 
                 fns.remove(&mut ctx, &entity_markers, &mut entity);

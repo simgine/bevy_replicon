@@ -469,6 +469,11 @@ fn apply_removals(
         .get(&server_entity)
         .ok_or_else(|| format!("received removal for unknown server's `{server_entity}`"))?;
 
+    let world_cell = world.as_unsafe_world_cell();
+    // SAFETY: split into cell and `DeferredEntity`.
+    // The cell won't alias with the `DeferredEntity`.
+    let world = unsafe { world_cell.world_mut() };
+
     let Ok(mut client_entity) = world
         .get_entity_mut(client_entity)
         .map(|entity| DeferredEntity::new(entity, params.changes))
@@ -492,6 +497,7 @@ fn apply_removals(
         let mut ctx = RemoveCtx {
             message_tick,
             component_id,
+            world_cell,
         };
         trace!(
             "applying removal for `{}` with `{fns_id:?}`",
@@ -564,6 +570,7 @@ fn apply_changes(
             message_tick,
             entities,
             ignore_mapping: false,
+            world_cell,
         };
         trace!(
             "applying change for `{}` with `{fns_id:?}`",
@@ -718,6 +725,7 @@ fn apply_mutations(
             message_tick,
             entities,
             ignore_mapping: false,
+            world_cell,
         };
         trace!(
             "applying mutation for `{}` with `{fns_id:?}`",
