@@ -32,7 +32,7 @@ pub trait ClientMessageAppExt {
     /// previously registered. But be careful, since on listen servers all messages `M` are drained,
     /// which could break Bevy or third-party plugin systems that read `M`.
     ///
-    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
+    /// See also the [corresponding section](crate#from-client-to-server) from the quick start guide.
     fn add_client_message<M: Message + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,

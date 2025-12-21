@@ -40,7 +40,7 @@ pub trait ServerMessageAppExt {
     /// Unlike client messages, server messages are tied to replication. See [`Self::make_message_independent`]
     /// for more details.
     ///
-    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
+    /// See also the [corresponding section](crate#from-client-to-server) from the quick start guide.
     fn add_server_message<M: Message + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,

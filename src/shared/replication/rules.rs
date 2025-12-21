@@ -19,7 +19,7 @@ pub trait AppRuleExt {
     /// it will be serialized and deserialized as-is using [`postcard`]
     /// and sent at [`ReplicationMode::OnChange`]. To customize this, use [`Self::replicate_with`].
     ///
-    /// See also the section on [`components`](../../index.html#components) from the quick start guide.
+    /// See also the [components section](crate#components) from the quick start guide.
     fn replicate<C>(&mut self) -> &mut Self
     where
         C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
