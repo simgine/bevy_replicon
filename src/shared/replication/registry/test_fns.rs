@@ -11,6 +11,7 @@ use crate::{
         replication::{
             command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},
+            registry::ctx::EntitySpawner,
         },
         server_entity_map::ServerEntityMap,
     },
@@ -138,9 +139,9 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                 world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
                     let type_registry = world.resource::<AppTypeRegistry>().clone();
                     let world_cell = world.as_unsafe_world_cell();
-                    let entities = world_cell.entities();
-                    // SAFETY: split into `Entities` and `DeferredEntity`.
-                    // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
+                    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
+                    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
+                    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
                     let world = unsafe { world_cell.world_mut() };
 
                     let mut changes = DeferredChanges::default();
@@ -148,11 +149,11 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
 
                     let (_, component_id, fns) = registry.get(fns_id);
                     let mut ctx = WriteCtx {
-                        entities,
                         entity_map: &mut entity_map,
                         type_registry: &type_registry,
                         component_id,
                         message_tick,
+                        spawner: &mut spawner,
                         ignore_mapping: false,
                     };
 

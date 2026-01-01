@@ -514,7 +514,7 @@ fn marker_with_history_consume() {
 
     server_app.connect_client(&mut client_app);
 
-    let entities_before = client_app.world().entities().len();
+    let entities_before = client_app.world().entities().count_spawned();
 
     let server_map_entity = server_app.world_mut().spawn_empty().id();
     let server_entity = server_app
@@ -567,7 +567,7 @@ fn marker_with_history_consume() {
     );
 
     assert_eq!(
-        client_app.world().entities().len() - entities_before,
+        client_app.world().entities().count_spawned() - entities_before,
         3,
         "client should have 2 initial entities and 1 from mutate message"
     );
@@ -949,7 +949,7 @@ fn old_ignored() {
 
     server_app.connect_client(&mut client_app);
 
-    let entities_before = client_app.world().entities().len();
+    let entities_before = client_app.world().entities().count_spawned();
 
     let server_map_entity = server_app.world_mut().spawn_empty().id();
     let server_entity = server_app
@@ -992,7 +992,7 @@ fn old_ignored() {
     );
 
     assert_eq!(
-        client_app.world().entities().len() - entities_before,
+        client_app.world().entities().count_spawned() - entities_before,
         3,
         "client should have 2 initial entities and 1 from mutation"
     );

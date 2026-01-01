@@ -1,7 +1,7 @@
 use core::time::Duration;
 
 use bevy::{
-    ecs::{component::Tick, entity::hash_map::EntityHashMap},
+    ecs::{change_detection::Tick, entity::hash_map::EntityHashMap},
     platform::collections::HashMap,
     prelude::*,
 };

@@ -63,8 +63,6 @@ impl<'w> DeferredEntity<'w> {
     /// Needed to be called after processing each entity
     /// to spawn all allocated entities from mappings.
     pub fn flush(&mut self) {
-        // SAFETY: entity location is unchanged because all changes applied after.
-        unsafe { self.entity.world_mut().flush() };
         self.changes.apply(&mut self.entity);
     }
 }

@@ -200,10 +200,10 @@ struct UiRoot;
         border: UiRect::all(Val::Px(5.0)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
+        border_radius: BorderRadius::MAX,
         ..Default::default()
     },
     BorderColor::all(Color::WHITE),
-    BorderRadius::MAX,
 )]
 struct ToggleButton(bool);
 
