@@ -20,11 +20,18 @@ pub trait TrackAppExt {
 
 impl TrackAppExt for App {
     fn track_mutate_messages(&mut self) -> &mut Self {
+        let mut track = self.world_mut().resource_mut::<TrackMutateMessages>();
+        if track.0 {
+            debug!("mutate message tracking was already enabled, ignoring duplicate call");
+            return self;
+        }
+
+        track.0 = true;
+
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
             .track_mutate_messages();
 
-        self.world_mut().resource_mut::<TrackMutateMessages>().0 = true;
         self
     }
 }
