@@ -24,7 +24,7 @@ pub trait ClientEventAppExt {
     /// If [`ServerMessagePlugin`] is enabled and the client state is [`ClientState::Disconnected`], the event will also be triggered
     /// locally as [`FromClient<E>`] event with [`FromClient::client_id`] equal to [`ClientId::Server`].
     ///
-    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
+    /// See also the [corresponding section](crate#from-client-to-server) from the quick start guide.
     fn add_client_event<E: Event + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,

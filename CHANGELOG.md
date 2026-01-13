@@ -13,7 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update to Bevy 0.18.
 
-## [0.37.0] - 2025-12-14
+## [0.37.2] - 2026-01-11
+
+### Fixed
+
+- Skip `TrackAppExt::track_mutate_messages` if it has already been called.
+
+## [0.37.1] - 2025-12-14
 
 ### Fixed
 
