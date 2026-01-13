@@ -11,7 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.
 
-## [0.37.0] - 2025-12-14
+## [0.38.0] - 2025-12-17
+
+### Changed
+
+- Update to Bevy 0.18.
+
+## [0.37.2] - 2026-01-11
+
+### Fixed
+
+- Skip `TrackAppExt::track_mutate_messages` if it has already been called.
+
+## [0.37.1] - 2025-12-14
 
 ### Fixed
 
@@ -976,7 +988,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.37.1...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/simgine/bevy_replicon/compare/v0.37.2...v0.38.0
+[0.37.2]: https://github.com/simgine/bevy_replicon/compare/v0.37.1...v0.37.2
 [0.37.1]: https://github.com/simgine/bevy_replicon/compare/v0.37.0...v0.37.1
 [0.37.0]: https://github.com/simgine/bevy_replicon/compare/v0.36.1...v0.37.0
 [0.36.1]: https://github.com/simgine/bevy_replicon/compare/v0.36.0...v0.36.1

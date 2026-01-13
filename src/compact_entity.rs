@@ -18,7 +18,7 @@
 use core::fmt::{self, Formatter};
 
 use bevy::{
-    ecs::entity::{EntityGeneration, EntityRow},
+    ecs::entity::{EntityGeneration, EntityIndex},
     prelude::*,
 };
 use serde::{
@@ -36,7 +36,7 @@ use serde::{
 ///
 /// See also [`deserialize`] and [`postcard_utils::entity_to_extend_mut`](crate::postcard_utils::entity_to_extend_mut).
 pub fn serialize<S: Serializer>(entity: &Entity, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut index = entity.index() << 1;
+    let mut index = entity.index_u32() << 1;
     let has_generation = entity.generation() != EntityGeneration::FIRST;
     index |= has_generation as u32;
 
@@ -79,9 +79,9 @@ impl<'de> Visitor<'de> for EntityVisitor {
         };
 
         // SAFETY: `index` is non-max after shift.
-        let row = unsafe { EntityRow::from_raw_u32(index >> 1).unwrap_unchecked() };
+        let row = unsafe { EntityIndex::from_raw_u32(index >> 1).unwrap_unchecked() };
         let generation = EntityGeneration::from_bits(generation);
 
-        Ok(Entity::from_row_and_generation(row, generation))
+        Ok(Entity::from_index_and_generation(row, generation))
     }
 }

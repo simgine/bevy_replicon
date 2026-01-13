@@ -13,7 +13,7 @@ use core::{mem, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::{CheckChangeTicks, Tick},
+        change_detection::{CheckChangeTicks, Tick},
         entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -251,7 +251,7 @@ fn buffer_removals(
     let registry = registry.expect("registry should always exist on the server");
 
     replicated_archetypes.update(archetypes, &rules);
-    let location = entities.get(remove.entity).unwrap();
+    let location = entities.get_spawned(remove.entity).unwrap();
     let Some(archetype) = replicated_archetypes.get(location.archetype_id) else {
         // `Replicated` component is missing.
         trace!(
@@ -561,7 +561,7 @@ fn collect_removals(
                 // The client didn't see this entity.
                 continue;
             };
-            let Some(location) = entities.get(entity) else {
+            let Ok(location) = entities.get_spawned(entity) else {
                 warn!(
                     "`{entity}` was despawned after despawn processing but before sending, \
                      so the despawn will be sent on the next tick; \

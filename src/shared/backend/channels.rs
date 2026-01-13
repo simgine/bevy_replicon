@@ -125,7 +125,7 @@ impl RepliconChannels {
 /// Server events also have minimum required tick. For details, see the documentation on
 /// [`ServerMessageAppExt::make_message_independent`](crate::shared::message::server_message::ServerMessageAppExt::make_message_independent).
 ///
-/// See also [`RepliconChannels`], [`Channel`] and [corresponding section](../index.html#eventual-consistency)
+/// See also [`RepliconChannels`], [`Channel`] and [corresponding section](crate#eventual-consistency)
 /// from the quick start guide.
 pub enum ServerChannel {
     /// For sending messages with entity mappings, inserts, removals and despawns.
