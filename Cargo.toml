@@ -1,6 +1,6 @@
 [package]
 name = "bevy_replicon"
-version = "0.38.0-rc.1"
+version = "0.38.0"
 authors = [
   "Hennadii Chernyshchyk <genaloner@gmail.com>",
   "koe <ukoe@protonmail.com>",
@@ -28,7 +28,7 @@ all-features = true
 members = ["example_backend"]
 
 [dependencies]
-bevy = { version = "0.18.0-rc.1", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
   "bevy_state",
 ] }
 log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `bevy_log` currently requires `std`.
@@ -54,7 +54,7 @@ bytes = { version = "1.10", default-features = false, features = [
 
 [dev-dependencies]
 ron = { version = "0.12", default-features = false }
-bevy = { version = "0.18.0-rc.1", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
   "bevy_log",
   "bevy_sprite_render",
   "debug",
