@@ -470,10 +470,6 @@ impl<E: EntityEvent> EntityEvent for FromClient<E> {
     fn event_target(&self) -> Entity {
         self.message.event_target()
     }
-
-    fn event_target_mut(&mut self) -> &mut Entity {
-        self.message.event_target_mut()
-    }
 }
 
 /// Default message serialization function.

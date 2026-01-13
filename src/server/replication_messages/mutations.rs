@@ -1,6 +1,6 @@
 use core::{cmp::Ordering, iter, mem, ops::Range, time::Duration};
 
-use bevy::{ecs::component::Tick, prelude::*};
+use bevy::{ecs::change_detection::Tick, prelude::*};
 use log::trace;
 use postcard::experimental::{max_size::MaxSize, serialized_size};
 
