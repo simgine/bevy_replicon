@@ -31,7 +31,7 @@ fn empty() {
 
     let client_entity = client_app
         .world_mut()
-        .query_filtered::<Entity, With<Replicated>>()
+        .query_filtered::<Entity, (With<Remote>, With<Replicated>)>()
         .single(client_app.world())
         .unwrap();
 
@@ -249,6 +249,7 @@ fn signature() {
         client_entity.contains::<Replicated>(),
         "entity should start receive replication"
     );
+    assert!(client_entity.contains::<Remote>());
     assert!(
         client_entity.contains::<ConfirmHistory>(),
         "server should confirm replication of client entity"
