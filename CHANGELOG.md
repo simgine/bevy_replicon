@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Remote` component that automatically inserted on newly-replicated entities on the client.
+- `Remote` component that automatically inserted on entities spawned by replication.
 
 ### Changed
 
