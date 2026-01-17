@@ -34,8 +34,9 @@ For examples navigate to the [`example_backend`](example_backend) (because you n
 [Messaging backend](#messaging-backends) repositories usually also contains the exact same examples, but with backend initialization adapted to each backend's API.
 
 You can also:
+
 - Watch [my talk at Bevy Meetup #9](https://www.youtube.com/watch?v=aDsVFmXD2cc)
-- Read [this great article](https://www.hankruiger.com/posts/adding-networked-multiplayer-to-my-game-with-bevy-replicon) *(not mine)*
+- Read [this great article](https://www.hankruiger.com/posts/adding-networked-multiplayer-to-my-game-with-bevy-replicon) _(not mine)_
 
 Have any questions? Feel free to ask in the dedicated [`bevy_replicon` channel](https://discord.com/channels/691052431525675048/1090432346907492443) in Bevy's Discord server.
 
@@ -58,19 +59,13 @@ Depending on your game, you may need additional features. We provide an API that
 
 - [`bevy_rewind`](https://github.com/NiseVoid/bevy_rewind) - server-authoritative rollback inspired by Rocket League.
 
-#### Visibility
-
-- [`bevy_replicon_attributes`](https://github.com/UkoeHB/bevy_replicon_attributes) - ergonomic visibility control through client attributes and entity/event visibility conditions. An extension of this crate's raw client visibility API.
-
-#### Miscellaneous
-
-- [`bevy_bundlication`](https://github.com/NiseVoid/bevy_bundlication) - automates the creation of replication rules for bundles.
-
 #### Unmaintained
 
 - [`bevy_replicon_repair`](https://github.com/UkoeHB/bevy_replicon_repair) - preserves replicated client state across reconnects.
+- [`bevy_replicon_attributes`](https://github.com/UkoeHB/bevy_replicon_attributes) - ergonomic visibility control through client attributes and entity/event visibility conditions. An extension of this crate's raw client visibility API.
 - [`bevy_replicon_snap`](https://github.com/Bendzae/bevy_replicon_snap) - snapshot interpolation and client-side prediction.
 - [`bevy_timewarp`](https://github.com/RJ/bevy_timewarp) - a rollback library that buffers component state. See [this instruction](https://github.com/RJ/bevy_timewarp/blob/main/REPLICON_INTEGRATION.md) about how to integrate.
+- [`bevy_bundlication`](https://github.com/NiseVoid/bevy_bundlication) - automates the creation of replication rules for bundles.
 
 ## Bevy compatibility
 
