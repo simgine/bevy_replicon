@@ -117,22 +117,34 @@ fn add_measurements(
     diagnostics.add_measurement(&RECEIVED_BPS, || stats.received_bps);
 
     diagnostics.add_measurement(&ENTITIES_CHANGED, || {
-        (replication_stats.entities_changed - last_replication_stats.entities_changed) as f64
+        replication_stats
+            .entities_changed
+            .saturating_sub(last_replication_stats.entities_changed) as f64
     });
     diagnostics.add_measurement(&COMPONENTS_CHANGED, || {
-        (replication_stats.components_changed - last_replication_stats.components_changed) as f64
+        replication_stats
+            .components_changed
+            .saturating_sub(last_replication_stats.components_changed) as f64
     });
     diagnostics.add_measurement(&MAPPINGS, || {
-        (replication_stats.mappings - last_replication_stats.mappings) as f64
+        replication_stats
+            .mappings
+            .saturating_sub(last_replication_stats.mappings) as f64
     });
     diagnostics.add_measurement(&DESPAWNS, || {
-        (replication_stats.despawns - last_replication_stats.despawns) as f64
+        replication_stats
+            .despawns
+            .saturating_sub(last_replication_stats.despawns) as f64
     });
     diagnostics.add_measurement(&REPLICATION_MESSAGES, || {
-        (replication_stats.messages - last_replication_stats.messages) as f64
+        replication_stats
+            .messages
+            .saturating_sub(last_replication_stats.messages) as f64
     });
     diagnostics.add_measurement(&REPLICATION_BYTES, || {
-        (replication_stats.bytes - last_replication_stats.bytes) as f64
+        replication_stats
+            .bytes
+            .saturating_sub(last_replication_stats.bytes) as f64
     });
     *last_replication_stats = *replication_stats;
 }

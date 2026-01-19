@@ -53,6 +53,27 @@ fn client_stats() {
     assert_eq!(stats.despawns, 1);
     assert_eq!(stats.messages, 3);
     assert_eq!(stats.bytes, 25);
+
+    server_app.disconnect_client(&mut client_app);
+
+    let stats = client_app.world().resource::<ClientReplicationStats>();
+    assert_eq!(stats.entities_changed, 0);
+    assert_eq!(stats.components_changed, 0);
+    assert_eq!(stats.mappings, 0);
+    assert_eq!(stats.despawns, 0);
+    assert_eq!(stats.messages, 0);
+    assert_eq!(stats.bytes, 0);
+
+    server_app.connect_client(&mut client_app);
+
+    // The test entity was despawned, so there is nothing to replicate.
+    let stats = client_app.world().resource::<ClientReplicationStats>();
+    assert_eq!(stats.entities_changed, 0);
+    assert_eq!(stats.components_changed, 0);
+    assert_eq!(stats.mappings, 0);
+    assert_eq!(stats.despawns, 0);
+    assert_eq!(stats.messages, 0);
+    assert_eq!(stats.bytes, 0);
 }
 
 #[derive(Component, Deserialize, Serialize)]
