@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.
 
+### Fixed
+
+- Overflow on reconnect when `client_diagnostics` feature is enabled.
+
 ## [0.38.0] - 2025-12-17
 
 ### Changed
