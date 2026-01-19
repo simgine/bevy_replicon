@@ -116,6 +116,8 @@ fn add_measurements(
     diagnostics.add_measurement(&SENT_BPS, || stats.sent_bps);
     diagnostics.add_measurement(&RECEIVED_BPS, || stats.received_bps);
 
+    // `saturating_sub` is used to prevent overflow after reconnecting,
+    // since `last_replication_stats` is not reset on disconnect.
     diagnostics.add_measurement(&ENTITIES_CHANGED, || {
         replication_stats
             .entities_changed
