@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Overflow on reconnect when `client_diagnostics` feature is enabled.
+
 ## [0.38.0] - 2025-12-17
 
 ### Changed
