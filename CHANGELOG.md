@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.2] - 2026-01-22
+
 ### Fixed
 
 - Ack cleanup and message timestamps are no longer affected by time dilation.
@@ -994,7 +996,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.38.1...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.38.2...HEAD
+[0.38.2]: https://github.com/simgine/bevy_replicon/compare/v0.38.1...v0.38.2
 [0.38.1]: https://github.com/simgine/bevy_replicon/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/simgine/bevy_replicon/compare/v0.37.2...v0.38.0
 [0.37.2]: https://github.com/simgine/bevy_replicon/compare/v0.37.1...v0.37.2
