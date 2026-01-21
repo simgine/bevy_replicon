@@ -332,8 +332,10 @@ fn increment_tick(mut server_tick: ResMut<ServerTick>) {
 
 fn cleanup_acks(
     mutations_timeout: Duration,
-) -> impl FnMut(Query<&mut ClientTicks>, ResMut<ClientPools>, Res<Time>) {
-    move |mut clients: Query<&mut ClientTicks>, mut pools: ResMut<ClientPools>, time: Res<Time>| {
+) -> impl FnMut(Query<&mut ClientTicks>, ResMut<ClientPools>, Res<Time<Real>>) {
+    move |mut clients: Query<&mut ClientTicks>,
+          mut pools: ResMut<ClientPools>,
+          time: Res<Time<Real>>| {
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
             ticks.cleanup_older_mutations(min_timestamp, |mutate_info| {
@@ -827,7 +829,7 @@ fn update_ticks(
 /// Sends previously constructed [`Updates`] and [`Mutations`].
 fn send_messages(
     mut split_buffer: Local<Vec<MutationsSplit>>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     track_mutate_messages: Res<TrackMutateMessages>,

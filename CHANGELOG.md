@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.
 
+### Fixed
+
+- Ack cleanup and message timestamps are no longer affected by time dilation.
+
 ## [0.38.1] - 2026-01-19
 
 ### Fixed
