@@ -13,7 +13,7 @@ use bevy::prelude::*;
 /// Marks an entity for replication on the server.
 ///
 /// After replication, client entities will also have this component,
-/// so it can be used to run shared logic for networked entities.
+/// so it can be used for shared logic for networked entities.
 ///
 /// See also [`Remote`](crate::prelude::Remote).
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]

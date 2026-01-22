@@ -874,7 +874,7 @@ pub struct ClientReplicationStats {
 /// Marker for entities spawned by replication.
 ///
 /// Inserted automatically. Unlike [`Replicated`], it's present only
-/// on the client and can be used to run client-specific logic.
+/// on the client and can be used for client-specific logic.
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Remote;
