@@ -139,9 +139,9 @@ impl Plugin for ServerPlugin {
                 )
                     .chain(),
             )
-            .add_observer(handle_connects)
-            .add_observer(handle_disconnects)
-            .add_observer(buffer_despawns)
+            .add_observer(handle_connect)
+            .add_observer(handle_disconnect)
+            .add_observer(buffer_despawn)
             .add_observer(check_mutation_ticks)
             .add_systems(
                 PreUpdate,
@@ -264,17 +264,17 @@ fn buffer_removals(
     removals.insert(remove.entity, components, archetype, &registry);
 }
 
-fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
+fn handle_connect(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
     debug!("client `{}` connected", add.entity);
     message_buffer.exclude_client(add.entity);
 }
 
-fn handle_disconnects(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
+fn handle_disconnect(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
     debug!("client `{}` disconnected", remove.entity);
     messages.remove_client(remove.entity);
 }
 
-fn buffer_despawns(
+fn buffer_despawn(
     remove: On<Remove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     state: Res<State<ServerState>>,
