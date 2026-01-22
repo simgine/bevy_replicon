@@ -342,6 +342,8 @@ pub trait FilterScope {
 ///
 /// We can't implement [`FilterScope`] for both tuples and all types that implement [`Component`].
 /// This is why this wrapper is needed to set the scope for only a single component.
+///
+/// If you need a [`FilterScope`] for multiple components, use a tuple directly, e.g. `(C1, C2)`.
 pub struct ComponentScope<A: Component>(PhantomData<A>);
 
 impl<C: Component<Mutability: MutWrite<C>>> FilterScope for ComponentScope<C> {
