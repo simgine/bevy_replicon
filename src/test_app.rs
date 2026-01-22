@@ -35,11 +35,11 @@ server_app.update();
 server_app.exchange_with_client(&mut client_app);
 client_app.update();
 
-let mut relicated = client_app.world_mut().query::<&Replicated>();
+let mut remote = client_app.world_mut().query::<&Remote>();
 assert_eq!(
-    relicated.iter(client_app.world()).len(),
+    remote.iter(client_app.world()).len(),
     1,
-    "client should replicate spawned entity"
+    "client should receive spawned entity"
 );
 
 // You can optionally simulate a disconnect.

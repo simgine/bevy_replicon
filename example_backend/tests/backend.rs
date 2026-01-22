@@ -89,9 +89,9 @@ fn disconnect_request() {
     let messages = client_app.world().resource::<Messages<Test>>();
     assert_eq!(messages.len(), 1, "last message should be received");
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    let mut remote = client_app.world_mut().query::<&Remote>();
     assert_eq!(
-        replicated.iter(client_app.world()).len(),
+        remote.iter(client_app.world()).len(),
         1,
         "last replication should be received"
     );
@@ -139,9 +139,9 @@ fn server_stop() {
         "message shouldn't be received after stop"
     );
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    let mut remote = client_app.world_mut().query::<&Remote>();
     assert_eq!(
-        replicated.iter(client_app.world()).len(),
+        remote.iter(client_app.world()).len(),
         0,
         "replication after stop shouldn't be received"
     );
@@ -168,8 +168,8 @@ fn replication() {
     server_app.update();
     client_app.update();
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 }
 
 #[test]

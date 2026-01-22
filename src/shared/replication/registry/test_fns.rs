@@ -62,8 +62,8 @@ entity.apply_remove(fns_id, tick);
 assert!(!entity.contains::<ExampleComponent>());
 
 entity.apply_despawn(tick);
-let mut replicated = app.world_mut().query::<&ExampleComponent>();
-assert_eq!(replicated.iter(app.world()).len(), 0);
+let mut components = app.world_mut().query::<&ExampleComponent>();
+assert_eq!(components.iter(app.world()).len(), 0);
 
 #[derive(Component, Serialize, Deserialize)]
 struct ExampleComponent;

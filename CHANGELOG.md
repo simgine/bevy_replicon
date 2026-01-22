@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Remote` component that automatically inserted on entities spawned by replication.
+
 ### Changed
 
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.

@@ -671,8 +671,8 @@ fn many_entities() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES_COUNT);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).count(), ENTITIES_COUNT);
 
     for mut component in server_app
         .world_mut()

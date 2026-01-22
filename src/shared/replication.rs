@@ -10,7 +10,12 @@ pub mod update_message_flags;
 
 use bevy::prelude::*;
 
-/// Marks entity for replication.
+/// Marks an entity for replication on the server.
+///
+/// After replication, client entities will also have this component,
+/// so it can be used for shared logic for networked entities.
+///
+/// See also [`Remote`](crate::prelude::Remote).
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Replicated;

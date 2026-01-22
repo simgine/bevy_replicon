@@ -225,8 +225,8 @@ fn mapped_new_entity() {
         .unwrap();
     assert!(client_app.world().get_entity(mapped_component.0).is_ok());
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).count(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).count(), 1);
 }
 
 #[test]
@@ -298,7 +298,7 @@ fn multiple_components_sequential() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A)>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
 
     // Insert another replicated component.
@@ -308,7 +308,7 @@ fn multiple_components_sequential() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A, &B)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A, &B)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -573,10 +573,10 @@ fn with_client_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app
+    let mut remote = client_app
         .world_mut()
-        .query_filtered::<Entity, With<Replicated>>();
-    let client_entity = replicated.single(client_app.world()).unwrap();
+        .query_filtered::<Entity, With<Remote>>();
+    let client_entity = remote.single(client_app.world()).unwrap();
 
     server_app.world_mut().entity_mut(server_entity).insert(A);
 
