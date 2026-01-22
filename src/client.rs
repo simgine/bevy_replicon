@@ -421,7 +421,7 @@ fn apply_entity_mapping(
 
     debug!("mapping `{server_entity}` to `{client_entity}` using hash 0x{hash:016x}");
     params.entity_map.insert(server_entity, client_entity);
-    world.entity_mut(client_entity).insert((Replicated, Remote));
+    world.entity_mut(client_entity).insert(Remote);
 
     Ok(())
 }
@@ -541,7 +541,6 @@ fn apply_changes(
         }
         EntityEntry::Vacant(entry) => {
             let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
-            client_entity.insert(Replicated);
             client_entity.insert(Remote);
             entry.insert(client_entity.id());
             client_entity
@@ -877,4 +876,5 @@ pub struct ClientReplicationStats {
 /// on the client and can be used for client-specific logic.
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
+#[require(Replicated)]
 pub struct Remote;
