@@ -379,8 +379,8 @@ impl ServerMessage {
 
         match *mode {
             SendMode::Broadcast => {
-                for client_entity in clients {
-                    server_messages.send(client_entity, self.channel_id, message_bytes.clone());
+                for client in clients {
+                    server_messages.send(client, self.channel_id, message_bytes.clone());
                 }
             }
             SendMode::BroadcastExcept(ignored_id) => {

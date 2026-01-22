@@ -145,11 +145,11 @@ impl BufferedMessage {
     fn send(
         &mut self,
         messages: &mut ServerMessages,
-        client_entity: Entity,
-        client: &ClientTicks,
+        client: Entity,
+        ticks: &ClientTicks,
     ) -> Result<()> {
-        let message = self.message.get_bytes(client.update_tick)?;
-        messages.send(client_entity, self.channel_id, message);
+        let message = self.message.get_bytes(ticks.update_tick)?;
+        messages.send(client, self.channel_id, message);
         Ok(())
     }
 }

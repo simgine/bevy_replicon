@@ -131,22 +131,22 @@ fn on_insert<F: VisibilityFilter>(
     mut clients: Query<(Entity, Option<&F>, &mut ClientVisibility)>,
 ) {
     let bit = registry.bit::<F>();
-    if let Ok((client_entity, client_component, mut visibility)) = clients.get_mut(insert.entity) {
+    if let Ok((client, client_component, mut visibility)) = clients.get_mut(insert.entity) {
         let client_component = client_component.unwrap();
         for (entity, component) in &entities {
             let visible = client_component.is_visible(component);
             debug!(
-                "updating `{}` filter on client `{client_entity}` to `{visible}` for `{entity}`",
+                "updating `{}` filter on client `{client}` to `{visible}` for `{entity}`",
                 ShortName::of::<F>(),
             );
             visibility.set(entity, bit, visible);
         }
     } else {
         let (entity, component) = entities.get(insert.entity).unwrap();
-        for (client_entity, client_component, mut visibility) in &mut clients {
+        for (client, client_component, mut visibility) in &mut clients {
             let visible = client_component.is_some_and(|c| c.is_visible(component));
             debug!(
-                "updating `{}` filter on `{entity}` to `{visible}` for client `{client_entity}`",
+                "updating `{}` filter on `{entity}` to `{visible}` for client `{client}`",
                 ShortName::of::<F>(),
             );
             visibility.set(insert.entity, bit, visible);
