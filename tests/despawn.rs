@@ -74,8 +74,8 @@ fn with_relations() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 2);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 2);
 
     server_app.world_mut().despawn(server_entity);
 
@@ -83,7 +83,7 @@ fn with_relations() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -223,8 +223,8 @@ fn visibility_lose() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 
     server_app
         .world_mut()
@@ -235,7 +235,7 @@ fn visibility_lose() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]

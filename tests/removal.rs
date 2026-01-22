@@ -252,7 +252,7 @@ fn not_replicated() {
 
     let client_entity = client_app
         .world_mut()
-        .query_filtered::<Entity, (With<Replicated>, Without<NotReplicated>)>()
+        .query_filtered::<Entity, (With<Remote>, Without<NotReplicated>)>()
         .single(client_app.world())
         .unwrap();
 
@@ -297,8 +297,8 @@ fn with_client_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query_filtered::<Entity, With<A>>();
-    let client_entity = components.single(client_app.world()).unwrap();
+    let mut with_components = client_app.world_mut().query_filtered::<Entity, With<A>>();
+    let client_entity = with_components.single(client_app.world()).unwrap();
 
     server_app
         .world_mut()
@@ -311,8 +311,8 @@ fn with_client_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -377,10 +377,10 @@ fn after_spawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app
+    let mut remote = client_app
         .world_mut()
-        .query_filtered::<&Replicated, Without<A>>();
-    assert_eq!(components.iter(client_app.world()).len(), 1);
+        .query_filtered::<&Remote, Without<A>>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -406,8 +406,8 @@ fn after_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 
     // Un-replicate and remove at the same time.
     server_app
@@ -420,7 +420,7 @@ fn after_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
