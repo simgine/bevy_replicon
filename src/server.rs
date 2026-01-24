@@ -65,7 +65,7 @@ pub struct ServerPlugin {
     /// Use [`Self::new`] to avoid calling [`ScheduleLabel::intern`].
     ///
     /// You can also set it to `None` to trigger replication by manually
-    /// incrementing [`ServerTick`].
+    /// incrementing [`ServerTick`] or scheduling [`increment_tick`].
     ///
     /// # Examples
     ///
@@ -275,7 +275,7 @@ fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut Cli
 }
 
 /// Increments current server tick which causes the server to replicate this frame.
-fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     trace!("incrementing `{:?}`", *server_tick);
     server_tick.increment();
 }
