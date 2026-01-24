@@ -141,8 +141,8 @@ impl Plugin for ServerPlugin {
             )
             .add_observer(handle_connect)
             .add_observer(handle_disconnect)
-            .add_observer(buffer_despawn)
             .add_observer(check_mutation_ticks)
+            .add_observer(buffer_despawn)
             .add_systems(
                 PreUpdate,
                 (
@@ -225,6 +225,61 @@ impl Plugin for ServerPlugin {
     }
 }
 
+fn handle_connect(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
+    debug!("client `{}` connected", add.entity);
+    message_buffer.exclude_client(add.entity);
+}
+
+fn handle_disconnect(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
+    debug!("client `{}` disconnected", remove.entity);
+    messages.remove_client(remove.entity);
+}
+
+fn check_protocol(
+    client_protocol: On<FromClient<ProtocolHash>>,
+    mut commands: Commands,
+    mut disconnects: MessageWriter<DisconnectRequest>,
+    protocol: Res<ProtocolHash>,
+) {
+    let client = client_protocol
+        .client_id
+        .entity()
+        .expect("protocol hash sent only from clients");
+
+    if **client_protocol == *protocol {
+        debug!("marking client `{client}` as authorized");
+        commands.entity(client).insert(AuthorizedClient);
+    } else {
+        debug!(
+            "disconnecting client `{client}` due to protocol mismatch (client: `{:?}`, server: `{:?}`)",
+            **client_protocol, *protocol
+        );
+        commands.server_trigger(ToClients {
+            mode: SendMode::Direct(client_protocol.client_id),
+            message: ProtocolMismatch,
+        });
+        disconnects.write(DisconnectRequest { client });
+    }
+}
+
+fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
+    debug!(
+        "checking mutation ticks for overflow for {:?}",
+        check.present_tick()
+    );
+    for mut ticks in &mut clients {
+        for entity_ticks in ticks.entities.values_mut() {
+            entity_ticks.system_tick.check_tick(*check);
+        }
+    }
+}
+
+/// Increments current server tick which causes the server to replicate this frame.
+fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+    trace!("incrementing `{:?}`", *server_tick);
+    server_tick.increment();
+}
+
 fn buffer_removals(
     remove: On<Remove>,
     entities: &Entities,
@@ -264,16 +319,6 @@ fn buffer_removals(
     removals.insert(remove.entity, components, archetype, &registry);
 }
 
-fn handle_connect(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
-    debug!("client `{}` connected", add.entity);
-    message_buffer.exclude_client(add.entity);
-}
-
-fn handle_disconnect(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
-    debug!("client `{}` disconnected", remove.entity);
-    messages.remove_client(remove.entity);
-}
-
 fn buffer_despawn(
     remove: On<Remove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
@@ -283,51 +328,6 @@ fn buffer_despawn(
         trace!("buffering despawn of `{}`", remove.entity);
         despawn_buffer.push(remove.entity);
     }
-}
-
-fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
-    debug!(
-        "checking mutation ticks for overflow for {:?}",
-        check.present_tick()
-    );
-    for mut ticks in &mut clients {
-        for entity_ticks in ticks.entities.values_mut() {
-            entity_ticks.system_tick.check_tick(*check);
-        }
-    }
-}
-
-fn check_protocol(
-    client_protocol: On<FromClient<ProtocolHash>>,
-    mut commands: Commands,
-    mut disconnects: MessageWriter<DisconnectRequest>,
-    protocol: Res<ProtocolHash>,
-) {
-    let client = client_protocol
-        .client_id
-        .entity()
-        .expect("protocol hash sent only from clients");
-
-    if **client_protocol == *protocol {
-        debug!("marking client `{client}` as authorized");
-        commands.entity(client).insert(AuthorizedClient);
-    } else {
-        debug!(
-            "disconnecting client `{client}` due to protocol mismatch (client: `{:?}`, server: `{:?}`)",
-            **client_protocol, *protocol
-        );
-        commands.server_trigger(ToClients {
-            mode: SendMode::Direct(client_protocol.client_id),
-            message: ProtocolMismatch,
-        });
-        disconnects.write(DisconnectRequest { client });
-    }
-}
-
-/// Increments current server tick which causes the server to replicate this frame.
-fn increment_tick(mut server_tick: ResMut<ServerTick>) {
-    trace!("incrementing `{:?}`", *server_tick);
-    server_tick.increment();
 }
 
 fn cleanup_acks(
