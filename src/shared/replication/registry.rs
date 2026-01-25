@@ -189,7 +189,7 @@ pub struct FnsId(usize);
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, PartialEq, Clone, Copy)]
 pub(crate) struct ComponentIndex(usize);
 
-/// Signature of the entity despawn function.
+/// Signature of the entity despawn function in [`ReplicationRegistry::despawn`].
 pub type DespawnFn = fn(&DespawnCtx, EntityWorldMut);
 
 /// Default entity despawn function.
