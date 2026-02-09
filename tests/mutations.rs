@@ -319,7 +319,7 @@ fn related() {
 }
 
 #[test]
-fn write_if_neq() {
+fn command_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -383,54 +383,7 @@ fn write_if_neq() {
 }
 
 #[test]
-fn command_fns() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .replicate::<OriginalComponent>()
-        .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>)
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, OriginalComponent(false)))
-        .id();
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    let mut components = client_app
-        .world_mut()
-        .query_filtered::<&ReplacedComponent, Without<OriginalComponent>>();
-    assert_eq!(components.iter(client_app.world()).len(), 1);
-
-    // Change value.
-    let mut component = server_app
-        .world_mut()
-        .get_mut::<OriginalComponent>(server_entity)
-        .unwrap();
-    component.0 = true;
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
-    let component = components.single(client_app.world()).unwrap();
-    assert!(component.0);
-}
-
-#[test]
-fn marker() {
+fn marker_with_replace() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
