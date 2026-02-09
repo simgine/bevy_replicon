@@ -49,9 +49,10 @@ pub trait AppMarkerExt {
 
     ```
     # use bevy::state::app::StatesPlugin;
-    use bevy::{ecs::system::EntityCommands, ecs::component::Mutable, prelude::*, platform::collections::HashMap};
+    use bevy::{ecs::component::Mutable, platform::collections::HashMap, prelude::*};
     use bevy_replicon::{
         bytes::Bytes,
+        prelude::*,
         shared::{
             replication::{
                 command_markers::MarkerConfig,
@@ -63,17 +64,17 @@ pub trait AppMarkerExt {
             },
             replicon_tick::RepliconTick,
         },
-        prelude::*,
     };
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
 
     # let mut app = App::new();
     # app.add_plugins((StatesPlugin, RepliconPlugins));
-    app.register_marker_with::<Predicted>(MarkerConfig {
-        need_history: true, // Enable writing for values that are older than the last received value.
-        ..Default::default()
-    })
-    .set_marker_fns::<Predicted, Health>(write_history, remove_history::<Health>);
+    app.replicate::<Health>()
+        .register_marker_with::<Predicted>(MarkerConfig {
+            need_history: true, // Enable writing for values that are older than the last received value.
+            ..Default::default()
+        })
+        .set_marker_fns::<Predicted, Health>(write_history, remove_history::<Health>);
 
     /// Instead of writing into a component directly, it writes data into [`History<C>`].
     fn write_history<C: Component<Mutability = Mutable>>(
@@ -119,14 +120,37 @@ pub trait AppMarkerExt {
         remove: RemoveFn,
     ) -> &mut Self;
 
-    /// Sets default functions for a component when there are no markers.
-    ///
-    /// If there are no markers present on an entity, then these functions will
-    /// be called for this component during replication instead of
-    /// [`default_write`](super::registry::command_fns::default_write) /
-    /// [`default_insert_write`](super::registry::command_fns::default_insert_write) and
-    /// [`default_remove`](super::registry::command_fns::default_remove).
-    /// See also [`Self::set_marker_fns`].
+    /**
+    Sets default functions for a component when there are no markers.
+
+    If there are no markers present on an entity, then these functions will
+    be called for this component during replication instead of
+    [`default_write`](super::registry::command_fns::default_write) /
+    [`default_insert_write`](super::registry::command_fns::default_insert_write) and
+    [`default_remove`](super::registry::command_fns::default_remove).
+    See also [`Self::set_marker_fns`].
+
+    # Examples
+
+    Don't update the component if the client receives the same value:
+
+    ```
+    # use bevy::state::app::StatesPlugin;
+    use bevy::prelude::*;
+    use bevy_replicon::{prelude::*, shared::replication::registry::command_fns};
+    use serde::{Deserialize, Serialize};
+
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
+    app.replicate::<Health>().set_command_fns::<Health>(
+        command_fns::write_if_neq, // We provide a built-in function for it, but you can write your own functions.
+        command_fns::default_remove::<Health>,
+    );
+
+    #[derive(Component, Serialize, Deserialize, PartialEq)]
+    struct Health(u32);
+    ```
+    */
     fn set_command_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         write: WriteFn<C>,

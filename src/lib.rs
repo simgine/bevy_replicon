@@ -243,7 +243,14 @@ that already has it on the server, the client will treat it as a mutation. As a 
 differently on the client and server. If your game logic relies on this semantic, mark your component as
 [`Immutable`](bevy::ecs::component::Immutable). For such components, replication will always be applied via insertion.
 
-This behavior is also configurable via [client markers](#client-markers).
+A single mutation on the server may result in multiple change detection triggers on a client.
+Clients track the last applied tick for each entity and apply a mutation only if the tick for the received data is greater.
+However, mutation messages include only the server tick on which the message was sent. This is because it would be too expensive
+to include the change tick for each entity. So, if a client does not acknowledge the received message in time, the server
+will resend the data (because it might have been lost). Since the tick for this message will be greater, the
+client will write the component again, even if it is the same. If your game logic relies on this behavior, you can set
+[`write_if_neq`](shared::replication::registry::command_fns::write_if_neq) as your writing function for
+the desired components. See [client markers](#client-markers) for more details.
 
 #### Component relations
 
@@ -591,14 +598,16 @@ and then match level entities to synchronize certain things, such as opened door
 
 #### Client markers
 
-To apply interpolation or store value history for client-side prediction, you need to override how components are
-written. However, the server knows nothing about archetypes on the client, and while some entities need to be predicted,
-others might need to be interpolated.
+This is similar to replication rules, except markers are client-specific and only define how components
+are applied to entities. This allows you to customize writing based on components that might not be known to the server.
+For example, on clients some entities might be predicted, while others might be interpolated, and their values need to be written
+differently. The server does not need to know which entities the client interpolates and which it predicts.
 
-This is why writing functions are marker-based. First, you register a marker using [`AppMarkerExt::register_marker<M>`].
-Then you can override how specific component is written and removed using [`AppMarkerExt::set_marker_fns<M, C>`].
-
-You can control marker priority or enable processing of old values using [`AppMarkerExt::register_marker_with<M>`].
+[`AppMarkerExt::set_command_fns<C>`] allows you to override how the component `C` is written by default.
+To select a different writing function for a specific entity, you need to register a marker via [`AppMarkerExt::register_marker<M>`]
+and associate functions for components with this marker using [`AppMarkerExt::set_marker_fns<M, C>`]. These functions will be called for `C`
+if the marker `M` is present. You can also control marker priority or enable processing of old values using
+[`AppMarkerExt::register_marker_with<M>`].
 
 ### Ticks information
 
