@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Remote` component that automatically inserted on entities spawned by replication.
+- `SendMode::SERVER_ONLY` and `SendMode::CLIENTS_ONLY` constants for convenience.
 
 ### Changed
 

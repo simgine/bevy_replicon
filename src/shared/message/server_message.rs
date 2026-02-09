@@ -696,6 +696,14 @@ pub enum SendMode {
     Direct(ClientId),
 }
 
+impl SendMode {
+    /// Send to every client except the listen server.
+    pub const CLIENTS_ONLY: SendMode = SendMode::BroadcastExcept(ClientId::Server);
+
+    /// Send only to the server.
+    pub const SERVER_ONLY: SendMode = SendMode::Direct(ClientId::Server);
+}
+
 /// Default message serialization function.
 pub fn default_serialize<M: Serialize>(
     _ctx: &mut ServerSendCtx,
