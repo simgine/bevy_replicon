@@ -328,8 +328,11 @@ fn command_fns() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate::<OriginalComponent>()
-        .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>)
+        .replicate::<BoolComponent>()
+        .set_command_fns(
+            command_fns::write_if_neq::<BoolComponent>,
+            command_fns::default_remove::<BoolComponent>,
+        )
         .finish();
     }
 
@@ -337,7 +340,7 @@ fn command_fns() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, OriginalComponent(false)))
+        .spawn((Replicated, BoolComponent(false)))
         .id();
 
     server_app.update();
@@ -345,18 +348,32 @@ fn command_fns() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app
-        .world_mut()
-        .query_filtered::<&ReplacedComponent, Without<OriginalComponent>>();
+    let mut components = client_app.world_mut().query::<Ref<BoolComponent>>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
 
-    // Change value.
+    // Trigger change detection without changing the value.
     let mut component = server_app
         .world_mut()
-        .get_mut::<OriginalComponent>(server_entity)
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap();
+    component.set_changed();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(!component.0);
+    assert!(!component.is_changed());
+
+    // Actually change value.
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
         .unwrap();
     component.0 = true;
 
+    server_app.exchange_with_client(&mut client_app);
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
@@ -366,7 +383,7 @@ fn command_fns() {
 }
 
 #[test]
-fn marker() {
+fn marker_with_replace() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -1238,7 +1255,7 @@ fn after_disconnect() {
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
-#[derive(Clone, Component, Copy, Deserialize, Serialize)]
+#[derive(Clone, Component, Copy, Deserialize, Serialize, PartialEq)]
 struct BoolComponent(bool);
 
 #[derive(Component, Default, Deserialize, Serialize)]

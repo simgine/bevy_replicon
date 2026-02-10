@@ -112,6 +112,30 @@ pub fn default_write<C: Component<Mutability = Mutable>>(
     Ok(())
 }
 
+/// Writes the component only if it is not equal to the current value.
+///
+/// This is not done by default because it would require [`PartialEq`] for all replicated components,
+/// and quite often it is cheaper to always write the value instead of checking for equality.
+///
+/// Use [`AppMarkerExt`] to apply this to specific components.
+pub fn write_if_neq<C: Component<Mutability = Mutable> + PartialEq>(
+    ctx: &mut WriteCtx,
+    rule_fns: &RuleFns<C>,
+    entity: &mut DeferredEntity,
+    message: &mut Bytes,
+) -> Result<()> {
+    let component: C = rule_fns.deserialize(ctx, message)?;
+    if let Some(mut current) = entity.get_mut::<C>() {
+        if *current != component {
+            *current = component;
+        }
+    } else {
+        entity.insert(component);
+    }
+
+    Ok(())
+}
+
 /// Default component writing function for [`Immutable`] components.
 ///
 /// The component will be deserialized with [`RuleFns::deserialize`] and inserted via [`Commands`].
