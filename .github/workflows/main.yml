@@ -66,22 +66,6 @@ jobs:
           cargo rustdoc --all-features -- -D warnings
           cargo rustdoc -p bevy_replicon_example_backend -- -D warnings
 
-  doctest:
-    name: Doctest
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clone repo
-        uses: actions/checkout@v6
-
-      - name: Instal stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache crates
-        uses: Swatinem/rust-cache@v2
-
-      - name: Test doc
-        run: cargo test --workspace --all-features --doc
-
   feature-combinations:
     name: Feature combinations
     runs-on: ubuntu-latest
@@ -145,6 +129,22 @@ jobs:
         env:
           CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime
 
+  doctest:
+    name: Doctest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v6
+
+      - name: Instal stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test doc
+        run: cargo test --workspace --all-features --doc
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -190,10 +190,10 @@ jobs:
         typos,
         format,
         lint,
-        doctest,
         feature-combinations,
         no-std-portable-atomic,
         wasi,
+        doctest,
         test,
       ]
     runs-on: ubuntu-latest
