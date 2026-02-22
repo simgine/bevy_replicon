@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Remote` component that automatically inserted on entities spawned by replication.
 - `SendMode::SERVER_ONLY` and `SendMode::CLIENTS_ONLY` constants for convenience.
 - `command_fns::write_if_neq` built-in to avoid writing component if the value didn't change.
+- `DeferredEntity::world_mut` to access world mutable during replication.
 
 ### Changed
 
