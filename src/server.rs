@@ -941,7 +941,7 @@ struct DespawnBuffer(Vec<Entity>);
 /// **All other events will be ignored**.
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
-#[derive(Component, Default)]
+#[derive(Component, Reflect, Default)]
 #[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
 
@@ -965,5 +965,5 @@ pub struct AuthorizedClient;
 /// All of this only affects mutations. For any component insertion or removal, the changes
 /// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
 /// See its documentation for more details.
-#[derive(Component, Deref, DerefMut, Debug, Default, Clone)]
+#[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);

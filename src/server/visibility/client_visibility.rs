@@ -11,7 +11,7 @@ use super::filters_mask::{FilterBit, FiltersMask};
 /// Stores only entities that have some hidden data.
 ///
 /// Automatically updated by observers from [`AppVisibilityExt`](super::AppVisibilityExt).
-#[derive(Component, Default)]
+#[derive(Component, Reflect, Default)]
 pub struct ClientVisibility {
     /// Entities with hidden data.
     hidden: EntityHashMap<FiltersMask>,
