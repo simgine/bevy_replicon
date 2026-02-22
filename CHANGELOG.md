@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.
 - Make `ClientMessages::received_count` public.
 - Make `increment_tick` public.
+- Rename `command_markers` module into `receive_markers`.
+- Rename `command_fns` module into `receive_fns`.
+- Rename `AppMarkerExt::set_command_fns` into `AppMarkerExt::set_receive_fns`.
 
 ## [0.38.2] - 2026-01-22
 

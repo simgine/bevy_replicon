@@ -9,8 +9,8 @@ use crate::{
     prelude::*,
     shared::{
         replication::{
-            command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},
+            receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::ctx::EntitySpawner,
         },
         server_entity_map::ServerEntityMap,
@@ -130,8 +130,8 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
         message_tick: RepliconTick,
     ) -> &mut Self {
         let mut entity_markers = self.world_scope(EntityMarkers::from_world);
-        let command_markers = self.world().resource::<CommandMarkers>();
-        entity_markers.read(command_markers, &*self);
+        let receive_markers = self.world().resource::<ReceiveMarkers>();
+        entity_markers.read(receive_markers, &*self);
 
         let entity = self.id();
         self.world_scope(|world| {
@@ -170,8 +170,8 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
 
     fn apply_remove(&mut self, fns_id: FnsId, message_tick: RepliconTick) -> &mut Self {
         let mut entity_markers = self.world_scope(EntityMarkers::from_world);
-        let command_markers = self.world().resource::<CommandMarkers>();
-        entity_markers.read(command_markers, &*self);
+        let receive_markers = self.world().resource::<ReceiveMarkers>();
+        entity_markers.read(receive_markers, &*self);
 
         let entity = self.id();
         self.world_scope(|world| {

@@ -11,7 +11,7 @@ use bevy::{
 use log::debug;
 
 use crate::shared::replication::registry::{
-    ReplicationRegistry, command_fns::MutWrite, component_mask::ComponentMask,
+    ReplicationRegistry, component_mask::ComponentMask, receive_fns::MutWrite,
 };
 use client_visibility::ClientVisibility;
 use registry::{FilterRegistry, VisibilityScope};

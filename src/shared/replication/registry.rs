@@ -1,7 +1,7 @@
-pub mod command_fns;
 pub mod component_fns;
 pub(crate) mod component_mask;
 pub mod ctx;
+pub mod receive_fns;
 pub mod rule_fns;
 pub(crate) mod serde_fns;
 pub mod test_fns;
@@ -10,11 +10,11 @@ use bevy::{ecs::component::ComponentId, prelude::*};
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use super::command_markers::CommandMarkerIndex;
+use super::receive_markers::ReceiveMarkerIndex;
 use crate::{prelude::*, shared::replication::registry::serde_fns::SerdeFns};
-use command_fns::{MutWrite, RemoveFn, UntypedCommandFns, WriteFn};
 use component_fns::ComponentFns;
 use ctx::DespawnCtx;
+use receive_fns::{MutWrite, RemoveFn, UntypedReceiveFns, WriteFn};
 use rule_fns::UntypedRuleFns;
 
 /// Stores configurable replication functions.
@@ -48,19 +48,19 @@ impl ReplicationRegistry {
     /// Registers marker slot for component functions.
     ///
     /// Should be used after calling
-    /// [`CommandMarkers::insert`](super::command_markers::CommandMarkers::insert)
-    pub(super) fn register_marker(&mut self, marker_id: CommandMarkerIndex) {
+    /// [`ReceiveMarkers::insert`](super::receive_markers::ReceiveMarkers::insert)
+    pub(super) fn register_marker(&mut self, marker_id: ReceiveMarkerIndex) {
         self.marker_slots += 1;
-        for (_, command_fns) in &mut self.components {
-            command_fns.add_marker_slot(marker_id);
+        for (_, receive_fns) in &mut self.components {
+            receive_fns.add_marker_slot(marker_id);
         }
     }
 
-    /// Associates command functions with a marker for a component.
+    /// Associates receive functions with a marker for a component.
     ///
     /// **Must** be called **after** calling [`Self::register_marker`] with `marker_id`.
     ///
-    /// See also [`Self::set_command_fns`].
+    /// See also [`Self::set_receive_fns`].
     ///
     /// # Panics
     ///
@@ -68,24 +68,24 @@ impl ReplicationRegistry {
     pub(super) fn set_marker_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         world: &mut World,
-        marker_id: CommandMarkerIndex,
+        marker_id: ReceiveMarkerIndex,
         write: WriteFn<C>,
         remove: RemoveFn,
     ) {
         let (index, _) = self.init_component_fns::<C>(world);
         let (_, component_fns) = &mut self.components[index.0];
-        let command_fns = UntypedCommandFns::new(write, remove);
+        let receive_fns = UntypedReceiveFns::new(write, remove);
 
-        // SAFETY: `component_fns` and `command_fns` were created for `C`.
+        // SAFETY: `component_fns` and `receive_fns` were created for `C`.
         unsafe {
-            component_fns.set_marker_fns(marker_id, command_fns);
+            component_fns.set_marker_fns(marker_id, receive_fns);
         }
     }
 
     /// Sets default functions for a component when there are no markers.
     ///
     /// See also [`Self::set_marker_fns`].
-    pub(super) fn set_command_fns<C: Component<Mutability: MutWrite<C>>>(
+    pub(super) fn set_receive_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         world: &mut World,
         write: WriteFn<C>,
@@ -93,11 +93,11 @@ impl ReplicationRegistry {
     ) {
         let (index, _) = self.init_component_fns::<C>(world);
         let (_, component_fns) = &mut self.components[index.0];
-        let command_fns = UntypedCommandFns::new(write, remove);
+        let receive_fns = UntypedReceiveFns::new(write, remove);
 
-        // SAFETY: `component_fns` and `command_fns` were created for `C`.
+        // SAFETY: `component_fns` and `receive_fns` were created for `C`.
         unsafe {
-            component_fns.set_command_fns(command_fns);
+            component_fns.set_receive_fns(receive_fns);
         }
     }
 
@@ -221,7 +221,7 @@ mod tests {
         assert_eq!(
             registry.components.len(),
             1,
-            "multiple serde registrations for the same component should result only in a single command functions instance"
+            "multiple serde registrations for the same component should result only in a single receive functions instance"
         );
     }
 

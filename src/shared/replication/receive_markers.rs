@@ -5,17 +5,15 @@ use log::debug;
 
 use super::registry::{
     ReplicationRegistry,
-    command_fns::{MutWrite, RemoveFn, WriteFn},
+    receive_fns::{MutWrite, RemoveFn, WriteFn},
 };
 
-/// Marker-based functions for [`App`].
+/// Marker-based replication receive functions for [`App`].
 ///
 /// Allows customizing behavior on clients when receiving updates from the server.
 ///
 /// We check markers on receive instead of archetypes because on client we don't
 /// know an incoming entity's archetype in advance.
-///
-/// This is mostly needed for third-party crates, most end-users should not need to use it directly.
 pub trait AppMarkerExt {
     /// Registers a component as a marker.
     ///
@@ -31,14 +29,14 @@ pub trait AppMarkerExt {
     fn register_marker_with<M: Component>(&mut self, config: MarkerConfig) -> &mut Self;
 
     /**
-    Associates command functions with a marker for a component.
+    Associates receive functions with a marker for a component.
 
     If this marker is present on an entity and its priority is the highest,
     then these functions will be called for this component during replication
-    instead of [`default_write`](super::registry::command_fns::default_write) /
-    [`default_insert_write`](super::registry::command_fns::default_insert_write) and
-    [`default_remove`](super::registry::command_fns::default_remove).
-    See also [`Self::set_command_fns`].
+    instead of [`default_write`](super::registry::receive_fns::default_write) /
+    [`default_insert_write`](super::registry::receive_fns::default_insert_write) and
+    [`default_remove`](super::registry::receive_fns::default_remove).
+    See also [`Self::set_receive_fns`].
 
     # Examples
 
@@ -55,7 +53,7 @@ pub trait AppMarkerExt {
         prelude::*,
         shared::{
             replication::{
-                command_markers::MarkerConfig,
+                receive_markers::MarkerConfig,
                 deferred_entity::DeferredEntity,
                 registry::{
                     ctx::{RemoveCtx, WriteCtx},
@@ -125,9 +123,9 @@ pub trait AppMarkerExt {
 
     If there are no markers present on an entity, then these functions will
     be called for this component during replication instead of
-    [`default_write`](super::registry::command_fns::default_write) /
-    [`default_insert_write`](super::registry::command_fns::default_insert_write) and
-    [`default_remove`](super::registry::command_fns::default_remove).
+    [`default_write`](super::registry::receive_fns::default_write) /
+    [`default_insert_write`](super::registry::receive_fns::default_insert_write) and
+    [`default_remove`](super::registry::receive_fns::default_remove).
     See also [`Self::set_marker_fns`].
 
     # Examples
@@ -137,21 +135,21 @@ pub trait AppMarkerExt {
     ```
     # use bevy::state::app::StatesPlugin;
     use bevy::prelude::*;
-    use bevy_replicon::{prelude::*, shared::replication::registry::command_fns};
+    use bevy_replicon::{prelude::*, shared::replication::registry::receive_fns};
     use serde::{Deserialize, Serialize};
 
     # let mut app = App::new();
     # app.add_plugins((StatesPlugin, RepliconPlugins));
-    app.replicate::<Health>().set_command_fns::<Health>(
-        command_fns::write_if_neq, // We provide a built-in function for it, but you can write your own functions.
-        command_fns::default_remove::<Health>,
+    app.replicate::<Health>().set_receive_fns::<Health>(
+        receive_fns::write_if_neq, // We provide a built-in function for it, but you can write your own functions.
+        receive_fns::default_remove::<Health>,
     );
 
     #[derive(Component, Serialize, Deserialize, PartialEq)]
     struct Health(u32);
     ```
     */
-    fn set_command_fns<C: Component<Mutability: MutWrite<C>>>(
+    fn set_receive_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         write: WriteFn<C>,
         remove: RemoveFn,
@@ -166,8 +164,8 @@ impl AppMarkerExt for App {
     fn register_marker_with<M: Component>(&mut self, config: MarkerConfig) -> &mut Self {
         debug!("registering marker `{}`", ShortName::of::<M>());
         let component_id = self.world_mut().register_component::<M>();
-        let mut command_markers = self.world_mut().resource_mut::<CommandMarkers>();
-        let marker_id = command_markers.insert(CommandMarker {
+        let mut receive_markers = self.world_mut().resource_mut::<ReceiveMarkers>();
+        let marker_id = receive_markers.insert(ReceiveMarker {
             component_id,
             config,
         });
@@ -189,8 +187,8 @@ impl AppMarkerExt for App {
             ShortName::of::<C>()
         );
         let component_id = self.world_mut().register_component::<M>();
-        let command_markers = self.world().resource::<CommandMarkers>();
-        let marker_id = command_markers.marker_id(component_id);
+        let receive_markers = self.world().resource::<ReceiveMarkers>();
+        let marker_id = receive_markers.marker_id(component_id);
         self.world_mut()
             .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
                 registry.set_marker_fns::<C>(world, marker_id, write, remove);
@@ -199,35 +197,35 @@ impl AppMarkerExt for App {
         self
     }
 
-    fn set_command_fns<C: Component<Mutability: MutWrite<C>>>(
+    fn set_receive_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,
         write: WriteFn<C>,
         remove: RemoveFn,
     ) -> &mut Self {
         debug!(
-            "setting command fns for component `{}`",
+            "setting receive fns for component `{}`",
             ShortName::of::<C>()
         );
         self.world_mut()
             .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
-                registry.set_command_fns::<C>(world, write, remove);
+                registry.set_receive_fns::<C>(world, write, remove);
             });
 
         self
     }
 }
 
-/// Registered markers that override command functions if present.
+/// Registered markers that override receive functions if present.
 #[derive(Resource, Default)]
-pub(crate) struct CommandMarkers(Vec<CommandMarker>);
+pub(crate) struct ReceiveMarkers(Vec<ReceiveMarker>);
 
-impl CommandMarkers {
+impl ReceiveMarkers {
     /// Inserts a new marker, maintaining sorting by their priority in descending order.
     ///
-    /// May invalidate previously returned [`CommandMarkerIndex`] due to sorting.
+    /// May invalidate previously returned [`ReceiveMarkerIndex`] due to sorting.
     ///
-    /// Use [`ReplicationRegistry::register_marker`] to register a slot for command functions for this marker.
-    fn insert(&mut self, marker: CommandMarker) -> CommandMarkerIndex {
+    /// Use [`ReplicationRegistry::register_marker`] to register a slot for receive functions for this marker.
+    fn insert(&mut self, marker: ReceiveMarker) -> ReceiveMarkerIndex {
         let key = Reverse(marker.config.priority);
         let index = self
             .0
@@ -236,18 +234,18 @@ impl CommandMarkers {
 
         self.0.insert(index, marker);
 
-        CommandMarkerIndex(index)
+        ReceiveMarkerIndex(index)
     }
 
     /// Returns marker ID from its component ID.
-    fn marker_id(&self, component_id: ComponentId) -> CommandMarkerIndex {
+    fn marker_id(&self, component_id: ComponentId) -> ReceiveMarkerIndex {
         let index = self
             .0
             .iter()
             .position(|marker| marker.component_id == component_id)
             .unwrap_or_else(|| panic!("marker {component_id:?} wasn't registered"));
 
-        CommandMarkerIndex(index)
+        ReceiveMarkerIndex(index)
     }
 
     pub(super) fn iter_require_history(&self) -> impl Iterator<Item = bool> + '_ {
@@ -257,8 +255,8 @@ impl CommandMarkers {
 
 /// Component marker information.
 ///
-/// See also [`CommandMarkers`].
-struct CommandMarker {
+/// See also [`ReceiveMarkers`].
+struct ReceiveMarker {
     /// Marker ID.
     component_id: ComponentId,
 
@@ -297,7 +295,7 @@ pub(crate) struct EntityMarkers {
 impl EntityMarkers {
     pub(crate) fn read<'a>(
         &'a mut self,
-        markers: &CommandMarkers,
+        markers: &ReceiveMarkers,
         entity: impl Into<EntityRef<'a>>,
     ) {
         self.markers.clear();
@@ -315,7 +313,7 @@ impl EntityMarkers {
 
     /// Returns a slice of which markers are present on an entity.
     ///
-    /// Indices corresponds markers in to [`CommandMarkers`].
+    /// Indices corresponds markers in to [`ReceiveMarkers`].
     pub(super) fn markers(&self) -> &[bool] {
         &self.markers
     }
@@ -328,7 +326,7 @@ impl EntityMarkers {
 
 impl FromWorld for EntityMarkers {
     fn from_world(world: &mut World) -> Self {
-        let markers = world.resource::<CommandMarkers>();
+        let markers = world.resource::<ReceiveMarkers>();
         Self {
             markers: Vec::with_capacity(markers.0.len()),
             need_history: false,
@@ -336,35 +334,35 @@ impl FromWorld for EntityMarkers {
     }
 }
 
-/// Can be obtained from [`CommandMarkers::insert`].
+/// Can be obtained from [`ReceiveMarkers::insert`].
 ///
 /// Shouldn't be stored anywhere since insertion may invalidate old indices.
 #[derive(Clone, Copy, Deref, Debug)]
-pub(super) struct CommandMarkerIndex(usize);
+pub(super) struct ReceiveMarkerIndex(usize);
 
 #[cfg(test)]
 mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::shared::replication::registry::command_fns;
+    use crate::shared::replication::registry::receive_fns;
 
     #[test]
     #[should_panic]
     fn non_registered_marker() {
         let mut app = App::new();
-        app.init_resource::<CommandMarkers>()
+        app.init_resource::<ReceiveMarkers>()
             .init_resource::<ReplicationRegistry>()
             .set_marker_fns::<Marker, TestComponent>(
-                command_fns::default_write,
-                command_fns::default_remove::<TestComponent>,
+                receive_fns::default_write,
+                receive_fns::default_remove::<TestComponent>,
             );
     }
 
     #[test]
     fn sorting() {
         let mut app = App::new();
-        app.init_resource::<CommandMarkers>()
+        app.init_resource::<ReceiveMarkers>()
             .init_resource::<ReplicationRegistry>()
             .register_marker::<MarkerA>()
             .register_marker_with::<MarkerB>(MarkerConfig {
@@ -377,7 +375,7 @@ mod tests {
             })
             .register_marker::<MarkerD>();
 
-        let markers = app.world().resource::<CommandMarkers>();
+        let markers = app.world().resource::<ReceiveMarkers>();
         let priorities: Vec<_> = markers
             .0
             .iter()

@@ -3,7 +3,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     prelude::*,
-    shared::replication::registry::{FnsId, ReplicationRegistry, command_fns::MutWrite},
+    shared::replication::registry::{FnsId, ReplicationRegistry, receive_fns::MutWrite},
 };
 
 /// Component for [`ReplicationRule`](super::ReplicationRule).

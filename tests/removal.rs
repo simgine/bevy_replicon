@@ -5,7 +5,7 @@ use bevy_replicon::{
     server::server_tick::ServerTick,
     shared::replication::{
         deferred_entity::DeferredEntity,
-        registry::{command_fns, ctx::WriteCtx},
+        registry::{ctx::WriteCtx, receive_fns},
     },
     test_app::{ServerTestAppExt, TestClientEntity},
 };
@@ -98,7 +98,7 @@ fn multiple() {
 }
 
 #[test]
-fn command_fns() {
+fn receive_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -108,7 +108,7 @@ fn command_fns() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<Original>()
-        .set_command_fns(replace, command_fns::default_remove::<Replaced>)
+        .set_receive_fns(replace, receive_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -148,7 +148,7 @@ fn marker() {
         ))
         .register_marker::<ReplaceMarker>()
         .replicate::<Original>()
-        .set_marker_fns::<ReplaceMarker, _>(replace, command_fns::default_remove::<Replaced>)
+        .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
         .finish();
     }
 
