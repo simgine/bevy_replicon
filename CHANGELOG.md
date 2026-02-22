@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename `command_fns` module into `receive_fns`.
 - Rename `AppMarkerExt::set_command_fns` into `AppMarkerExt::set_receive_fns`.
 
+### Removed
+
+- `LinkConditionerPlugin`. It was used to add `ConditionerConfig` to `AppTypeRegistry`, but it's now done automatically.
+
 ## [0.38.2] - 2026-01-22
 
 ### Fixed

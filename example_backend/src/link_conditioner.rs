@@ -8,15 +8,6 @@ use bevy::prelude::*;
 use bevy_replicon::bytes::Bytes;
 use fastrand::Rng;
 
-/// Adds [`ConditionerConfig`] to [`AppTypeRegistry`].
-pub struct LinkConditionerPlugin;
-
-impl Plugin for LinkConditionerPlugin {
-    fn build(&self, app: &mut App) {
-        app.register_type::<ConditionerConfig>();
-    }
-}
-
 #[derive(Default)]
 pub(super) struct LinkConditioner {
     rng: Rng,
