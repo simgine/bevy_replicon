@@ -228,9 +228,9 @@ mod tests {
         );
     }
 
-    #[derive(Serialize, Deserialize, Component)]
+    #[derive(Component, Serialize, Deserialize)]
     struct A;
 
-    #[derive(Serialize, Deserialize, Component)]
+    #[derive(Component, Serialize, Deserialize)]
     struct B;
 }

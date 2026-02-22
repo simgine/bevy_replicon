@@ -201,14 +201,14 @@ trait BenchmarkComponent:
     const NAME: &'static str;
 }
 
-#[derive(Clone, Component, Default, Deserialize, Serialize)]
+#[derive(Component, Deserialize, Serialize, Default, Clone)]
 struct UsizeComponent(usize);
 
 impl BenchmarkComponent for UsizeComponent {
     const NAME: &'static str = "usize_component";
 }
 
-#[derive(Component, Clone, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Clone)]
 struct StringComponent(String);
 
 impl BenchmarkComponent for StringComponent {
@@ -225,7 +225,7 @@ impl BenchmarkComponent for StructComponent {
     const NAME: &'static str = "struct_component";
 }
 
-#[derive(Component, Clone, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Clone)]
 struct StructComponent {
     x: u32,
     y: u32,
