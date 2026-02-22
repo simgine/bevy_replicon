@@ -100,11 +100,7 @@ pub struct RepliconSharedPlugin {
 
 impl Plugin for RepliconSharedPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Replicated>()
-            .register_type::<ConnectedClient>()
-            .register_type::<NetworkIdMap>()
-            .register_type::<ClientStats>()
-            .init_state::<ClientState>()
+        app.init_state::<ClientState>()
             .init_state::<ServerState>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<NetworkIdMap>()
