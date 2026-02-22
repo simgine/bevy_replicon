@@ -18,7 +18,7 @@ use crate::prelude::*;
 ///
 /// See also [`EntityReplicated`] and the [ticks information](crate#ticks-information)
 /// in the quick start guide.
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct ConfirmHistory {
     /// Previously confirmed ticks, including the last tick at position 0.
     mask: u64,
