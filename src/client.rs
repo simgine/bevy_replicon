@@ -15,9 +15,9 @@ use crate::{
     shared::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
-            command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},
             mutate_index::MutateIndex,
+            receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
                 ReplicationRegistry,
                 ctx::{DespawnCtx, EntitySpawner, RemoveCtx, WriteCtx},
@@ -134,7 +134,7 @@ pub(super) fn receive_replication(
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
             world.resource_scope(|world, mut signature_map: Mut<SignatureMap>| {
                 world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
-                    world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
+                    world.resource_scope(|world, receive_markers: Mut<ReceiveMarkers>| {
                         world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
                             world.resource_scope(
                                 |world, mut replicated: Mut<Messages<EntityReplicated>>| {
@@ -151,7 +151,7 @@ pub(super) fn receive_replication(
                                         replicated: &mut replicated,
                                         mutate_ticks: mutate_ticks.as_mut(),
                                         stats: stats.as_mut(),
-                                        command_markers: &command_markers,
+                                        receive_markers: &receive_markers,
                                         registry: &registry,
                                         type_registry: &type_registry,
                                     };
@@ -481,7 +481,7 @@ fn apply_removals(
 
     params
         .entity_markers
-        .read(params.command_markers, &*client_entity);
+        .read(params.receive_markers, &*client_entity);
 
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
@@ -549,7 +549,7 @@ fn apply_changes(
 
     params
         .entity_markers
-        .read(params.command_markers, &*client_entity);
+        .read(params.receive_markers, &*client_entity);
 
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
@@ -670,7 +670,7 @@ fn apply_mutations(
 
     params
         .entity_markers
-        .read(params.command_markers, &*client_entity);
+        .read(params.receive_markers, &*client_entity);
 
     let Some(mut history) = client_entity.get_mut::<ConfirmHistory>() else {
         return Err(format!(
@@ -730,7 +730,7 @@ fn apply_mutations(
             fns.consume_or_write(
                 &mut ctx,
                 params.entity_markers,
-                params.command_markers,
+                params.receive_markers,
                 &mut client_entity,
                 data,
             )?;
@@ -759,7 +759,7 @@ struct ReceiveParams<'a> {
     replicated: &'a mut Messages<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
-    command_markers: &'a CommandMarkers,
+    receive_markers: &'a ReceiveMarkers,
     registry: &'a ReplicationRegistry,
     type_registry: &'a AppTypeRegistry,
 }

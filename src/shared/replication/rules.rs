@@ -6,7 +6,7 @@ use core::cmp::Reverse;
 use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
-use super::registry::{ReplicationRegistry, command_fns::MutWrite};
+use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
 use crate::prelude::*;
 use component::{BundleRules, ComponentRule, IntoComponentRules};
 use filter::{FilterRule, FilterRules};

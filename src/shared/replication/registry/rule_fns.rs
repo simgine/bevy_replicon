@@ -122,7 +122,7 @@ impl<C: Component> RuleFns<C> {
     /// If you want to ignore a component, just use its expected size to advance the cursor
     /// without deserializing (but be careful if the component is dynamically sized).
     ///
-    /// See [`MarkerConfig::need_history`](crate::shared::replication::command_markers::MarkerConfig::need_history)
+    /// See [`MarkerConfig::need_history`](crate::shared::replication::receive_markers::MarkerConfig::need_history)
     /// for details.
     pub fn with_consume(mut self, consume: ConsumeFn<C>) -> Self {
         self.consume = consume;

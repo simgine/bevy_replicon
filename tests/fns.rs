@@ -3,11 +3,12 @@ use bevy_replicon::{
     prelude::*,
     shared::{
         replication::{
-            command_markers::MarkerConfig,
             deferred_entity::DeferredEntity,
+            receive_markers::MarkerConfig,
             registry::{
-                ReplicationRegistry, command_fns,
+                ReplicationRegistry,
                 ctx::{DespawnCtx, WriteCtx},
+                receive_fns,
                 test_fns::TestFnsEntityExt,
             },
         },
@@ -75,7 +76,7 @@ fn remove() {
 fn write_with_command() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-        .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>);
+        .set_receive_fns(replace, receive_fns::default_remove::<ReplacedComponent>);
 
     let tick = RepliconTick::default();
     let (_, fns_id) =
@@ -94,7 +95,7 @@ fn write_with_command() {
 fn remove_with_command() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-        .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>);
+        .set_receive_fns(replace, receive_fns::default_remove::<ReplacedComponent>);
 
     let tick = RepliconTick::default();
     let (_, fns_id) =
@@ -115,7 +116,7 @@ fn write_without_marker() {
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -139,7 +140,7 @@ fn remove_without_marker() {
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -161,7 +162,7 @@ fn write_with_marker() {
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -184,7 +185,7 @@ fn remove_with_marker() {
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -207,11 +208,11 @@ fn write_with_multiple_markers() {
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         )
         .set_marker_fns::<Marker, _>(
-            command_fns::default_write::<OriginalComponent>,
-            command_fns::default_remove::<OriginalComponent>,
+            receive_fns::default_write::<OriginalComponent>,
+            receive_fns::default_remove::<OriginalComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -240,11 +241,11 @@ fn remove_with_multiple_markers() {
         .register_marker::<ReplaceMarker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         )
         .set_marker_fns::<Marker, _>(
-            command_fns::default_write::<OriginalComponent>,
-            command_fns::default_remove::<OriginalComponent>,
+            receive_fns::default_write::<OriginalComponent>,
+            receive_fns::default_remove::<OriginalComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -275,11 +276,11 @@ fn write_with_priority_marker() {
         .register_marker::<Marker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         )
         .set_marker_fns::<Marker, _>(
-            command_fns::default_write::<OriginalComponent>,
-            command_fns::default_remove::<OriginalComponent>,
+            receive_fns::default_write::<OriginalComponent>,
+            receive_fns::default_remove::<OriginalComponent>,
         );
 
     let tick = RepliconTick::default();
@@ -308,11 +309,11 @@ fn remove_with_priority_marker() {
         .register_marker::<Marker>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         )
         .set_marker_fns::<Marker, _>(
-            command_fns::default_write::<OriginalComponent>,
-            command_fns::default_remove::<OriginalComponent>,
+            receive_fns::default_write::<OriginalComponent>,
+            receive_fns::default_remove::<OriginalComponent>,
         );
 
     let tick = RepliconTick::default();

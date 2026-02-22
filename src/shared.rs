@@ -13,7 +13,7 @@ use backend::connected_client::NetworkIdMap;
 use message::registry::RemoteMessageRegistry;
 use replication::signature::SignatureMap;
 use replication::{
-    command_markers::CommandMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
+    receive_markers::ReceiveMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
     track_mutate_messages::TrackMutateMessages,
 };
 
@@ -113,7 +113,7 @@ impl Plugin for RepliconSharedPlugin {
             .init_resource::<ReplicationRegistry>()
             .init_resource::<ReplicationRules>()
             .init_resource::<SignatureMap>()
-            .init_resource::<CommandMarkers>()
+            .init_resource::<ReceiveMarkers>()
             .init_resource::<RemoteMessageRegistry>()
             .insert_resource(self.auth_method)
             .add_message::<DisconnectRequest>();

@@ -11,9 +11,9 @@ use bevy_replicon::{
     server::server_tick::ServerTick,
     shared::{
         replication::{
-            command_markers::MarkerConfig,
             deferred_entity::DeferredEntity,
-            registry::{command_fns, ctx::WriteCtx},
+            receive_markers::MarkerConfig,
+            registry::{ctx::WriteCtx, receive_fns},
         },
         server_entity_map::ServerEntityMap,
     },
@@ -319,7 +319,7 @@ fn related() {
 }
 
 #[test]
-fn command_fns() {
+fn receive_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -329,9 +329,9 @@ fn command_fns() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<BoolComponent>()
-        .set_command_fns(
-            command_fns::write_if_neq::<BoolComponent>,
-            command_fns::default_remove::<BoolComponent>,
+        .set_receive_fns(
+            receive_fns::write_if_neq::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .finish();
     }
@@ -396,7 +396,7 @@ fn marker_with_replace() {
         .replicate::<OriginalComponent>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         )
         .finish();
     }
@@ -452,7 +452,7 @@ fn marker_with_history() {
         })
         .set_marker_fns::<HistoryMarker, BoolComponent>(
             write_history,
-            command_fns::default_remove::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .replicate::<BoolComponent>()
         .finish();
@@ -522,7 +522,7 @@ fn marker_with_history_consume() {
         })
         .set_marker_fns::<HistoryMarker, BoolComponent>(
             write_history,
-            command_fns::default_remove::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .replicate::<BoolComponent>()
         .replicate::<MappedComponent>()
@@ -606,7 +606,7 @@ fn marker_with_history_old_update() {
         })
         .set_marker_fns::<HistoryMarker, BoolComponent>(
             write_history,
-            command_fns::default_remove::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .replicate::<BoolComponent>()
         .finish();

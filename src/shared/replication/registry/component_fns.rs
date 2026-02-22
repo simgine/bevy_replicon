@@ -2,24 +2,24 @@ use bevy::{prelude::*, ptr::Ptr};
 use bytes::Bytes;
 
 use super::{
-    command_fns::{MutWrite, UntypedCommandFns},
     ctx::{RemoveCtx, SerializeCtx, WriteCtx},
+    receive_fns::{MutWrite, UntypedReceiveFns},
     rule_fns::UntypedRuleFns,
 };
 use crate::shared::replication::{
-    command_markers::{CommandMarkerIndex, CommandMarkers, EntityMarkers},
     deferred_entity::DeferredEntity,
+    receive_markers::{EntityMarkers, ReceiveMarkerIndex, ReceiveMarkers},
 };
 
 /// Type-erased functions for a component.
 ///
-/// Stores type-erased command functions and functions that will restore original types.
+/// Stores type-erased receive functions and functions that will restore original types.
 pub(crate) struct ComponentFns {
     serialize: UntypedSerializeFn,
     write: UntypedWriteFn,
     consume: UntypedConsumeFn,
-    commands: UntypedCommandFns,
-    markers: Vec<Option<UntypedCommandFns>>,
+    receive: UntypedReceiveFns,
+    markers: Vec<Option<UntypedReceiveFns>>,
 }
 
 impl ComponentFns {
@@ -29,7 +29,7 @@ impl ComponentFns {
             serialize: untyped_serialize::<C>,
             write: untyped_write::<C>,
             consume: untyped_consume::<C>,
-            commands: UntypedCommandFns::default_fns::<C>(),
+            receive: UntypedReceiveFns::default_fns::<C>(),
             markers: vec![None; marker_slots],
         }
     }
@@ -37,7 +37,7 @@ impl ComponentFns {
     /// Adds new empty slot for a marker.
     ///
     /// Use [`Self::set_marker_fns`] to assign functions to it.
-    pub(super) fn add_marker_slot(&mut self, marker_id: CommandMarkerIndex) {
+    pub(super) fn add_marker_slot(&mut self, marker_id: ReceiveMarkerIndex) {
         self.markers.insert(*marker_id, None);
     }
 
@@ -45,36 +45,36 @@ impl ComponentFns {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `command_fns` was created for the same type as this instance.
+    /// The caller must ensure that `receive_fns` was created for the same type as this instance.
     ///
     /// # Panics
     ///
     /// Panics if there is no such slot for the marker. Use [`Self::add_marker_slot`] to assign.
     pub(super) unsafe fn set_marker_fns(
         &mut self,
-        marker_id: CommandMarkerIndex,
-        command_fns: UntypedCommandFns,
+        marker_id: ReceiveMarkerIndex,
+        receive_fns: UntypedReceiveFns,
     ) {
         let fns = self
             .markers
             .get_mut(*marker_id)
-            .unwrap_or_else(|| panic!("command fns should have a slot for {marker_id:?}"));
+            .unwrap_or_else(|| panic!("receive fns should have a slot for {marker_id:?}"));
 
         debug_assert!(
             fns.is_none(),
             "function for {marker_id:?} can't be set twice"
         );
 
-        *fns = Some(command_fns);
+        *fns = Some(receive_fns);
     }
 
     /// Sets default functions that will be called when there are no marker matches.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `command_fns` was created for the same type as this instance.
-    pub(super) unsafe fn set_command_fns(&mut self, command_fns: UntypedCommandFns) {
-        self.commands = command_fns;
+    /// The caller must ensure that `receive_fns` was created for the same type as this instance.
+    pub(super) unsafe fn set_receive_fns(&mut self, receive_fns: UntypedReceiveFns) {
+        self.receive = receive_fns;
     }
 
     /// Restores erased type from `ptr` and `rule_fns` to the type for which this instance was created,
@@ -110,15 +110,15 @@ impl ComponentFns {
         entity: &mut DeferredEntity,
         message: &mut Bytes,
     ) -> Result<()> {
-        let command_fns = self
+        let receive_fns = self
             .markers
             .iter()
             .zip(entity_markers.markers())
             .filter(|&(_, contains)| *contains)
             .find_map(|(&fns, _)| fns)
-            .unwrap_or(self.commands);
+            .unwrap_or(self.receive);
 
-        unsafe { (self.write)(ctx, &command_fns, rule_fns, entity, message) }
+        unsafe { (self.write)(ctx, &receive_fns, rule_fns, entity, message) }
     }
 
     /// Calls the assigned writing or consuming function based on entity markers.
@@ -134,20 +134,20 @@ impl ComponentFns {
         ctx: &mut WriteCtx,
         rule_fns: &UntypedRuleFns,
         entity_markers: &EntityMarkers,
-        command_markers: &CommandMarkers,
+        receive_markers: &ReceiveMarkers,
         entity: &mut DeferredEntity,
         message: &mut Bytes,
     ) -> Result<()> {
-        if let Some(command_fns) = self
+        if let Some(receive_fns) = self
             .markers
             .iter()
             .zip(entity_markers.markers())
-            .zip(command_markers.iter_require_history())
+            .zip(receive_markers.iter_require_history())
             .filter(|&((_, contains), _)| *contains)
             .find_map(|((&fns, _), need_history)| fns.map(|fns| (fns, need_history)))
             .and_then(|(fns, need_history)| need_history.then_some(fns))
         {
-            unsafe { (self.write)(ctx, &command_fns, rule_fns, entity, message) }
+            unsafe { (self.write)(ctx, &receive_fns, rule_fns, entity, message) }
         } else {
             unsafe { (self.consume)(ctx, rule_fns, message) }
         }
@@ -160,15 +160,15 @@ impl ComponentFns {
         entity_markers: &EntityMarkers,
         entity: &mut DeferredEntity,
     ) {
-        let command_fns = self
+        let receive_fns = self
             .markers
             .iter()
             .zip(entity_markers.markers())
             .filter(|&(_, contains)| *contains)
             .find_map(|(&fns, _)| fns)
-            .unwrap_or(self.commands);
+            .unwrap_or(self.receive);
 
-        command_fns.remove(ctx, entity)
+        receive_fns.remove(ctx, entity)
     }
 }
 
@@ -179,7 +179,7 @@ type UntypedSerializeFn =
 /// Signature of component writing functions that restore the original type.
 type UntypedWriteFn = unsafe fn(
     &mut WriteCtx,
-    &UntypedCommandFns,
+    &UntypedReceiveFns,
     &UntypedRuleFns,
     &mut DeferredEntity,
     &mut Bytes,
@@ -205,19 +205,19 @@ unsafe fn untyped_serialize<C: Component>(
     }
 }
 
-/// Resolves `rule_fns` to `C` and calls [`UntypedCommandFns::write`] for `C`.
+/// Resolves `rule_fns` to `C` and calls [`UntypedReceiveFns::write`] for `C`.
 ///
 /// # Safety
 ///
 /// The caller must ensure that `rule_fns` was created for `C`.
 unsafe fn untyped_write<C: Component>(
     ctx: &mut WriteCtx,
-    command_fns: &UntypedCommandFns,
+    receive_fns: &UntypedReceiveFns,
     rule_fns: &UntypedRuleFns,
     entity: &mut DeferredEntity,
     message: &mut Bytes,
 ) -> Result<()> {
-    unsafe { command_fns.write::<C>(ctx, &rule_fns.typed::<C>(), entity, message) }
+    unsafe { receive_fns.write::<C>(ctx, &rule_fns.typed::<C>(), entity, message) }
 }
 
 /// Resolves `rule_fns` to `C` and calls [`RuleFns::consume`](super::rule_fns::RuleFns) for `C`.
