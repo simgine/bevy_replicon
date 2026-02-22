@@ -12,7 +12,7 @@ use crate::{prelude::*, shared::replication::registry::component_mask::Component
 
 /// Tracks replication ticks for a client.
 #[derive(Component, Default)]
-pub struct ClientTicks {
+pub(crate) struct ClientTicks {
     /// Last acknowledged tick for each visible entity with its components.
     ///
     /// Used to track what the client has already received.
