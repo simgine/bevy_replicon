@@ -258,7 +258,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /// Defines what data is affected when the filter denies visibility.
     ///
     /// - To hide the entire entity, this type must be [`Entity`].
-    /// - To hide a single component on the entity, this type must be [`ComponentScope`].
+    /// - To hide a single component on the entity, this type must be [`SingleComponent`].
     /// - To hide more than one component on the entity, this type must be a tuple of those [`Component`]s.
     ///
     /// # Examples
@@ -293,7 +293,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     ///
     /// impl VisibilityFilter for Team {
     ///     type ClientComponent = Self;
-    ///     type Scope = ComponentScope<Health>;
+    ///     type Scope = SingleComponent<Health>;
     ///
     ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
@@ -439,15 +439,18 @@ pub trait FilterScope {
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope;
 }
 
+#[deprecated(since = "0.39.0", note = "Renamed into `SingleComponent`")]
+pub type ComponentScope<A> = SingleComponent<A>;
+
 /// A scope for a single component `A`.
 ///
 /// We can't implement [`FilterScope`] for both tuples and all types that implement [`Component`].
 /// This is why this wrapper is needed to set the scope for only a single component.
 ///
 /// If you need a [`FilterScope`] for multiple components, use a tuple directly, e.g. `(C1, C2)`.
-pub struct ComponentScope<A: Component>(PhantomData<A>);
+pub struct SingleComponent<A: Component>(PhantomData<A>);
 
-impl<C: Component<Mutability: MutWrite<C>>> FilterScope for ComponentScope<C> {
+impl<C: Component<Mutability: MutWrite<C>>> FilterScope for SingleComponent<C> {
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope {
         let mut mask = ComponentMask::default();
         let (index, _) = registry.init_component_fns::<C>(world);
