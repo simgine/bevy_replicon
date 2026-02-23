@@ -21,10 +21,10 @@ pub trait AppVisibilityExt {
     /**
     Registers a component as a remote visibility filter.
 
-    This component needs to be inserted on both the server's client entity and replicated entities.
-    If [`VisibilityFilter::is_visible`] on the entity component returns `false` for the
-    corresponding component on a client entity, the associated [`VisibilityFilter::Scope`]
-    (entity or components) becomes hidden for the client.
+    This component needs be inserted on replicated entities and will be tested against
+    [`VisibilityFilter::ClientComponent`] on client entities. If [`VisibilityFilter::is_visible`]
+    returns `false` for the component on a client entity, the associated [`VisibilityFilter::Scope`]
+    (entity or components) will become hidden for that client.
 
     If the component is missing on a replicated entity, it is treated as if
     [`VisibilityFilter::is_visible`] would return `false`.
@@ -77,9 +77,10 @@ pub trait AppVisibilityExt {
     }
 
     impl VisibilityFilter for Guild {
+        type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some_and(|c| self == c)
         }
     }
@@ -102,13 +103,14 @@ impl AppVisibilityExt for App {
         self.add_observer(update_for_new_clients::<F>)
             .add_observer(on_insert::<F>)
             .add_observer(on_remove::<F>)
+            .add_observer(on_client_remove::<F>)
     }
 }
 
 fn update_for_new_clients<F: VisibilityFilter>(
     insert: On<Insert, ClientVisibility>,
     registry: Res<FilterRegistry>,
-    mut clients: Query<&mut ClientVisibility, Without<F>>,
+    mut clients: Query<&mut ClientVisibility, Without<F::ClientComponent>>,
     entities: Query<(Entity, &F)>,
 ) {
     if let Ok(mut visibility) = clients.get_mut(insert.entity) {
@@ -129,7 +131,7 @@ fn on_insert<F: VisibilityFilter>(
     insert: On<Insert, F>,
     registry: Res<FilterRegistry>,
     entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
-    mut clients: Query<(Entity, Option<&F>, &mut ClientVisibility)>,
+    mut clients: Query<(Entity, Option<&F::ClientComponent>, &mut ClientVisibility)>,
 ) {
     let bit = registry.bit::<F>();
     if let Ok((client, client_component, mut visibility)) = clients.get_mut(insert.entity) {
@@ -158,103 +160,101 @@ fn on_remove<F: VisibilityFilter>(
     remove: On<Remove, F>,
     registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility>,
+) {
+    // `F` and `F::ClientComponent` could be the same,
+    // so we need to ensure that it wasn't removed from a client.
+    if clients.get(remove.entity).is_ok() {
+        return;
+    }
+
+    let bit = registry.bit::<F>();
+    debug!(
+        "removing `{}` filter from entity `{}`",
+        ShortName::of::<F>(),
+        remove.entity
+    );
+    for mut visibility in &mut clients {
+        visibility.set(remove.entity, bit, true);
+    }
+}
+
+fn on_client_remove<F: VisibilityFilter>(
+    remove: On<Remove, F::ClientComponent>,
+    registry: Res<FilterRegistry>,
+    mut clients: Query<&mut ClientVisibility>,
     entities: Query<(Entity, &F), Without<ClientVisibility>>,
 ) {
+    let Ok(mut visibility) = clients.get_mut(remove.entity) else {
+        return;
+    };
+
     let bit = registry.bit::<F>();
-    if let Ok(mut visibility) = clients.get_mut(remove.entity) {
-        for (entity, component) in &entities {
-            let visible = component.is_visible(None);
-            debug!(
-                "evaluating removed `{}` from client `{}` for entity `{entity}` to `{visible}`",
-                ShortName::of::<F>(),
-                remove.entity
-            );
-            visibility.set(entity, bit, visible);
-        }
-    } else {
+    for (entity, component) in &entities {
+        let visible = component.is_visible(None);
         debug!(
-            "removing `{}` filter from `{}`",
+            "evaluating removed `{}` from client `{}` for entity `{entity}` to `{visible}`",
             ShortName::of::<F>(),
             remove.entity
         );
-        for mut visibility in &mut clients {
-            visibility.set(remove.entity, bit, true);
+        visibility.set(entity, bit, visible);
+    }
+}
+
+/// Component that controls remote entity visibility.
+///
+/// Should be registered via [`AppVisibilityExt`].
+pub trait VisibilityFilter: Component<Mutability = Immutable> {
+    /**
+    Component on the client entity that will be passed to [`Self::is_visible`].
+
+    # Examples
+
+    Different component for the client and replicated entities:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component)]
+    #[component(immutable)]
+    struct Moderator;
+
+    #[derive(Component)]
+    #[component(immutable)]
+    struct SensitiveInfo;
+
+    impl VisibilityFilter for SensitiveInfo {
+        type ClientComponent = Moderator;
+        type Scope = Entity;
+
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+            // Only moderators can see entities with sensitive information.
+            client_component.is_some()
         }
     }
-}
+    ```
 
-/**
-Component that controls remote entity visibility.
+    You can use `Self` to check for same component on both the client and replicated entities:
 
-Should be registered via [`AppVisibilityExt`].
-
-# Examples
-
-Visible if the filter is present on both the entity and the client:
-
-```
-# use bevy::prelude::*;
-# use bevy_replicon::prelude::*;
-/// Only ghost players can see ghosts.
-#[derive(Component)]
-#[component(immutable)] // Component should be immutable.
-struct Ghost;
-
-impl VisibilityFilter for Ghost {
-    type Scope = Entity;
-
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
-        client_component.is_some()
-    }
-}
-```
-
-Visible if the entity and the client belong to the same team:
-
-```
-# use bevy::prelude::*;
-# use bevy_replicon::prelude::*;
-#[derive(Component, PartialEq)]
-#[component(immutable)]
-struct Team(u8);
-
-impl VisibilityFilter for Team {
-    type Scope = Entity;
-
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
-        client_component.is_some_and(|c| self == c)
-    }
-}
-```
-
-Visible if client has all bits the entity has:
-
-```
-# use bevy::prelude::*;
-# use bevy_replicon::prelude::*;
-use bitflags::bitflags;
-
-bitflags! {
-    #[derive(Component, Clone, Copy)]
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component, PartialEq)]
     #[component(immutable)]
-    pub(crate) struct RemoteVisibility: u8 {
-        const SPIRIT = 0b0001;
-        const STEALTH = 0b0010;
-        const SHADOW = 0b0100;
-        const QUEST_ONLY = 0b1000;
-    }
-}
+    struct SpectatorOnly;
 
-impl VisibilityFilter for RemoteVisibility {
-    type Scope = Entity;
+    impl VisibilityFilter for SpectatorOnly {
+        type ClientComponent = Self;
+        type Scope = Entity;
 
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
-        client_component.is_some_and(|&c| self.contains(c))
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+            // Visible only if the client also has `SpectatorOnly`.
+            client_component.is_some()
+        }
     }
-}
-```
-*/
-pub trait VisibilityFilter: Component<Mutability = Immutable> {
+    ```
+     */
+    type ClientComponent: Component<Mutability = Immutable>;
+
     /// Defines what data is affected when the filter denies visibility.
     ///
     /// - To hide the entire entity, this type must be [`Entity`].
@@ -273,9 +273,10 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /// struct Team(u8);
     ///
     /// impl VisibilityFilter for Team {
+    ///     type ClientComponent = Self;
     ///     type Scope = Entity;
     ///
-    ///     fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
     ///     }
     /// }
@@ -291,9 +292,10 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /// struct Team(u8);
     ///
     /// impl VisibilityFilter for Team {
+    ///     type ClientComponent = Self;
     ///     type Scope = ComponentScope<Health>;
     ///
-    ///     fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
     ///     }
     /// }
@@ -312,9 +314,10 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /// struct Team(u8);
     ///
     /// impl VisibilityFilter for Team {
+    ///     type ClientComponent = Self;
     ///     type Scope = (Health, Stats);
     ///
-    ///     fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
     ///     }
     /// }
@@ -329,8 +332,105 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /// ```
     type Scope: FilterScope;
 
-    /// Returns `true` if a client with this component should see [`Self::Scope`] for an entity with this component.
-    fn is_visible(&self, client_component: Option<&Self>) -> bool;
+    /**
+    Returns `true` if a client should see [`Self::Scope`] for an entity with this component
+    based on [`Self::ClientComponent`] .
+
+    # Examples
+
+    Visible if the component is present on both the entity and the client:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    /// Only astral players can see other astral entities.
+    #[derive(Component)]
+    #[component(immutable)] // Component should be immutable.
+    struct Astral;
+
+    impl VisibilityFilter for Astral {
+        type ClientComponent = Self;
+        type Scope = Entity;
+
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+            client_component.is_some()
+        }
+    }
+    ```
+
+    Visible if the component is present on the entity, but missing on the client:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component)]
+    #[component(immutable)]
+    struct Unit;
+
+    #[derive(Component)]
+    #[component(immutable)]
+    struct Blind;
+
+    impl VisibilityFilter for Blind {
+        type ClientComponent = Unit;
+        type Scope = Entity;
+
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+            // Blind clients cannot see units.
+            client_component.is_none()
+        }
+    }
+    ```
+
+    Visible if the entity and the client have equal component values:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component, PartialEq)]
+    #[component(immutable)]
+    struct Team(u8);
+
+    impl VisibilityFilter for Team {
+        type ClientComponent = Self;
+        type Scope = Entity;
+
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+            // Visible if the client belongs to the same team.
+            client_component.is_some_and(|c| self == c)
+        }
+    }
+    ```
+
+    Visible if client has all bits the entity has:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    use bitflags::bitflags;
+
+    bitflags! {
+        #[derive(Component, Clone, Copy)]
+        #[component(immutable)]
+        pub(crate) struct RemoteVisibility: u8 {
+            const SPIRIT = 0b0001;
+            const STEALTH = 0b0010;
+            const SHADOW = 0b0100;
+            const QUEST_ONLY = 0b1000;
+        }
+    }
+
+    impl VisibilityFilter for RemoteVisibility {
+        type ClientComponent = Self;
+        type Scope = Entity;
+
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+            client_component.is_some_and(|&c| self.contains(c))
+        }
+    }
+    ```
+    */
+    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool;
 }
 
 /// Associates the type with a visibility scope.
@@ -393,18 +493,25 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .init_resource::<ReplicationRegistry>()
-            .add_visibility_filter::<A>();
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
 
-        let client1 = app.world_mut().spawn((ClientVisibility::default(), A)).id();
+        let client1 = app
+            .world_mut()
+            .spawn((ClientVisibility::default(), SelfFilter, ClientFilter))
+            .id();
         let client2 = app.world_mut().spawn(ClientVisibility::default()).id();
-        let entity = app.world_mut().spawn(A).id();
+        let entity1 = app.world_mut().spawn(SelfFilter).id();
+        let entity2 = app.world_mut().spawn(EntityFilter).id();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.get(entity).is_hidden(registry));
+        assert!(!visibility1.get(entity1).is_hidden(registry));
+        assert!(!visibility1.get(entity2).is_hidden(registry));
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(visibility2.get(entity).is_hidden(registry));
+        assert!(visibility2.get(entity1).is_hidden(registry));
+        assert!(visibility2.get(entity2).is_hidden(registry));
     }
 
     #[test]
@@ -412,18 +519,25 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .init_resource::<ReplicationRegistry>()
-            .add_visibility_filter::<A>();
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
 
-        let entity = app.world_mut().spawn(A).id();
-        let client1 = app.world_mut().spawn((ClientVisibility::default(), A)).id();
+        let entity1 = app.world_mut().spawn(SelfFilter).id();
+        let entity2 = app.world_mut().spawn(EntityFilter).id();
+        let client1 = app
+            .world_mut()
+            .spawn((ClientVisibility::default(), SelfFilter, ClientFilter))
+            .id();
         let client2 = app.world_mut().spawn(ClientVisibility::default()).id();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.get(entity).is_hidden(registry));
+        assert!(!visibility1.get(entity1).is_hidden(registry));
+        assert!(!visibility1.get(entity2).is_hidden(registry));
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(visibility2.get(entity).is_hidden(registry));
+        assert!(visibility2.get(entity1).is_hidden(registry));
+        assert!(visibility2.get(entity2).is_hidden(registry));
     }
 
     #[test]
@@ -431,14 +545,25 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .init_resource::<ReplicationRegistry>()
-            .add_visibility_filter::<A>();
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
 
         let client = app.world_mut().spawn(ClientVisibility::default()).id();
-        let entity = app.world_mut().spawn(A).remove::<A>().id();
+        let entity1 = app
+            .world_mut()
+            .spawn(SelfFilter)
+            .remove::<SelfFilter>()
+            .id();
+        let entity2 = app
+            .world_mut()
+            .spawn(EntityFilter)
+            .remove::<EntityFilter>()
+            .id();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(!visibility.get(entity).is_hidden(registry));
+        assert!(!visibility.get(entity1).is_hidden(registry));
+        assert!(!visibility.get(entity2).is_hidden(registry));
     }
 
     #[test]
@@ -446,18 +571,21 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .init_resource::<ReplicationRegistry>()
-            .add_visibility_filter::<A>();
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
 
-        let entity = app.world_mut().spawn(A).id();
+        let entity1 = app.world_mut().spawn(SelfFilter).id();
+        let entity2 = app.world_mut().spawn(EntityFilter).id();
         let client = app
             .world_mut()
-            .spawn((ClientVisibility::default(), A))
-            .remove::<A>()
+            .spawn((ClientVisibility::default(), SelfFilter, ClientFilter))
+            .remove::<(SelfFilter, ClientFilter)>()
             .id();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(visibility.get(entity).is_hidden(registry));
+        assert!(visibility.get(entity1).is_hidden(registry));
+        assert!(visibility.get(entity2).is_hidden(registry));
     }
 
     #[test]
@@ -465,15 +593,18 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<FilterRegistry>()
             .init_resource::<ReplicationRegistry>()
-            .add_visibility_filter::<A>()
-            .add_visibility_filter::<B>();
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
 
         let client1 = app
             .world_mut()
-            .spawn((ClientVisibility::default(), A, B))
+            .spawn((ClientVisibility::default(), SelfFilter, ClientFilter))
             .id();
-        let client2 = app.world_mut().spawn((ClientVisibility::default(), A)).id();
-        let entity = app.world_mut().spawn((A, B)).id();
+        let client2 = app
+            .world_mut()
+            .spawn((ClientVisibility::default(), SelfFilter))
+            .id();
+        let entity = app.world_mut().spawn((SelfFilter, EntityFilter)).id();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
@@ -483,14 +614,14 @@ mod tests {
         assert!(visibility2.get(entity).is_hidden(registry));
 
         // Hide entity from the first client too.
-        app.world_mut().entity_mut(client1).remove::<B>();
+        app.world_mut().entity_mut(client1).remove::<ClientFilter>();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
         assert!(visibility1.get(entity).is_hidden(registry));
 
         // Relax visibility constraints to make it visible to both.
-        app.world_mut().entity_mut(entity).remove::<B>();
+        app.world_mut().entity_mut(entity).remove::<EntityFilter>();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
@@ -502,25 +633,31 @@ mod tests {
 
     #[derive(Component)]
     #[component(immutable)]
-    struct A;
+    struct SelfFilter;
 
-    impl VisibilityFilter for A {
+    impl VisibilityFilter for SelfFilter {
+        type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some()
         }
     }
 
     #[derive(Component)]
     #[component(immutable)]
-    struct B;
+    struct EntityFilter;
 
-    impl VisibilityFilter for B {
+    impl VisibilityFilter for EntityFilter {
+        type ClientComponent = ClientFilter;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some()
         }
     }
+
+    #[derive(Component)]
+    #[component(immutable)]
+    struct ClientFilter;
 }

@@ -747,9 +747,10 @@ impl Team {
 
 /// Replicate commands only for units owned by the player.
 impl VisibilityFilter for Team {
+    type ClientComponent = Self;
     type Scope = ComponentScope<Command>;
 
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
         client_component.is_some_and(|c| self == c)
     }
 }

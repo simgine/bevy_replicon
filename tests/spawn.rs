@@ -580,9 +580,10 @@ struct B;
 struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
         client_component.is_some()
     }
 }

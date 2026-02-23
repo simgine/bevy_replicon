@@ -325,9 +325,10 @@ struct TestComponent;
 struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
         client_component.is_some()
     }
 }
@@ -337,9 +338,10 @@ impl VisibilityFilter for EntityVisibility {
 struct ComponentVisibility;
 
 impl VisibilityFilter for ComponentVisibility {
+    type ClientComponent = Self;
     type Scope = ComponentScope<TestComponent>;
 
-    fn is_visible(&self, client_component: Option<&Self>) -> bool {
+    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
         client_component.is_some()
     }
 }
