@@ -220,9 +220,10 @@ mod tests {
     struct EntityVisibility;
 
     impl VisibilityFilter for EntityVisibility {
+        type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some()
         }
     }
@@ -232,9 +233,10 @@ mod tests {
     struct ComponentVisibility;
 
     impl VisibilityFilter for ComponentVisibility {
+        type ClientComponent = Self;
         type Scope = ComponentScope<A>;
 
-        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some()
         }
     }
@@ -244,9 +246,10 @@ mod tests {
     struct MultiComponentVisibility;
 
     impl VisibilityFilter for MultiComponentVisibility {
+        type ClientComponent = Self;
         type Scope = (A, B);
 
-        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some()
         }
     }
