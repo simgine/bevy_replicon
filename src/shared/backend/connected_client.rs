@@ -27,6 +27,7 @@ use crate::prelude::*;
 ///
 /// See also [`AuthorizedClient`].
 #[derive(Component, Reflect)]
+#[component(immutable)]
 #[require(Name::new("Connected client"), ConnectedClientStats)]
 pub struct ConnectedClient {
     /// Maximum size of a message that can be transferred over unreliable channel without

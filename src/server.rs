@@ -942,6 +942,7 @@ struct DespawnBuffer(Vec<Entity>);
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
 #[derive(Component, Reflect, Default)]
+#[component(immutable)]
 #[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
 
