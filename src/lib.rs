@@ -730,11 +730,14 @@ pub mod prelude {
     };
 
     #[cfg(feature = "server")]
+    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
-        visibility::{AppVisibilityExt, ComponentScope, FilterScope, VisibilityFilter},
+        visibility::{
+            AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
+        },
     };
 
     #[cfg(feature = "client_diagnostics")]

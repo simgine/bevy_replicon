@@ -339,7 +339,7 @@ struct ComponentVisibility;
 
 impl VisibilityFilter for ComponentVisibility {
     type ClientComponent = Self;
-    type Scope = ComponentScope<TestComponent>;
+    type Scope = SingleComponent<TestComponent>;
 
     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
         client_component.is_some()
