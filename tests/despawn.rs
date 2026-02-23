@@ -50,6 +50,40 @@ fn single() {
 }
 
 #[test]
+fn resource() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_resource::<TestResource>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.world_mut().insert_resource(TestResource);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert!(client_app.world().contains_resource::<TestResource>());
+
+    server_app.world_mut().remove_resource::<TestResource>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(!client_app.world().contains_resource::<TestResource>());
+}
+
+#[test]
 fn with_relations() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -319,6 +353,9 @@ fn with_visibility_gain_and_signature() {
 
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
+
+#[derive(Resource, Deserialize, Serialize)]
+struct TestResource;
 
 #[derive(Component)]
 #[component(immutable)]
