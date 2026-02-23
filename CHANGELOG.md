@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `ClientStats` now represents only current client statistics. Use the `ConnectedClientStats` component for connected client statistics on the server.
+- `ConditionerConfig` now represents configuration only for a connected client on the server. Use the `GlobalConditionerConfig` resource for global server or client configuration.
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.
 - Make `ClientMessages::received_count` public.
 - Make `increment_tick` public.

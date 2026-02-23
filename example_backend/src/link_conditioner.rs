@@ -78,16 +78,11 @@ impl PartialOrd for TimedMessage {
     }
 }
 
-/// Configuration for simulating various network conditions.
+/// Configuration for simulating various network conditions
+/// for a connected client on the server.
 ///
-/// When inserted as a resource, these settings apply to all received messages:
-/// - For a client, it affects messages received from the server.
-/// - For a server, it affects messages received from all connected clients.
-///
-/// You can also insert this as a component on a connected entity.
-/// This will affect only that specific entity and take priority over
-/// the resource configuration.
-#[derive(Resource, Component, Reflect, Debug, Clone, Copy)]
+/// Takes priority over the [`GlobalConditionerConfig`] resource.
+#[derive(Component, Reflect, Debug, Clone, Copy)]
 pub struct ConditionerConfig {
     /// Base delay for incoming messages in milliseconds.
     pub latency: u16,
@@ -102,6 +97,15 @@ pub struct ConditionerConfig {
     /// Represented as a value between 0 and 1.
     pub loss: f32,
 }
+
+/// Configuration for simulating various network conditions.
+///
+/// - On a client, it affects messages received from the server.
+/// - On a server, it affects messages received from all connected clients.
+///
+/// See also [`ConditionerConfig`].
+#[derive(Resource, Deref, DerefMut, Reflect, Debug, Clone, Copy)]
+pub struct GlobalConditionerConfig(pub ConditionerConfig);
 
 impl ConditionerConfig {
     pub const VERY_GOOD: Self = Self {
