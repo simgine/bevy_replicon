@@ -749,8 +749,8 @@ impl Team {
 impl VisibilityFilter for Team {
     type Scope = ComponentScope<Command>;
 
-    fn is_visible(&self, entity_filter: &Self) -> bool {
-        self == entity_filter
+    fn is_visible(&self, client_component: Option<&Self>) -> bool {
+        client_component.is_some_and(|c| self == c)
     }
 }
 

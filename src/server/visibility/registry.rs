@@ -222,8 +222,8 @@ mod tests {
     impl VisibilityFilter for EntityVisibility {
         type Scope = Entity;
 
-        fn is_visible(&self, _entity_filter: &Self) -> bool {
-            true
+        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+            client_component.is_some()
         }
     }
 
@@ -234,8 +234,8 @@ mod tests {
     impl VisibilityFilter for ComponentVisibility {
         type Scope = ComponentScope<A>;
 
-        fn is_visible(&self, _entity_filter: &Self) -> bool {
-            true
+        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+            client_component.is_some()
         }
     }
 
@@ -246,8 +246,8 @@ mod tests {
     impl VisibilityFilter for MultiComponentVisibility {
         type Scope = (A, B);
 
-        fn is_visible(&self, _entity_filter: &Self) -> bool {
-            true
+        fn is_visible(&self, client_component: Option<&Self>) -> bool {
+            client_component.is_some()
         }
     }
 
