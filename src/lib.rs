@@ -39,7 +39,7 @@ This part is specific to your messaging backend. For `bevy_replicon_renet`,
 see [this section](https://docs.rs/bevy_replicon_renet#server-and-client-creation).
 
 On server connected clients represented as entities with [`ConnectedClient`] component.
-Their data represented as components, such as [`ClientStats`]. Users can also attach their
+Their data represented as components, such as [`ConnectedClientStats`]. Users can also attach their
 own metadata to them or even replicate these entities back to clients.
 
 These entities are automatically spawned and despawned by the messaging backend. You can
@@ -699,7 +699,7 @@ pub mod prelude {
         shared::{
             AuthMethod, RepliconSharedPlugin,
             backend::{
-                ClientState, ClientStats, DisconnectRequest, ServerState,
+                ClientState, ClientStats, ConnectedClientStats, DisconnectRequest, ServerState,
                 channels::{Channel, RepliconChannels},
                 client_messages::ClientMessages,
                 connected_client::ConnectedClient,

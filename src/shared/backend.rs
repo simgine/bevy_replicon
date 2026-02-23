@@ -8,7 +8,7 @@
 //! - Update the [`ServerMessages`](server_messages::ServerMessages) and [`ClientMessages`](client_messages::ClientMessages) resources.
 //! - Spawn and despawn entities with [`ConnectedClient`](connected_client::ConnectedClient) component.
 //! - React on [`DisconnectRequest`] message.
-//! - Optionally update statistic in [`ClientStats`] resource and components.
+//! - Optionally update statistics in [`ClientStats`] resource and [`ConnectedClientStats`] components on connected client entities.
 //!
 //! This way, integrations can be provided as separate crates without requiring us or crate authors to maintain them under a feature.
 //! See the documentation on types in this module for details.
@@ -76,9 +76,7 @@ pub struct DisconnectRequest {
     pub client: Entity,
 }
 
-/// Statistic for the current client when used as a resource,
-/// or for a connected client when used as a component
-/// on connected entities on the server.
+/// Statistic for the current client.
 ///
 /// All values can be zero if not provided by the backend.
 ///
@@ -87,7 +85,7 @@ pub struct DisconnectRequest {
 /// Should only be modified from the messaging backend.
 ///
 /// </div>
-#[derive(Resource, Component, Default, Reflect, Debug, Clone, Copy)]
+#[derive(Resource, Default, Reflect, Debug, Clone, Copy)]
 pub struct ClientStats {
     /// Round-time trip in seconds for the connection.
     pub rtt: f64,
@@ -101,6 +99,18 @@ pub struct ClientStats {
     /// Bytes received per second for the connection.
     pub received_bps: f64,
 }
+
+/// Statistic for a connected client on the server.
+///
+/// All values can be zero if not provided by the backend.
+///
+/// <div class="warning">
+///
+/// Should only be modified from the messaging backend.
+///
+/// </div>
+#[derive(Component, Deref, DerefMut, Default, Reflect, Debug, Clone, Copy)]
+pub struct ConnectedClientStats(pub ClientStats);
 
 #[cfg(test)]
 mod tests {
