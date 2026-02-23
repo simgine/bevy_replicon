@@ -223,12 +223,8 @@ mod tests {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(
-            &self,
-            _client: Entity,
-            client_component: Option<&Self::ClientComponent>,
-        ) -> bool {
-            client_component.is_some()
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some()
         }
     }
 
@@ -240,12 +236,8 @@ mod tests {
         type ClientComponent = Self;
         type Scope = SingleComponent<A>;
 
-        fn is_visible(
-            &self,
-            _client: Entity,
-            client_component: Option<&Self::ClientComponent>,
-        ) -> bool {
-            client_component.is_some()
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some()
         }
     }
 
@@ -257,12 +249,8 @@ mod tests {
         type ClientComponent = Self;
         type Scope = (A, B);
 
-        fn is_visible(
-            &self,
-            _client: Entity,
-            client_component: Option<&Self::ClientComponent>,
-        ) -> bool {
-            client_component.is_some()
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some()
         }
     }
 
