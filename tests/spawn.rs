@@ -49,7 +49,7 @@ fn empty() {
 }
 
 #[test]
-fn with_component() {
+fn component() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -75,7 +75,7 @@ fn with_component() {
 }
 
 #[test]
-fn with_multiple_components() {
+fn multiple_components() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -109,7 +109,7 @@ fn with_multiple_components() {
 }
 
 #[test]
-fn with_old_component() {
+fn old_component() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
