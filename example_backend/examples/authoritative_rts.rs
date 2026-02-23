@@ -94,7 +94,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
         Cli::Singleplayer { team } => {
             info!("starting singleplayer as `{team:?}`");
             commands.client_trigger(TeamRequest { team });
-            commands.insert_resource(team);
+            commands.insert_resource(LocalTeam(team));
         }
         Cli::Server { port, team } => {
             info!("starting server as `{team:?}` at port {port}");
@@ -103,7 +103,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
 
-            commands.insert_resource(team);
+            commands.insert_resource(LocalTeam(team));
             commands.spawn(Text::new("Server"));
         }
         Cli::Client { port, ip, team } => {
@@ -114,7 +114,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let addr = client.local_addr()?;
             commands.insert_resource(client);
 
-            commands.insert_resource(team);
+            commands.insert_resource(LocalTeam(team));
             commands.spawn(Text(format!("Client: {addr}")));
         }
     }
@@ -123,8 +123,8 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
 }
 
 /// Sends the client's team choice to the server.
-fn trigger_team_request(mut commands: Commands, team: Res<Team>) {
-    commands.client_trigger(TeamRequest { team: *team });
+fn trigger_team_request(mut commands: Commands, local_team: Res<LocalTeam>) {
+    commands.client_trigger(TeamRequest { team: **local_team });
 }
 
 /// Assigns a team to a player.
@@ -132,7 +132,7 @@ fn apply_team_request(
     team_request: On<FromClient<TeamRequest>>,
     mut commands: Commands,
     mut disconnects: MessageWriter<DisconnectRequest>,
-    server_team: Res<Team>,
+    server_team: Res<LocalTeam>,
     teams: Query<(Entity, &Team)>,
 ) {
     let client = team_request
@@ -143,7 +143,7 @@ fn apply_team_request(
     if let Some((client_id, team)) = teams
         .iter()
         .map(|(client, team)| (ClientId::Client(client), *team))
-        .chain(iter::once((ClientId::Server, *server_team)))
+        .chain(iter::once((ClientId::Server, **server_team)))
         .find(|&(_, team)| team == team_request.team)
     {
         error!(
@@ -190,10 +190,10 @@ fn trigger_unit_spawn(
 fn apply_unit_spawn(
     spawn: On<FromClient<UnitSpawn>>,
     mut commands: Commands,
-    server_team: Res<Team>,
+    server_team: Res<LocalTeam>,
     teams: Query<&Team>,
 ) {
-    let Some(team) = select_team(spawn.client_id, &server_team, teams) else {
+    let Some(team) = select_team(spawn.client_id, **server_team, teams) else {
         error!(
             "`{}` attempted to spawn a unit but has no team",
             spawn.client_id
@@ -236,7 +236,7 @@ fn select_units(
     drag: On<Pointer<Drag>>,
     mut commands: Commands,
     mut selection: ResMut<Selection>,
-    team: Res<Team>,
+    local_team: Res<LocalTeam>,
     camera: Single<(&Camera, &GlobalTransform)>,
     units: Query<(Entity, &Team, &GlobalTransform, &Aabb, Has<Selected>)>,
 ) -> Result<()> {
@@ -253,15 +253,15 @@ fn select_units(
     selection.rect = Rect::from_corners(origin, end);
     selection.active = true;
 
-    for (unit_entity, &unit_team, transform, aabb, prev_selected) in &units {
+    for (entity, &team, transform, aabb, prev_selected) in &units {
         let center = transform.translation_vec3a() + aabb.center;
         let rect = Rect::from_center_half_size(center.truncate(), aabb.half_extents.truncate());
         let selected = !selection.rect.intersect(rect).is_empty();
         if selected != prev_selected {
-            if selected && unit_team == *team {
-                commands.entity(unit_entity).insert(Selected);
+            if selected && team == **local_team {
+                commands.entity(entity).insert(Selected);
             } else {
-                commands.entity(unit_entity).remove::<Selected>();
+                commands.entity(entity).remove::<Selected>();
             }
         }
     }
@@ -319,7 +319,7 @@ fn apply_units_move(
     move_units: On<FromClient<MoveUnits>>,
     mut slots: Local<Vec<Vec2>>,
     mut positions: Local<Vec<Vec2>>,
-    server_team: Res<Team>,
+    server_team: Res<LocalTeam>,
     teams: Query<&Team>,
     mut units: Query<(&Team, &GlobalTransform, &mut Command)>,
 ) {
@@ -331,7 +331,7 @@ fn apply_units_move(
         return;
     }
 
-    let Some(team) = select_team(move_units.client_id, &server_team, teams) else {
+    let Some(team) = select_team(move_units.client_id, **server_team, teams) else {
         error!(
             "`{}` attempted to move units but has no team",
             move_units.client_id
@@ -564,11 +564,11 @@ fn draw_selected(mut gizmos: Gizmos, units: Query<(&GlobalTransform, &Command), 
 ///
 /// If it's [`ClientId::Server`], uses the value from resource.
 /// Should be called only on server.
-fn select_team(client_id: ClientId, server_team: &Res<Team>, teams: Query<&Team>) -> Option<Team> {
+fn select_team(client_id: ClientId, server_team: Team, teams: Query<&Team>) -> Option<Team> {
     if let ClientId::Client(client) = client_id {
         teams.get(client).copied().ok()
     } else {
-        Some(**server_team)
+        Some(server_team)
     }
 }
 
@@ -692,6 +692,9 @@ struct Unit;
 #[derive(Component)]
 struct Player;
 
+#[derive(Resource, Deref, DerefMut, Clone, Copy)]
+struct LocalTeam(Team);
+
 /// Team color.
 ///
 /// This palette matches the team colors from Warcraft III.
@@ -700,7 +703,6 @@ struct Player;
 /// Also present on player entities and units as component to associate
 /// them with teams.
 #[derive(
-    Resource,
     Component,
     Serialize,
     Deserialize,
