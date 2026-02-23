@@ -583,7 +583,11 @@ impl VisibilityFilter for EntityVisibility {
     type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+    fn is_visible(
+        &self,
+        _client: Entity,
+        client_component: Option<&Self::ClientComponent>,
+    ) -> bool {
         client_component.is_some()
     }
 }

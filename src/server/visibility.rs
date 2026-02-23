@@ -80,7 +80,7 @@ pub trait AppVisibilityExt {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some_and(|c| self == c)
         }
     }
@@ -116,7 +116,7 @@ fn update_for_new_clients<F: VisibilityFilter>(
     if let Ok(mut visibility) = clients.get_mut(insert.entity) {
         let bit = registry.bit::<F>();
         for (entity, component) in &entities {
-            let visible = component.is_visible(None);
+            let visible = component.is_visible(insert.entity, None);
             debug!(
                 "evaluating missing `{}` for new client `{}` for entity `{entity}` to `{visible}`",
                 ShortName::of::<F>(),
@@ -136,7 +136,7 @@ fn on_insert<F: VisibilityFilter>(
     let bit = registry.bit::<F>();
     if let Ok((client, client_component, mut visibility)) = clients.get_mut(insert.entity) {
         for (entity, component) in &entities {
-            let visible = component.is_visible(client_component);
+            let visible = component.is_visible(client, client_component);
             debug!(
                 "evaluating inserted `{}` to client `{client}` for entity `{entity}` to `{visible}`",
                 ShortName::of::<F>(),
@@ -146,7 +146,7 @@ fn on_insert<F: VisibilityFilter>(
     } else {
         let (entity, component) = entities.get(insert.entity).unwrap();
         for (client, client_component, mut visibility) in &mut clients {
-            let visible = component.is_visible(client_component);
+            let visible = component.is_visible(client, client_component);
             debug!(
                 "evaluating inserted `{}` to entity `{entity}` for client `{client}` to `{visible}`",
                 ShortName::of::<F>(),
@@ -190,7 +190,7 @@ fn on_client_remove<F: VisibilityFilter>(
 
     let bit = registry.bit::<F>();
     for (entity, component) in &entities {
-        let visible = component.is_visible(None);
+        let visible = component.is_visible(remove.entity, None);
         debug!(
             "evaluating removed `{}` from client `{}` for entity `{entity}` to `{visible}`",
             ShortName::of::<F>(),
@@ -226,7 +226,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
         type ClientComponent = Moderator;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             // Only moderators can see entities with sensitive information.
             client_component.is_some()
         }
@@ -246,7 +246,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             // Visible only if the client also has `SpectatorOnly`.
             client_component.is_some()
         }
@@ -276,7 +276,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     ///     type ClientComponent = Self;
     ///     type Scope = Entity;
     ///
-    ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+    ///     fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
     ///     }
     /// }
@@ -295,7 +295,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     ///     type ClientComponent = Self;
     ///     type Scope = SingleComponent<Health>;
     ///
-    ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+    ///     fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
     ///     }
     /// }
@@ -317,7 +317,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     ///     type ClientComponent = Self;
     ///     type Scope = (Health, Stats);
     ///
-    ///     fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+    ///     fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
     ///         client_component.is_some_and(|c| self == c)
     ///     }
     /// }
@@ -352,7 +352,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some()
         }
     }
@@ -375,7 +375,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
         type ClientComponent = Unit;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             // Blind clients cannot see units.
             client_component.is_none()
         }
@@ -395,7 +395,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             // Visible if the client belongs to the same team.
             client_component.is_some_and(|c| self == c)
         }
@@ -424,13 +424,32 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(&self, _client: Entity, client_component: Option<&Self::ClientComponent>) -> bool {
             client_component.is_some_and(|&c| self.contains(c))
         }
     }
     ```
+
+    Visible if the component references the client entity:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component, PartialEq)]
+    #[component(immutable)]
+    struct Owner(Entity);
+
+    impl VisibilityFilter for Owner {
+        type ClientComponent = AuthorizedClient; // All clients authorized for replication have this component.
+        type Scope = Entity;
+
+        fn is_visible(&self, client: Entity, _client_component: Option<&Self::ClientComponent>) -> bool {
+            self.0 == client
+        }
+    }
+    ```
     */
-    fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool;
+    fn is_visible(&self, client: Entity, client_component: Option<&Self::ClientComponent>) -> bool;
 }
 
 /// Associates the type with a visibility scope.
@@ -642,7 +661,11 @@ mod tests {
         type ClientComponent = Self;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(
+            &self,
+            _client: Entity,
+            client_component: Option<&Self::ClientComponent>,
+        ) -> bool {
             client_component.is_some()
         }
     }
@@ -655,7 +678,11 @@ mod tests {
         type ClientComponent = ClientFilter;
         type Scope = Entity;
 
-        fn is_visible(&self, client_component: Option<&Self::ClientComponent>) -> bool {
+        fn is_visible(
+            &self,
+            _client: Entity,
+            client_component: Option<&Self::ClientComponent>,
+        ) -> bool {
             client_component.is_some()
         }
     }

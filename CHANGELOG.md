@@ -16,8 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- In `VisibilityFilter::is_visible` the second argument is now wrapped in an `Option`, and the arguments have been swapped: `self` is now the entity component, and the client component is the second argument.
-- `VisibilityFilter` now has a `ClientComponent` associated type, which allows using a different component for client entities. Set it to `Self` to preserve the old behavior.
+- `VisibilityFilter` now allows expressing more complex rules:
+  - A new `ClientComponent` associated type allows specifying a different component for client entities. Use `Self` to preserve the previous behavior.
+  - In `is_visible`, `self` now refers to the entity component, and the client component is passed into the function.
+  - The passed component is now wrapped in an `Option` to allow customizing behavior when the component on the client is missing.
+  - `is_visible` now accepts the client entity.
 - `AuthorizedClient` and `ConnectedClient` now immutable.
 - `ClientStats` now represents only current client statistics. Use the `ConnectedClientStats` component for connected client statistics on the server.
 - `ConditionerConfig` now represents configuration only for a connected client on the server. Use the `GlobalConditionerConfig` resource for global server or client configuration.
