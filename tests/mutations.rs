@@ -1255,7 +1255,7 @@ fn after_disconnect() {
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
-#[derive(Clone, Component, Copy, Deserialize, Serialize, PartialEq)]
+#[derive(Component, Deserialize, Serialize, PartialEq, Clone, Copy)]
 struct BoolComponent(bool);
 
 #[derive(Component, Default, Deserialize, Serialize)]
