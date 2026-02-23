@@ -257,81 +257,83 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
      */
     type ClientComponent: Component<Mutability = Immutable>;
 
-    /// Defines what data is affected when the filter denies visibility.
-    ///
-    /// - To hide the entire entity, this type must be [`Entity`].
-    /// - To hide a single component on the entity, this type must be [`SingleComponent`].
-    /// - To hide more than one component on the entity, this type must be a tuple of those [`Component`]s.
-    ///
-    /// # Examples
-    ///
-    /// Hide the entire entity:
-    ///
-    /// ```
-    /// # use bevy::prelude::*;
-    /// # use bevy_replicon::prelude::*;
-    /// #[derive(Component, PartialEq)]
-    /// #[component(immutable)]
-    /// struct Team(u8);
-    ///
-    /// impl VisibilityFilter for Team {
-    ///     type ClientComponent = Self;
-    ///     type Scope = Entity;
-    ///
-    ///     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
-    ///         component.is_some_and(|c| self == c)
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// Hide only a single component:
-    ///
-    /// ```
-    /// # use bevy::prelude::*;
-    /// # use bevy_replicon::prelude::*;
-    /// #[derive(Component, PartialEq)]
-    /// #[component(immutable)]
-    /// struct Team(u8);
-    ///
-    /// impl VisibilityFilter for Team {
-    ///     type ClientComponent = Self;
-    ///     type Scope = SingleComponent<Health>;
-    ///
-    ///     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
-    ///         component.is_some_and(|c| self == c)
-    ///     }
-    /// }
-    ///
-    /// #[derive(Component)]
-    /// struct Health(u8);
-    /// ```
-    ///
-    /// Hide multiple components:
-    ///
-    /// ```
-    /// # use bevy::prelude::*;
-    /// # use bevy_replicon::prelude::*;
-    /// #[derive(Component, PartialEq)]
-    /// #[component(immutable)]
-    /// struct Team(u8);
-    ///
-    /// impl VisibilityFilter for Team {
-    ///     type ClientComponent = Self;
-    ///     type Scope = (Health, Stats);
-    ///
-    ///     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
-    ///         component.is_some_and(|c| self == c)
-    ///     }
-    /// }
-    ///
-    /// #[derive(Component)]
-    /// struct Health(u8);
-    ///
-    /// #[derive(Component)]
-    /// struct Stats {
-    /// // ...
-    /// }
-    /// ```
+    /**
+    Defines what data is affected when the filter denies visibility.
+
+    - To hide the entire entity, this type must be [`Entity`].
+    - To hide a single component on the entity, this type must be [`SingleComponent`].
+    - To hide more than one component on the entity, this type must be a tuple of those [`Component`]s.
+
+    # Examples
+
+    Hide the entire entity:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component, PartialEq)]
+    #[component(immutable)]
+    struct Team(u8);
+
+    impl VisibilityFilter for Team {
+        type ClientComponent = Self;
+        type Scope = Entity;
+
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some_and(|c| self == c)
+        }
+    }
+    ```
+
+    Hide only a single component:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component, PartialEq)]
+    #[component(immutable)]
+    struct Team(u8);
+
+    impl VisibilityFilter for Team {
+        type ClientComponent = Self;
+        type Scope = SingleComponent<Health>;
+
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some_and(|c| self == c)
+        }
+    }
+
+    #[derive(Component)]
+    struct Health(u8);
+    ```
+
+    Hide multiple components:
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component, PartialEq)]
+    #[component(immutable)]
+    struct Team(u8);
+
+    impl VisibilityFilter for Team {
+        type ClientComponent = Self;
+        type Scope = (Health, Stats);
+
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some_and(|c| self == c)
+        }
+    }
+
+    #[derive(Component)]
+    struct Health(u8);
+
+    #[derive(Component)]
+    struct Stats {
+    // ...
+    }
+    ```
+    */
     type Scope: FilterScope;
 
     /**
