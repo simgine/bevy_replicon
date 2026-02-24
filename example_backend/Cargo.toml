@@ -21,12 +21,12 @@ license = "MIT OR Apache-2.0"
 include = ["/src", "../LICENSE*"]
 
 [dependencies]
-bevy = { version = "0.18", default-features = false, features = ["bevy_log"] }
+bevy = { git = "https://github.com/cart/bevy", branch = "next-generation-scenes", default-features = false, features = ["bevy_log"] }
 bevy_replicon = { path = "..", version = "0.39.0", default-features = false }
 fastrand = "2.3"
 
 [dev-dependencies]
-bevy = { version = "0.18", default-features = false, features = [
+bevy = { git = "https://github.com/cart/bevy", branch = "next-generation-scenes", default-features = false, features = [
   "bevy_gizmos",
   "bevy_text",
   "bevy_ui_render",

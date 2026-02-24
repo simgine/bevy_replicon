@@ -260,15 +260,15 @@ fn add_relation<C: Relationship>(
 }
 
 fn remove_relation<C: Relationship>(
-    replace: On<Replace, C>,
+    discard: On<Discard, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     relationships: Query<&C, With<Replicated>>,
 ) {
     if *state == ServerState::Running
-        && let Ok(relationship) = relationships.get(replace.entity)
+        && let Ok(relationship) = relationships.get(discard.entity)
     {
-        related_entities.remove_relation::<C>(replace.entity, relationship.get());
+        related_entities.remove_relation::<C>(discard.entity, relationship.get());
     }
 }
 
@@ -286,15 +286,15 @@ fn start_replication<C: Relationship>(
 }
 
 fn stop_replication<C: Relationship>(
-    replace: On<Replace, Replicated>,
+    discard: On<Discard, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     relationships: Query<&C, With<Replicated>>,
 ) {
     if *state == ServerState::Running
-        && let Ok(relationship) = relationships.get(replace.entity)
+        && let Ok(relationship) = relationships.get(discard.entity)
     {
-        related_entities.remove_relation::<C>(replace.entity, relationship.get());
+        related_entities.remove_relation::<C>(discard.entity, relationship.get());
     }
 }
 
