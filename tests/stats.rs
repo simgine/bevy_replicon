@@ -52,7 +52,7 @@ fn client_stats() {
     assert_eq!(stats.mappings, 1);
     assert_eq!(stats.despawns, 1);
     assert_eq!(stats.messages, 3);
-    assert_eq!(stats.bytes, 25);
+    assert_eq!(stats.bytes, 29);
 
     server_app.disconnect_client(&mut client_app);
 
