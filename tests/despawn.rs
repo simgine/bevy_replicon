@@ -157,6 +157,76 @@ fn signature() {
 }
 
 #[test]
+fn signature_with_hierarchy() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<TestComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client_parent = client_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    let client_child = client_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(1), ChildOf(client_parent)))
+        .id();
+
+    let server_parent = server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(1), ChildOf(server_parent)));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert!(client_app.world().get_entity(client_parent).is_ok());
+    assert!(client_app.world().get_entity(client_child).is_ok());
+
+    server_app.world_mut().despawn(server_parent);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(client_app.world().get_entity(client_parent).is_err());
+    assert!(client_app.world().get_entity(client_child).is_err());
+
+    let server_parent = server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(1), ChildOf(server_parent)));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(
+        remote.iter(client_app.world()).count(),
+        2,
+        "entities should be replicated as new due to removal from the signature map"
+    );
+}
+
+#[test]
 fn hidden_entity() {
     let mut server_app = App::new();
     let mut client_app = App::new();
