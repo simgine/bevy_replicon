@@ -92,7 +92,7 @@ impl ServerEventAppExt for App {
         let messages_id = self
             .world()
             .components()
-            .resource_id::<Messages<ServerTriggerEvent<E>>>()
+            .component_id::<Messages<ServerTriggerEvent<E>>>()
             .unwrap_or_else(|| {
                 panic!(
                     "event `{}` should be previously registered",
