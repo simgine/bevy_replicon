@@ -24,7 +24,7 @@ pub trait ServerEventAppExt {
     /// If [`ClientMessagePlugin`] is enabled and [`ClientId::Server`] is a recipient of the event,
     /// then `E` event will be emitted on the server as well.
     ///
-    /// See also the [corresponding section](../index.html#from-client-to-server) from the quick start guide.
+    /// See also the [corresponding section](crate#from-client-to-server) from the quick start guide.
     fn add_server_event<'a, E>(&mut self, channel: Channel) -> &mut Self
     where
         E: Event<Trigger<'a>: Default> + Serialize + DeserializeOwned,

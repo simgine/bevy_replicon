@@ -151,7 +151,7 @@ pub struct ProtocolHash(u64);
 ///
 /// If you need to debug the problem, compare the logs for protocol registrations on both sides.
 /// The ordering is important. You can also log only registrations by filtering with `bevy_replicon::shared::protocol`.
-/// For more details, see the [troubleshooting section](../../index.html#troubleshooting) from the quick start guide.
+/// For more details, see the [troubleshooting section](crate#troubleshooting) from the quick start guide.
 #[derive(Event, Serialize, Deserialize)]
 pub struct ProtocolMismatch;
 

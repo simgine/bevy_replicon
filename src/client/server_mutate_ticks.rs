@@ -5,9 +5,9 @@ use log::trace;
 
 use crate::prelude::*;
 
-/// Received ticks for mutate message from server.
+/// Ticks for received mutate message from server.
 ///
-/// For efficiency we store only the last received tick and
+/// For efficiency, we store only the last received tick and
 /// an array indicating whether all mutate messages for the most
 /// recent 64 ticks were received.
 ///
@@ -15,7 +15,8 @@ use crate::prelude::*;
 /// [`TrackAppExt::track_mutate_messages`](crate::shared::replication::track_mutate_messages::TrackAppExt::track_mutate_messages)
 /// were called.
 ///
-/// See also [`MutateTickReceived`] and [`ServerUpdateTick`](super::ServerUpdateTick).
+/// See also [`MutateTickReceived`] and the [ticks information](crate#ticks-information)
+/// in the quick start guide.
 #[derive(Debug, Resource)]
 pub struct ServerMutateTicks {
     ticks: VecDeque<TickMessages>,
@@ -43,9 +44,9 @@ impl ServerMutateTicks {
         bitmask
     }
 
-    /// Returns `true` if this tick is confirmed for an entity.
+    /// Returns `true` if, for the given tick, all mutation messages were received.
     ///
-    /// All ticks older then 64 ticks since [`Self::last_tick`] are considered received.
+    /// All ticks older than 64 ticks relative to [`Self::last_tick`] are considered received.
     pub fn contains(&self, tick: RepliconTick) -> bool {
         if tick > self.last_tick {
             return false;
@@ -59,15 +60,13 @@ impl ServerMutateTicks {
         }
     }
 
-    /// Returns `true` if any tick in the given range was confirmed for the entity with
-    /// this component.
+    /// Returns `true` if, for any tick in the given range, all mutation messages were received.
     ///
-    /// All ticks older then 64 ticks since [`Self::last_tick`] are considered received.
+    /// All ticks older than 64 ticks relative to [`Self::last_tick`] are considered received.
     ///
     /// # Panics
     ///
-    /// Panics if `debug_assertions` are enabled and
-    /// `start_tick` is greater then `end_tick`.
+    /// Panics if `debug_assertions` are enabled and `start_tick` is greater than `end_tick`.
     pub fn contains_any(&self, start_tick: RepliconTick, end_tick: RepliconTick) -> bool {
         debug_assert!(start_tick <= end_tick);
 
