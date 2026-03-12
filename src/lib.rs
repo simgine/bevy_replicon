@@ -39,7 +39,7 @@ This part is specific to your messaging backend. For `bevy_replicon_renet`,
 see [this section](https://docs.rs/bevy_replicon_renet#server-and-client-creation).
 
 On server connected clients represented as entities with [`ConnectedClient`] component.
-Their data represented as components, such as [`ClientStats`]. Users can also attach their
+Their data represented as components, such as [`ConnectedClientStats`]. Users can also attach their
 own metadata to them or even replicate these entities back to clients.
 
 These entities are automatically spawned and despawned by the messaging backend. You can
@@ -243,7 +243,14 @@ that already has it on the server, the client will treat it as a mutation. As a 
 differently on the client and server. If your game logic relies on this semantic, mark your component as
 [`Immutable`](bevy::ecs::component::Immutable). For such components, replication will always be applied via insertion.
 
-This behavior is also configurable via [client markers](#client-markers).
+A single mutation on the server may result in multiple change detection triggers on a client.
+Clients track the last applied tick for each entity and apply a mutation only if the tick for the received data is greater.
+However, mutation messages include only the server tick on which the message was sent. This is because it would be too expensive
+to include the change tick for each entity. So, if a client does not acknowledge the received message in time, the server
+will resend the data (because it might have been lost). Since the tick for this message will be greater, the
+client will write the component again, even if it is the same. If your game logic relies on this behavior, you can set
+[`write_if_neq`](shared::replication::registry::receive_fns::write_if_neq) as your writing function for
+the desired components. See [receive markers](#receive-markers) for more details.
 
 #### Component relations
 
@@ -589,16 +596,18 @@ previously spawned on the client.
 This is also useful for synchronizing scenes. Both the client and the server can load a level independently
 and then match level entities to synchronize certain things, such as opened doors.
 
-#### Client markers
+#### Receive markers
 
-To apply interpolation or store value history for client-side prediction, you need to override how components are
-written. However, the server knows nothing about archetypes on the client, and while some entities need to be predicted,
-others might need to be interpolated.
+This is similar to replication rules, except markers are client-specific and only define how components
+are applied to entities. This allows you to customize writing based on components that might not be known to the server.
+For example, on clients some entities might be predicted, while others might be interpolated, and their values need to be written
+differently. The server does not need to know which entities the client interpolates and which it predicts.
 
-This is why writing functions are marker-based. First, you register a marker using [`AppMarkerExt::register_marker<M>`].
-Then you can override how specific component is written and removed using [`AppMarkerExt::set_marker_fns<M, C>`].
-
-You can control marker priority or enable processing of old values using [`AppMarkerExt::register_marker_with<M>`].
+[`AppMarkerExt::set_receive_fns<C>`] allows you to override how the component `C` is written by default.
+To select a different writing function for a specific entity, you need to register a marker via [`AppMarkerExt::register_marker<M>`]
+and associate functions for components with this marker using [`AppMarkerExt::set_marker_fns<M, C>`]. These functions will be called for `C`
+if the marker `M` is present. You can also control marker priority or enable processing of old values using
+[`AppMarkerExt::register_marker_with<M>`].
 
 ### Ticks information
 
@@ -690,7 +699,7 @@ pub mod prelude {
         shared::{
             AuthMethod, RepliconSharedPlugin,
             backend::{
-                ClientState, ClientStats, DisconnectRequest, ServerState,
+                ClientState, ClientStats, ConnectedClientStats, DisconnectRequest, ServerState,
                 channels::{Channel, RepliconChannels},
                 client_messages::ClientMessages,
                 connected_client::ConnectedClient,
@@ -706,7 +715,7 @@ pub mod prelude {
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
                 Replicated,
-                command_markers::AppMarkerExt,
+                receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
@@ -717,15 +726,18 @@ pub mod prelude {
 
     #[cfg(feature = "client")]
     pub use super::client::{
-        ClientPlugin, ClientReplicationStats, ClientSystems, message::ClientMessagePlugin,
+        ClientPlugin, ClientReplicationStats, ClientSystems, Remote, message::ClientMessagePlugin,
     };
 
     #[cfg(feature = "server")]
+    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
-        visibility::{AppVisibilityExt, ComponentScope, FilterScope, VisibilityFilter},
+        visibility::{
+            AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
+        },
     };
 
     #[cfg(feature = "client_diagnostics")]

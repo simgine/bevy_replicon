@@ -3,8 +3,8 @@ use bytes::Bytes;
 
 use super::ctx::{RemoveCtx, SerializeCtx, WriteCtx};
 use crate::shared::replication::{
-    command_markers::{CommandMarkers, EntityMarkers},
     deferred_entity::DeferredEntity,
+    receive_markers::{EntityMarkers, ReceiveMarkers},
     registry::{component_fns::ComponentFns, rule_fns::UntypedRuleFns},
 };
 
@@ -76,7 +76,7 @@ impl<'a> SerdeFns<'a> {
         &self,
         ctx: &mut WriteCtx,
         entity_markers: &EntityMarkers,
-        command_markers: &CommandMarkers,
+        receive_markers: &ReceiveMarkers,
         entity: &mut DeferredEntity,
         message: &mut Bytes,
     ) -> Result<()> {
@@ -86,7 +86,7 @@ impl<'a> SerdeFns<'a> {
                 ctx,
                 self.rule_fns,
                 entity_markers,
-                command_markers,
+                receive_markers,
                 entity,
                 message,
             )

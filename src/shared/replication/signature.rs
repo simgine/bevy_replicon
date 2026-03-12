@@ -29,13 +29,14 @@ use xxhash_rust::xxh3::Xxh3Default;
 ///
 /// Signatures can also be relevant only to a specific client. In this case, the signature
 /// will be sent only to that client.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Debug, Clone, Copy)]
 #[component(on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
     /// User-defined value added to the hash.
     salt: Option<u64>,
 
     /// Functions to calculate hash from components.
+    #[reflect(ignore)]
     fns: &'static [HashFn],
 
     /// Relevant client.

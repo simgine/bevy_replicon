@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-/// Like [`Tick`](bevy::ecs::component::Tick), but for replication.
+/// Like [`Tick`](bevy::ecs::change_detection::Tick), but for replication.
 ///
 /// All operations on it are wrapping.
 ///

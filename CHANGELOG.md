@@ -7,11 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.1] - 2026-03-09
+
+### Fixed
+
+- Don't panic when despawning hierarchy with signatures.
+
+## [0.39.0] - 2026-02-24
+
+### Added
+
+- `Remote` component that automatically inserted on entities spawned by replication.
+- `SendMode::SERVER_ONLY` and `SendMode::CLIENTS_ONLY` constants for convenience.
+- `command_fns::write_if_neq` built-in to avoid writing component if the value didn't change.
+- `DeferredEntity::world_mut` to access world mutable during replication.
+
 ### Changed
 
+- `VisibilityFilter` now allows expressing more complex rules:
+  - A new `ClientComponent` associated type allows specifying a different component for client entities. Use `Self` to preserve the previous behavior.
+  - In `is_visible`, `self` now refers to the entity component, and the client component is passed into the function.
+  - The passed component is now wrapped in an `Option` to allow customizing behavior when the component on the client is missing.
+  - `is_visible` now accepts the client entity.
+- `AuthorizedClient` and `ConnectedClient` now immutable.
+- `ClientStats` now represents only current client statistics. Use the `ConnectedClientStats` component for connected client statistics on the server.
+- `ConditionerConfig` now represents configuration only for a connected client on the server. Use the `GlobalConditionerConfig` resource for global server or client configuration.
 - `ServerPlugin::tick_schedule` now wrapped in an `Option`. You can set it to `None` to trigger replication by manually incrementing `ServerTick`.
+- Make `ClientMessages::received_count` public.
+- Make `increment_tick` public.
+- Rename `ComponentScope` into `SingleComponent`.
+- Rename `command_markers` module into `receive_markers`.
+- Rename `command_fns` module into `receive_fns`.
+- Rename `AppMarkerExt::set_command_fns` into `AppMarkerExt::set_receive_fns`.
 
-## [0.37.0] - 2025-12-14
+### Removed
+
+- `LinkConditionerPlugin`. It was used to add `ConditionerConfig` to `AppTypeRegistry`, but it's now done automatically.
+
+## [0.38.2] - 2026-01-22
+
+### Fixed
+
+- Ack cleanup and message timestamps are no longer affected by time dilation.
+
+## [0.38.1] - 2026-01-19
+
+### Fixed
+
+- Overflow on reconnect when `client_diagnostics` feature is enabled.
+
+## [0.38.0] - 2026-01-17
+
+### Changed
+
+- Update to Bevy 0.18.
+
+## [0.37.2] - 2026-01-11
+
+### Fixed
+
+- Skip `TrackAppExt::track_mutate_messages` if it has already been called.
+
+## [0.37.1] - 2025-12-14
 
 ### Fixed
 
@@ -976,7 +1033,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.37.1...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.39.1...HEAD
+[0.39.1]: https://github.com/simgine/bevy_replicon/compare/v0.39.0...v0.39.1
+[0.39.0]: https://github.com/simgine/bevy_replicon/compare/v0.38.2...v0.39.0
+[0.38.2]: https://github.com/simgine/bevy_replicon/compare/v0.38.1...v0.38.2
+[0.38.1]: https://github.com/simgine/bevy_replicon/compare/v0.38.0...v0.38.1
+[0.38.0]: https://github.com/simgine/bevy_replicon/compare/v0.37.2...v0.38.0
+[0.37.2]: https://github.com/simgine/bevy_replicon/compare/v0.37.1...v0.37.2
 [0.37.1]: https://github.com/simgine/bevy_replicon/compare/v0.37.0...v0.37.1
 [0.37.0]: https://github.com/simgine/bevy_replicon/compare/v0.36.1...v0.37.0
 [0.36.1]: https://github.com/simgine/bevy_replicon/compare/v0.36.0...v0.36.1

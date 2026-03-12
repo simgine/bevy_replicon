@@ -8,7 +8,7 @@ use crate::shared::replication::registry::{ComponentIndex, component_mask::Compo
 /// Bitset of visibility filters for an entity for a client.
 ///
 /// If the bit is set, it means that this filter hides its associated data.
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Reflect, Debug, PartialEq, Clone, Copy)]
 pub(crate) struct FiltersMask(u32);
 
 impl FiltersMask {

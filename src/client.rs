@@ -15,12 +15,12 @@ use crate::{
     shared::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
-            command_markers::{CommandMarkers, EntityMarkers},
             deferred_entity::{DeferredChanges, DeferredEntity},
             mutate_index::MutateIndex,
+            receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
                 ReplicationRegistry,
-                ctx::{DespawnCtx, RemoveCtx, WriteCtx},
+                ctx::{DespawnCtx, EntitySpawner, RemoveCtx, WriteCtx},
             },
             signature::SignatureMap,
             track_mutate_messages::TrackMutateMessages,
@@ -134,7 +134,7 @@ pub(super) fn receive_replication(
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
             world.resource_scope(|world, mut signature_map: Mut<SignatureMap>| {
                 world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
-                    world.resource_scope(|world, command_markers: Mut<CommandMarkers>| {
+                    world.resource_scope(|world, receive_markers: Mut<ReceiveMarkers>| {
                         world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
                             world.resource_scope(
                                 |world, mut replicated: Mut<Messages<EntityReplicated>>| {
@@ -151,7 +151,7 @@ pub(super) fn receive_replication(
                                         replicated: &mut replicated,
                                         mutate_ticks: mutate_ticks.as_mut(),
                                         stats: stats.as_mut(),
-                                        command_markers: &command_markers,
+                                        receive_markers: &receive_markers,
                                         registry: &registry,
                                         type_registry: &type_registry,
                                     };
@@ -421,7 +421,7 @@ fn apply_entity_mapping(
 
     debug!("mapping `{server_entity}` to `{client_entity}` using hash 0x{hash:016x}");
     params.entity_map.insert(server_entity, client_entity);
-    world.entity_mut(client_entity).insert(Replicated);
+    world.entity_mut(client_entity).insert(Remote);
 
     Ok(())
 }
@@ -437,16 +437,16 @@ fn apply_despawn(
     // with the last replication message, but the server might not yet have received confirmation
     // from the client and could include the deletion in the this message.
     let server_entity = postcard_utils::entity_from_buf(message)?;
-    if let Some(client_entity) = params
-        .entity_map
-        .server_entry(server_entity)
-        .remove()
-        .and_then(|entity| world.get_entity_mut(entity).ok())
-    {
-        trace!("applying despawn for `{}`", client_entity.id());
-        params.signature_map.remove(client_entity.id()); // Requires manual removal since the map is removed from the world and inaccessible to triggers.
-        let ctx = DespawnCtx { message_tick };
-        (params.registry.despawn)(&ctx, client_entity);
+    if let Some(client_entity) = params.entity_map.server_entry(server_entity).remove() {
+        // Requires manual removal since the map is removed from the world and inaccessible to triggers.
+        // The entity can also be despawned via a relationship when applying
+        // despawn to another entity, so we always need to remove it from the map.
+        params.signature_map.remove(client_entity);
+        if let Ok(client_entity) = world.get_entity_mut(client_entity) {
+            trace!("applying despawn for `{}`", client_entity.id());
+            let ctx = DespawnCtx { message_tick };
+            (params.registry.despawn)(&ctx, client_entity);
+        }
     }
 
     Ok(())
@@ -486,7 +486,7 @@ fn apply_removals(
 
     params
         .entity_markers
-        .read(params.command_markers, &*client_entity);
+        .read(params.receive_markers, &*client_entity);
 
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
@@ -529,9 +529,9 @@ fn apply_changes(
     let data_size: usize = postcard_utils::from_buf(message)?;
 
     let world_cell = world.as_unsafe_world_cell();
-    let entities = world_cell.entities();
-    // SAFETY: split into `Entities` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
+    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
+    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
+    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
     let world = unsafe { world_cell.world_mut() };
 
     let mut client_entity = match params.entity_map.server_entry(server_entity) {
@@ -547,7 +547,7 @@ fn apply_changes(
         }
         EntityEntry::Vacant(entry) => {
             let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
-            client_entity.insert(Replicated);
+            client_entity.insert(Remote);
             entry.insert(client_entity.id());
             client_entity
         }
@@ -555,7 +555,7 @@ fn apply_changes(
 
     params
         .entity_markers
-        .read(params.command_markers, &*client_entity);
+        .read(params.receive_markers, &*client_entity);
 
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
@@ -568,7 +568,7 @@ fn apply_changes(
             type_registry: params.type_registry,
             component_id,
             message_tick,
-            entities,
+            spawner: &mut spawner,
             ignore_mapping: false,
             world_cell,
         };
@@ -660,9 +660,9 @@ fn apply_mutations(
     };
 
     let world_cell = world.as_unsafe_world_cell();
-    let entities = world_cell.entities();
-    // SAFETY: split into `Entities` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `Entities` won't be used afterward.
+    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
+    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
+    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
     let world = unsafe { world_cell.world_mut() };
 
     let Ok(mut client_entity) = world
@@ -677,7 +677,7 @@ fn apply_mutations(
 
     params
         .entity_markers
-        .read(params.command_markers, &*client_entity);
+        .read(params.receive_markers, &*client_entity);
 
     let Some(mut history) = client_entity.get_mut::<ConfirmHistory>() else {
         return Err(format!(
@@ -723,7 +723,7 @@ fn apply_mutations(
             type_registry: params.type_registry,
             component_id,
             message_tick,
-            entities,
+            spawner: &mut spawner,
             ignore_mapping: false,
             world_cell,
         };
@@ -738,7 +738,7 @@ fn apply_mutations(
             fns.consume_or_write(
                 &mut ctx,
                 params.entity_markers,
-                params.command_markers,
+                params.receive_markers,
                 &mut client_entity,
                 data,
             )?;
@@ -767,7 +767,7 @@ struct ReceiveParams<'a> {
     replicated: &'a mut Messages<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
-    command_markers: &'a CommandMarkers,
+    receive_markers: &'a ReceiveMarkers,
     registry: &'a ReplicationRegistry,
     type_registry: &'a AppTypeRegistry,
 }
@@ -877,3 +877,12 @@ pub struct ClientReplicationStats {
     /// Replication bytes received in message payloads (without internal messaging plugin data).
     pub bytes: usize,
 }
+
+/// Marker for entities spawned by replication.
+///
+/// Inserted automatically. Unlike [`Replicated`], it's present only
+/// on the client and can be used for client-specific logic.
+#[derive(Component, Default, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+#[require(Replicated)]
+pub struct Remote;

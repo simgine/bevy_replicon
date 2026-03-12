@@ -9,9 +9,9 @@ use bytes::Bytes;
 use super::ctx::{RemoveCtx, WriteCtx};
 use crate::{prelude::*, shared::replication::deferred_entity::DeferredEntity};
 
-/// Writing and removal functions for a component, like [`Commands`].
+/// Writing and removal functions for component receiving.
 #[derive(Clone, Copy)]
-pub(super) struct UntypedCommandFns {
+pub(super) struct UntypedReceiveFns {
     type_id: TypeId,
     type_name: ShortName<'static>,
 
@@ -19,8 +19,8 @@ pub(super) struct UntypedCommandFns {
     remove: RemoveFn,
 }
 
-impl UntypedCommandFns {
-    /// Creates a new instance with default command functions for `C`.
+impl UntypedReceiveFns {
+    /// Creates a new instance with default receive functions for `C`.
     pub(super) fn default_fns<C: Component<Mutability: MutWrite<C>>>() -> Self {
         Self::new(C::Mutability::default_write_fn(), default_remove::<C>)
     }
@@ -51,7 +51,7 @@ impl UntypedCommandFns {
         debug_assert_eq!(
             self.type_id,
             TypeId::of::<C>(),
-            "trying to call a command write function with `{}`, but it was created with `{}`",
+            "trying to call a receive write function with `{}`, but it was created with `{}`",
             ShortName::of::<C>(),
             self.type_name,
         );
@@ -92,7 +92,7 @@ pub type RemoveFn = fn(&mut RemoveCtx, &mut DeferredEntity);
 
 /// Default component writing function for [`Mutable`] components.
 ///
-/// If the component does not exist on the entity, it will be deserialized with [`RuleFns::deserialize`] and inserted via [`Commands`].
+/// If the component does not exist on the entity, it will be deserialized with [`RuleFns::deserialize`] and inserted.
 /// If the component exists on the entity, [`RuleFns::deserialize_in_place`] will be used directly on the entity's component.
 ///
 /// See also [`default_insert_write`].
@@ -112,9 +112,33 @@ pub fn default_write<C: Component<Mutability = Mutable>>(
     Ok(())
 }
 
+/// Writes the component only if it is not equal to the current value.
+///
+/// This is not done by default because it would require [`PartialEq`] for all replicated components,
+/// and quite often it is cheaper to always write the value instead of checking for equality.
+///
+/// Use [`AppMarkerExt`] to apply this to specific components.
+pub fn write_if_neq<C: Component<Mutability = Mutable> + PartialEq>(
+    ctx: &mut WriteCtx,
+    rule_fns: &RuleFns<C>,
+    entity: &mut DeferredEntity,
+    message: &mut Bytes,
+) -> Result<()> {
+    let component: C = rule_fns.deserialize(ctx, message)?;
+    if let Some(mut current) = entity.get_mut::<C>() {
+        if *current != component {
+            *current = component;
+        }
+    } else {
+        entity.insert(component);
+    }
+
+    Ok(())
+}
+
 /// Default component writing function for [`Immutable`] components.
 ///
-/// The component will be deserialized with [`RuleFns::deserialize`] and inserted via [`Commands`].
+/// The component will be deserialized with [`RuleFns::deserialize`] and inserted.
 ///
 /// Similar to [`default_write`], but always performs an insertion regardless of whether the component exists.
 pub fn default_insert_write<C: Component>(

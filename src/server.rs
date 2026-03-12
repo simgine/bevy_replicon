@@ -13,7 +13,7 @@ use core::{mem, time::Duration};
 use bevy::{
     ecs::{
         archetype::Archetypes,
-        component::{CheckChangeTicks, Tick},
+        change_detection::{CheckChangeTicks, Tick},
         entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -65,7 +65,7 @@ pub struct ServerPlugin {
     /// Use [`Self::new`] to avoid calling [`ScheduleLabel::intern`].
     ///
     /// You can also set it to `None` to trigger replication by manually
-    /// incrementing [`ServerTick`].
+    /// incrementing [`ServerTick`] or scheduling [`increment_tick`].
     ///
     /// # Examples
     ///
@@ -139,10 +139,10 @@ impl Plugin for ServerPlugin {
                 )
                     .chain(),
             )
-            .add_observer(handle_connects)
-            .add_observer(handle_disconnects)
-            .add_observer(buffer_despawns)
+            .add_observer(handle_connect)
+            .add_observer(handle_disconnect)
             .add_observer(check_mutation_ticks)
+            .add_observer(buffer_despawn)
             .add_systems(
                 PreUpdate,
                 (
@@ -225,76 +225,14 @@ impl Plugin for ServerPlugin {
     }
 }
 
-fn buffer_removals(
-    remove: On<Remove>,
-    entities: &Entities,
-    archetypes: &Archetypes,
-    state: Res<State<ServerState>>,
-    mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
-    rules: Res<ReplicationRules>,
-    registry: Option<Res<ReplicationRegistry>>,
-    mut removals: ResMut<RemovalBuffer>,
-) {
-    if *state != ServerState::Running {
-        return;
-    }
-
-    let components = remove.trigger().components;
-    if components.contains(&replicated_archetypes.marker_id()) {
-        trace!("ignoring removals for despawned `{}`", remove.entity);
-        return;
-    }
-
-    // Observers can't use run conditions. We return early on the client, but system parameters
-    // are validated before the observer runs. Because of this, the registry may not be present
-    // in the world during replication receive, so it needs to be optional.
-    let registry = registry.expect("registry should always exist on the server");
-
-    replicated_archetypes.update(archetypes, &rules);
-    let location = entities.get(remove.entity).unwrap();
-    let Some(archetype) = replicated_archetypes.get(location.archetype_id) else {
-        // `Replicated` component is missing.
-        trace!(
-            "ignoring `{components:?}` removal for non-replicated `{}`",
-            remove.entity
-        );
-        return;
-    };
-
-    removals.insert(remove.entity, components, archetype, &registry);
-}
-
-fn handle_connects(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
+fn handle_connect(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
     debug!("client `{}` connected", add.entity);
     message_buffer.exclude_client(add.entity);
 }
 
-fn handle_disconnects(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
+fn handle_disconnect(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
     debug!("client `{}` disconnected", remove.entity);
     messages.remove_client(remove.entity);
-}
-
-fn buffer_despawns(
-    remove: On<Remove, Replicated>,
-    mut despawn_buffer: ResMut<DespawnBuffer>,
-    state: Res<State<ServerState>>,
-) {
-    if *state == ServerState::Running {
-        trace!("buffering despawn of `{}`", remove.entity);
-        despawn_buffer.push(remove.entity);
-    }
-}
-
-fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
-    debug!(
-        "checking mutation ticks for overflow for {:?}",
-        check.present_tick()
-    );
-    for mut ticks in &mut clients {
-        for entity_ticks in ticks.entities.values_mut() {
-            entity_ticks.system_tick.check_tick(*check);
-        }
-    }
 }
 
 fn check_protocol(
@@ -324,16 +262,80 @@ fn check_protocol(
     }
 }
 
+fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
+    debug!(
+        "checking mutation ticks for overflow for {:?}",
+        check.present_tick()
+    );
+    for mut ticks in &mut clients {
+        for entity_ticks in ticks.entities.values_mut() {
+            entity_ticks.system_tick.check_tick(*check);
+        }
+    }
+}
+
 /// Increments current server tick which causes the server to replicate this frame.
-fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     trace!("incrementing `{:?}`", *server_tick);
     server_tick.increment();
 }
 
+fn buffer_removals(
+    remove: On<Remove>,
+    entities: &Entities,
+    archetypes: &Archetypes,
+    state: Res<State<ServerState>>,
+    mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
+    rules: Res<ReplicationRules>,
+    registry: Option<Res<ReplicationRegistry>>,
+    mut removals: ResMut<RemovalBuffer>,
+) {
+    if *state != ServerState::Running {
+        return;
+    }
+
+    let components = remove.trigger().components;
+    if components.contains(&replicated_archetypes.marker_id()) {
+        trace!("ignoring removals for despawned `{}`", remove.entity);
+        return;
+    }
+
+    // Observers can't use run conditions. We return early on the client, but system parameters
+    // are validated before the observer runs. Because of this, the registry may not be present
+    // in the world during replication receive, so it needs to be optional.
+    let registry = registry.expect("registry should always exist on the server");
+
+    replicated_archetypes.update(archetypes, &rules);
+    let location = entities.get_spawned(remove.entity).unwrap();
+    let Some(archetype) = replicated_archetypes.get(location.archetype_id) else {
+        // `Replicated` component is missing.
+        trace!(
+            "ignoring `{components:?}` removal for non-replicated `{}`",
+            remove.entity
+        );
+        return;
+    };
+
+    removals.insert(remove.entity, components, archetype, &registry);
+}
+
+fn buffer_despawn(
+    remove: On<Remove, Replicated>,
+    mut despawn_buffer: ResMut<DespawnBuffer>,
+    state: Res<State<ServerState>>,
+) {
+    if *state == ServerState::Running {
+        trace!("buffering despawn of `{}`", remove.entity);
+        despawn_buffer.push(remove.entity);
+    }
+}
+
 fn cleanup_acks(
     mutations_timeout: Duration,
-) -> impl FnMut(Query<&mut ClientTicks>, ResMut<ClientPools>, Res<Time>) {
-    move |mut clients: Query<&mut ClientTicks>, mut pools: ResMut<ClientPools>, time: Res<Time>| {
+) -> impl FnMut(Query<&mut ClientTicks>, ResMut<ClientPools>, Res<Time<Real>>) {
+    move |mut clients: Query<&mut ClientTicks>,
+          mut pools: ResMut<ClientPools>,
+          time: Res<Time<Real>>| {
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
             ticks.cleanup_older_mutations(min_timestamp, |mutate_info| {
@@ -404,23 +406,21 @@ fn collect_mappings(
         let mapping = EntityMapping { entity, hash };
         let mut mapping_range = None;
 
-        if let Some(client_entity) = signature.client() {
-            let Ok((_, mut message, ticks, visibility)) = clients.get_mut(client_entity) else {
+        if let Some(client) = signature.client() {
+            let Ok((_, mut message, ticks, visibility)) = clients.get_mut(client) else {
                 continue;
             };
             if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                 trace!(
-                    "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client_entity}`"
+                    "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client}`"
                 );
                 let mapping_range = mapping.write_cached(&mut serialized, &mut mapping_range)?;
                 message.add_mapping(mapping_range);
             }
         } else {
-            for (client_entity, mut message, ticks, visibility) in &mut clients {
+            for (client, mut message, ticks, visibility) in &mut clients {
                 if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
-                    trace!(
-                        "writing mapping `{entity}` to 0x{hash:016x} for client `{client_entity}`"
-                    );
+                    trace!("writing mapping `{entity}` to 0x{hash:016x} for client `{client}`");
                     let mapping_range =
                         mapping.write_cached(&mut serialized, &mut mapping_range)?;
                     message.add_mapping(mapping_range);
@@ -465,11 +465,11 @@ fn collect_despawns(
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
         let entity_range = entity.write(&mut serialized)?;
-        for (client_entity, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
+        for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
             if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 // Write despawn only if the entity was previously sent because
                 // spawn and despawn could happen during the same tick.
-                trace!("writing despawn for `{entity}` for client `{client_entity}`");
+                trace!("writing despawn for `{entity}` for client `{client}`");
                 message.add_despawn(entity_range.clone());
                 pools.recycle_components(entity_ticks.components);
             }
@@ -478,7 +478,7 @@ fn collect_despawns(
         }
     }
 
-    for (client_entity, mut message, mut ticks, mut priority, visibility) in clients {
+    for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
             if !filter_mask.is_hidden(&registry) {
@@ -486,7 +486,7 @@ fn collect_despawns(
             }
 
             if let Some(entity_ticks) = ticks.entities.remove(&entity) {
-                trace!("writing visibility lost for `{entity}` for client `{client_entity}`");
+                trace!("writing visibility lost for `{entity}` for client `{client}`");
                 let entity_range = entity.write(&mut serialized)?;
                 message.add_despawn(entity_range);
                 pools.recycle_components(entity_ticks.components);
@@ -528,7 +528,7 @@ fn collect_removals(
 
         for &(component_index, fns_id) in remove_ids {
             let mut fns_id_range = None;
-            for (client_entity, mut message, mut ticks, _) in &mut clients {
+            for (client, mut message, mut ticks, _) in &mut clients {
                 // Only send removals for components that were previously sent.
                 // If the entity was despawned or lost visibility, it was removed
                 // from ticks earlier during despawn collection.
@@ -539,7 +539,7 @@ fn collect_removals(
                     continue;
                 }
 
-                trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client_entity}`");
+                trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client}`");
                 if !message.removals_entity_added() {
                     let entity_range = entity.write_cached(&mut serialized, &mut entity_range)?;
                     message.add_removals_entity(&mut pools, entity_range);
@@ -551,7 +551,7 @@ fn collect_removals(
         }
     }
 
-    for (client_entity, mut message, mut ticks, mut visibility) in &mut clients {
+    for (client, mut message, mut ticks, mut visibility) in &mut clients {
         for (entity, filter_mask) in visibility.drain_lost() {
             if filter_mask.is_hidden(&filter_registry) {
                 // Was processed earlier during collecting despawns.
@@ -561,7 +561,7 @@ fn collect_removals(
                 // The client didn't see this entity.
                 continue;
             };
-            let Some(location) = entities.get(entity) else {
+            let Ok(location) = entities.get_spawned(entity) else {
                 warn!(
                     "`{entity}` was despawned after despawn processing but before sending, \
                      so the despawn will be sent on the next tick; \
@@ -596,7 +596,7 @@ fn collect_removals(
                     });
 
                     trace!(
-                        "writing `{:?}` lost for `{entity}` for client `{client_entity}`",
+                        "writing `{:?}` lost for `{entity}` for client `{client}`",
                         rule.fns_id
                     );
                     if !message.removals_entity_added() {
@@ -678,14 +678,8 @@ fn collect_changes(
                 };
 
                 let mut component_range = None;
-                for (
-                    client_entity,
-                    mut updates,
-                    mut mutations,
-                    client_ticks,
-                    priority,
-                    visibility,
-                ) in &mut clients
+                for (client, mut updates, mut mutations, client_ticks, priority, visibility) in
+                    &mut clients
                 {
                     if visibility
                         .get(entity.id())
@@ -705,7 +699,7 @@ fn collect_changes(
                             && ticks.is_changed(entity_ticks.system_tick, **change_tick)
                         {
                             trace!(
-                                "writing `{:?}` mutation for `{}` for client `{client_entity}`",
+                                "writing `{:?}` mutation for `{}` for client `{client}`",
                                 rule.fns_id,
                                 entity.id(),
                             );
@@ -728,7 +722,7 @@ fn collect_changes(
                         }
                     } else {
                         trace!(
-                            "writing `{:?}` insertion for `{}` for client `{client_entity}`",
+                            "writing `{:?}` insertion for `{}` for client `{client}`",
                             rule.fns_id,
                             entity.id(),
                         );
@@ -746,9 +740,7 @@ fn collect_changes(
                 }
             }
 
-            for (client_entity, mut updates, mut mutations, mut ticks, _, visibility) in
-                &mut clients
-            {
+            for (client, mut updates, mut mutations, mut ticks, _, visibility) in &mut clients {
                 if visibility.get(entity.id()).is_hidden(&filter_registry) {
                     continue;
                 }
@@ -763,7 +755,7 @@ fn collect_changes(
                     // into update message and bump the last acknowledged tick to keep entity updates atomic.
                     if mutations.entity_added() {
                         trace!(
-                            "merging mutations for `{}` with updates for client `{client_entity}`",
+                            "merging mutations for `{}` with updates for client `{client}`",
                             entity.id()
                         );
                         updates.take_added_entity(&mut pools, &mut mutations);
@@ -779,10 +771,7 @@ fn collect_changes(
                 }
 
                 if new_for_client && !updates.changed_entity_added() {
-                    trace!(
-                        "writing empty `{}` for client `{client_entity}`",
-                        entity.id()
-                    );
+                    trace!("writing empty `{}` for client `{client}`", entity.id());
 
                     // Force-write new entity even if it doesn't have any components.
                     let entity_range = entity
@@ -827,7 +816,7 @@ fn update_ticks(
 /// Sends previously constructed [`Updates`] and [`Mutations`].
 fn send_messages(
     mut split_buffer: Local<Vec<MutationsSplit>>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     track_mutate_messages: Res<TrackMutateMessages>,
@@ -843,13 +832,13 @@ fn send_messages(
     )>,
 ) -> Result<()> {
     let mut server_tick_range = None;
-    for (client_entity, updates, mut mutations, client, mut ticks) in &mut clients {
+    for (client, updates, mut mutations, connected, mut ticks) in &mut clients {
         if !updates.is_empty() {
             ticks.update_tick = **server_tick;
             let server_tick_range =
                 server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
 
-            updates.send(&mut messages, client_entity, &serialized, server_tick_range)?;
+            updates.send(&mut messages, client, &serialized, server_tick_range)?;
         }
 
         if !mutations.is_empty() || **track_mutate_messages {
@@ -858,7 +847,7 @@ fn send_messages(
 
             mutations.send(
                 &mut messages,
-                client_entity,
+                client,
                 &mut ticks,
                 &mut split_buffer,
                 &mut pools,
@@ -868,7 +857,7 @@ fn send_messages(
                 **server_tick,
                 **change_tick,
                 time.elapsed(),
-                client.max_size,
+                connected.max_size,
             )?;
         }
     }
@@ -890,8 +879,8 @@ fn reset(
     *server_tick = Default::default();
     message_buffer.clear();
     related_entities.clear();
-    for entity in &clients {
-        commands.entity(entity).despawn();
+    for client in &clients {
+        commands.entity(client).despawn();
     }
 }
 
@@ -952,7 +941,8 @@ struct DespawnBuffer(Vec<Entity>);
 /// **All other events will be ignored**.
 ///
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
-#[derive(Component, Default)]
+#[derive(Component, Reflect, Default)]
+#[component(immutable)]
 #[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
 
@@ -976,5 +966,5 @@ pub struct AuthorizedClient;
 /// All of this only affects mutations. For any component insertion or removal, the changes
 /// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
 /// See its documentation for more details.
-#[derive(Component, Deref, DerefMut, Debug, Default, Clone)]
+#[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);

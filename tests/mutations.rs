@@ -11,9 +11,9 @@ use bevy_replicon::{
     server::server_tick::ServerTick,
     shared::{
         replication::{
-            command_markers::MarkerConfig,
             deferred_entity::DeferredEntity,
-            registry::{command_fns, ctx::WriteCtx},
+            receive_markers::MarkerConfig,
+            registry::{ctx::WriteCtx, receive_fns},
         },
         server_entity_map::ServerEntityMap,
     },
@@ -319,7 +319,7 @@ fn related() {
 }
 
 #[test]
-fn command_fns() {
+fn receive_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -328,8 +328,11 @@ fn command_fns() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate::<OriginalComponent>()
-        .set_command_fns(replace, command_fns::default_remove::<ReplacedComponent>)
+        .replicate::<BoolComponent>()
+        .set_receive_fns(
+            receive_fns::write_if_neq::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
+        )
         .finish();
     }
 
@@ -337,7 +340,7 @@ fn command_fns() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, OriginalComponent(false)))
+        .spawn((Replicated, BoolComponent(false)))
         .id();
 
     server_app.update();
@@ -345,18 +348,32 @@ fn command_fns() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app
-        .world_mut()
-        .query_filtered::<&ReplacedComponent, Without<OriginalComponent>>();
+    let mut components = client_app.world_mut().query::<Ref<BoolComponent>>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
 
-    // Change value.
+    // Trigger change detection without changing the value.
     let mut component = server_app
         .world_mut()
-        .get_mut::<OriginalComponent>(server_entity)
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap();
+    component.set_changed();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(!component.0);
+    assert!(!component.is_changed());
+
+    // Actually change value.
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
         .unwrap();
     component.0 = true;
 
+    server_app.exchange_with_client(&mut client_app);
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
@@ -366,7 +383,7 @@ fn command_fns() {
 }
 
 #[test]
-fn marker() {
+fn marker_with_replace() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -379,7 +396,7 @@ fn marker() {
         .replicate::<OriginalComponent>()
         .set_marker_fns::<ReplaceMarker, _>(
             replace,
-            command_fns::default_remove::<ReplacedComponent>,
+            receive_fns::default_remove::<ReplacedComponent>,
         )
         .finish();
     }
@@ -435,7 +452,7 @@ fn marker_with_history() {
         })
         .set_marker_fns::<HistoryMarker, BoolComponent>(
             write_history,
-            command_fns::default_remove::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .replicate::<BoolComponent>()
         .finish();
@@ -505,7 +522,7 @@ fn marker_with_history_consume() {
         })
         .set_marker_fns::<HistoryMarker, BoolComponent>(
             write_history,
-            command_fns::default_remove::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .replicate::<BoolComponent>()
         .replicate::<MappedComponent>()
@@ -514,7 +531,7 @@ fn marker_with_history_consume() {
 
     server_app.connect_client(&mut client_app);
 
-    let entities_before = client_app.world().entities().len();
+    let entities_before = client_app.world().entities().count_spawned();
 
     let server_map_entity = server_app.world_mut().spawn_empty().id();
     let server_entity = server_app
@@ -567,7 +584,7 @@ fn marker_with_history_consume() {
     );
 
     assert_eq!(
-        client_app.world().entities().len() - entities_before,
+        client_app.world().entities().count_spawned() - entities_before,
         3,
         "client should have 2 initial entities and 1 from mutate message"
     );
@@ -589,7 +606,7 @@ fn marker_with_history_old_update() {
         })
         .set_marker_fns::<HistoryMarker, BoolComponent>(
             write_history,
-            command_fns::default_remove::<BoolComponent>,
+            receive_fns::default_remove::<BoolComponent>,
         )
         .replicate::<BoolComponent>()
         .finish();
@@ -671,8 +688,8 @@ fn many_entities() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES_COUNT);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).count(), ENTITIES_COUNT);
 
     for mut component in server_app
         .world_mut()
@@ -949,7 +966,7 @@ fn old_ignored() {
 
     server_app.connect_client(&mut client_app);
 
-    let entities_before = client_app.world().entities().len();
+    let entities_before = client_app.world().entities().count_spawned();
 
     let server_map_entity = server_app.world_mut().spawn_empty().id();
     let server_entity = server_app
@@ -992,7 +1009,7 @@ fn old_ignored() {
     );
 
     assert_eq!(
-        client_app.world().entities().len() - entities_before,
+        client_app.world().entities().count_spawned() - entities_before,
         3,
         "client should have 2 initial entities and 1 from mutation"
     );
@@ -1238,7 +1255,7 @@ fn after_disconnect() {
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
-#[derive(Clone, Component, Copy, Deserialize, Serialize)]
+#[derive(Component, Deserialize, Serialize, PartialEq, Clone, Copy)]
 struct BoolComponent(bool);
 
 #[derive(Component, Default, Deserialize, Serialize)]

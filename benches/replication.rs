@@ -63,8 +63,8 @@ fn changes_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Durat
             server_app.exchange_with_client(client_app);
             client_app.update();
 
-            let mut replicated = client_app.world_mut().query::<&Replicated>();
-            assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES);
+            let mut remote = client_app.world_mut().query::<&Remote>();
+            assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
         }
     }
 
@@ -92,8 +92,8 @@ fn mutations_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Dur
         server_app.exchange_with_client(client_app);
         client_app.update();
 
-        let mut replicated = client_app.world_mut().query::<&Replicated>();
-        assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES);
+        let mut remote = client_app.world_mut().query::<&Remote>();
+        assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
     }
 
     let mut elapsed = Duration::ZERO;
@@ -110,8 +110,8 @@ fn mutations_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Dur
             server_app.exchange_with_client(client_app);
             client_app.update();
 
-            let mut replicated = client_app.world_mut().query::<&Replicated>();
-            assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES);
+            let mut remote = client_app.world_mut().query::<&Remote>();
+            assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
         }
     }
 
@@ -137,8 +137,8 @@ fn changes_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
         client_app.update();
         elapsed += instant.elapsed();
 
-        let mut replicated = client_app.world_mut().query::<&Replicated>();
-        assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES);
+        let mut remote = client_app.world_mut().query::<&Remote>();
+        assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
     }
 
     elapsed
@@ -158,8 +158,8 @@ fn mutations_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
 
     let mut elapsed = Duration::ZERO;
     for _ in 0..iter {
@@ -175,8 +175,8 @@ fn mutations_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
         client_app.update();
         elapsed += instant.elapsed();
 
-        let mut replicated = client_app.world_mut().query::<&Replicated>();
-        assert_eq!(replicated.iter(client_app.world()).count(), ENTITIES);
+        let mut remote = client_app.world_mut().query::<&Remote>();
+        assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
     }
 
     elapsed
@@ -201,14 +201,14 @@ trait BenchmarkComponent:
     const NAME: &'static str;
 }
 
-#[derive(Clone, Component, Default, Deserialize, Serialize)]
+#[derive(Component, Deserialize, Serialize, Default, Clone)]
 struct UsizeComponent(usize);
 
 impl BenchmarkComponent for UsizeComponent {
     const NAME: &'static str = "usize_component";
 }
 
-#[derive(Component, Clone, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Clone)]
 struct StringComponent(String);
 
 impl BenchmarkComponent for StringComponent {
@@ -225,7 +225,7 @@ impl BenchmarkComponent for StructComponent {
     const NAME: &'static str = "struct_component";
 }
 
-#[derive(Component, Clone, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Clone)]
 struct StructComponent {
     x: u32,
     y: u32,

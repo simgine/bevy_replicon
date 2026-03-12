@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy_replicon::prelude::*;
 
 use super::{
-    link_conditioner::{ConditionerConfig, LinkConditioner},
+    link_conditioner::{GlobalConditionerConfig, LinkConditioner},
     tcp,
 };
 
@@ -51,10 +51,10 @@ fn receive_packets(
     mut commands: Commands,
     mut client: ResMut<ExampleClient>,
     mut messages: ResMut<ClientMessages>,
-    config: Option<Res<ConditionerConfig>>,
+    config: Option<Res<GlobalConditionerConfig>>,
 ) {
     let now = Instant::now();
-    let config = config.as_deref();
+    let config = config.as_deref().map(|c| &**c);
     loop {
         match tcp::read_message(&mut client.stream) {
             Ok((channel_id, message)) => {

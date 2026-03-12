@@ -74,8 +74,8 @@ fn with_relations() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 2);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 2);
 
     server_app.world_mut().despawn(server_entity);
 
@@ -83,7 +83,7 @@ fn with_relations() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -157,6 +157,76 @@ fn signature() {
 }
 
 #[test]
+fn signature_with_hierarchy() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<TestComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client_parent = client_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    let client_child = client_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(1), ChildOf(client_parent)))
+        .id();
+
+    let server_parent = server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(1), ChildOf(server_parent)));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert!(client_app.world().get_entity(client_parent).is_ok());
+    assert!(client_app.world().get_entity(client_child).is_ok());
+
+    server_app.world_mut().despawn(server_parent);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(client_app.world().get_entity(client_parent).is_err());
+    assert!(client_app.world().get_entity(client_child).is_err());
+
+    let server_parent = server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(0)))
+        .id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, Signature::from(1), ChildOf(server_parent)));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(
+        remote.iter(client_app.world()).count(),
+        2,
+        "entities should be replicated as new due to removal from the signature map"
+    );
+}
+
+#[test]
 fn hidden_entity() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -223,8 +293,8 @@ fn visibility_lose() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 
     server_app
         .world_mut()
@@ -235,7 +305,7 @@ fn visibility_lose() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -325,10 +395,11 @@ struct TestComponent;
 struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }
 
@@ -337,9 +408,10 @@ impl VisibilityFilter for EntityVisibility {
 struct ComponentVisibility;
 
 impl VisibilityFilter for ComponentVisibility {
-    type Scope = ComponentScope<TestComponent>;
+    type ClientComponent = Self;
+    type Scope = SingleComponent<TestComponent>;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }

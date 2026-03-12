@@ -1,7 +1,8 @@
 use bevy::{
     ecs::{
         archetype::ArchetypeEntity,
-        component::{ComponentId, ComponentTicks, StorageType, Tick},
+        change_detection::{ComponentTicks, Tick},
+        component::{ComponentId, StorageType},
         query::{FilteredAccess, FilteredAccessSet},
         storage::TableId,
         system::{ReadOnlySystemParam, SystemMeta, SystemParam},

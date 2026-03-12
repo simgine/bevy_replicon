@@ -31,7 +31,7 @@ fn empty() {
 
     let client_entity = client_app
         .world_mut()
-        .query_filtered::<Entity, With<Replicated>>()
+        .query_filtered::<Entity, With<Remote>>()
         .single(client_app.world())
         .unwrap();
 
@@ -49,7 +49,7 @@ fn empty() {
 }
 
 #[test]
-fn with_component() {
+fn component() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -70,12 +70,12 @@ fn with_component() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
 #[test]
-fn with_multiple_components() {
+fn multiple_components() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -99,7 +99,7 @@ fn with_multiple_components() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A, &B)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A, &B)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
     assert_eq!(
         client_app.world().archetypes().len() - before_archetypes,
@@ -109,7 +109,7 @@ fn with_multiple_components() {
 }
 
 #[test]
-fn with_old_component() {
+fn old_component() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -132,8 +132,8 @@ fn with_old_component() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 
     // Enable replication for previously spawned entity
     server_app
@@ -145,7 +145,7 @@ fn with_old_component() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -173,8 +173,8 @@ fn empty_before_connection() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).count(), 1);
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn before_connection() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -246,7 +246,7 @@ fn signature() {
 
     let client_entity = client_app.world().entity(client_entity);
     assert!(
-        client_entity.contains::<Replicated>(),
+        client_entity.contains::<Remote>(),
         "entity should start receive replication"
     );
     assert!(
@@ -258,9 +258,9 @@ fn signature() {
         "component from server should be replicated"
     );
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
+    let mut remote = client_app.world_mut().query::<&Remote>();
     assert_eq!(
-        replicated.iter(client_app.world()).count(),
+        remote.iter(client_app.world()).count(),
         1,
         "new entity shouldn't be spawned on client"
     );
@@ -486,8 +486,8 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -580,9 +580,10 @@ struct B;
 struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }

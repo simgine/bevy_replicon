@@ -27,7 +27,7 @@ pub struct RepliconExampleBackendPlugins;
 
 impl PluginGroup for RepliconExampleBackendPlugins {
     fn build(self) -> PluginGroupBuilder {
-        let mut group = PluginGroupBuilder::start::<Self>().add(LinkConditionerPlugin);
+        let mut group = PluginGroupBuilder::start::<Self>();
 
         #[cfg(feature = "server")]
         {

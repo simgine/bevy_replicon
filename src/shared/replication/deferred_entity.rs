@@ -55,7 +55,17 @@ impl<'w> DeferredEntity<'w> {
 
     fn register_component<C: Component>(&mut self) -> ComponentId {
         // SAFETY: no location update is needed because we only register the component ID.
-        unsafe { self.entity.world_mut().register_component::<C>() }
+        unsafe { self.world_mut().register_component::<C>() }
+    }
+
+    /// Returns this entity's world.
+    ///
+    /// # Safety
+    ///
+    /// Must only be used to make non-structural ECS changes,
+    /// similar to [`DeferredWorld`](bevy::ecs::world::DeferredWorld).
+    pub unsafe fn world_mut(&mut self) -> &mut World {
+        unsafe { self.entity.world_mut() }
     }
 
     /// Flushes the world and applies all buffered changes.
@@ -63,8 +73,6 @@ impl<'w> DeferredEntity<'w> {
     /// Needed to be called after processing each entity
     /// to spawn all allocated entities from mappings.
     pub fn flush(&mut self) {
-        // SAFETY: entity location is unchanged because all changes applied after.
-        unsafe { self.entity.world_mut().flush() };
         self.changes.apply(&mut self.entity);
     }
 }

@@ -1,8 +1,5 @@
-use bevy::{
-    ecs::{component::ComponentId, entity::Entities},
-    prelude::*,
-};
-use bevy::ecs::world::unsafe_world_cell::{UnsafeWorldCell};
+use bevy::{ecs::component::ComponentId, prelude::*};
+use bevy::ecs::world::unsafe_world_cell::UnsafeWorldCell;
 use crate::{prelude::*, shared::server_entity_map::ServerEntityMap};
 
 /// Replication context for serialization function.
@@ -20,7 +17,7 @@ pub struct SerializeCtx<'a> {
 
 /// Replication context for writing and deserialization.
 #[non_exhaustive]
-pub struct WriteCtx<'a> {
+pub struct WriteCtx<'a, 'w> {
     /// Maps server entities to client entities and vice versa.
     pub entity_map: &'a mut ServerEntityMap,
 
@@ -39,13 +36,13 @@ pub struct WriteCtx<'a> {
     pub world_cell: UnsafeWorldCell<'a>,
 
     /// World's entities to reserve IDs on new entities inside components.
-    pub(crate) entities: &'a Entities,
+    pub(crate) spawner: &'a mut EntitySpawner<'w>,
 
     /// Disables mapping logic to avoid spawning entities for consume functions.
     pub(crate) ignore_mapping: bool,
 }
 
-impl EntityMapper for WriteCtx<'_> {
+impl EntityMapper for WriteCtx<'_, '_> {
     fn get_mapped(&mut self, server_entity: Entity) -> Entity {
         if self.ignore_mapping {
             return server_entity;
@@ -53,7 +50,7 @@ impl EntityMapper for WriteCtx<'_> {
 
         self.entity_map
             .server_entry(server_entity)
-            .or_insert_with(|| self.entities.reserve_entity())
+            .or_insert_with(|| self.spawner.spawn_empty())
     }
 
     fn set_mapped(&mut self, _source: Entity, _target: Entity) {
@@ -81,4 +78,19 @@ pub struct RemoveCtx<'a> {
 pub struct DespawnCtx {
     /// Tick for the currently processing message.
     pub message_tick: RepliconTick,
+}
+
+/// A wrapper around [`World`] for spawning empty entities.
+pub(crate) struct EntitySpawner<'a> {
+    world: &'a mut World,
+}
+
+impl<'a> EntitySpawner<'a> {
+    pub(crate) fn new(world: &'a mut World) -> Self {
+        Self { world }
+    }
+
+    fn spawn_empty(&mut self) -> Entity {
+        self.world.spawn_empty().id()
+    }
 }

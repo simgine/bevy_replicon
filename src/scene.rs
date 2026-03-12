@@ -6,8 +6,9 @@ use crate::{prelude::*, shared::replication::rules::ReplicationRules};
 /**
 Fills scene with all replicated entities and their components.
 
-Components that are not registered using [`App::register_type`]
-or do not have `#[reflect(Component)]` will be skipped.
+Components will be skipped if they do not have `#[reflect(Component)]`,
+or if they are not registered (when automatic type registration is disabled
+and [`App::register_type`] has not been called).
 
 Entities won't have the [`Replicated`] component.
 So on deserialization you need to insert it back if you want entities to continue to replicate.
@@ -15,7 +16,7 @@ So on deserialization you need to insert it back if you want entities to continu
 # Examples
 
 ```
-use bevy::{asset::ron, prelude::*, state::app::StatesPlugin, scene::serde::SceneDeserializer};
+use bevy::{prelude::*, state::app::StatesPlugin, scene::serde::SceneDeserializer};
 use bevy_replicon::{prelude::*, scene};
 use serde::de::DeserializeSeed;
 # let mut app = App::new();

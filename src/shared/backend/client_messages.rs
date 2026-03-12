@@ -30,8 +30,6 @@ impl ClientMessages {
     }
 
     /// Returns number of received messages for a channel.
-    ///
-    /// See also [`Self::receive`].
     pub fn received_count<I: Into<usize>>(&self, channel_id: I) -> usize {
         let channel_id = channel_id.into();
         let channel_messages = self

@@ -5,7 +5,7 @@ use bevy_replicon::{
     server::server_tick::ServerTick,
     shared::replication::{
         deferred_entity::DeferredEntity,
-        registry::{command_fns, ctx::WriteCtx},
+        registry::{ctx::WriteCtx, receive_fns},
     },
     test_app::{ServerTestAppExt, TestClientEntity},
 };
@@ -98,7 +98,7 @@ fn multiple() {
 }
 
 #[test]
-fn command_fns() {
+fn receive_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -108,7 +108,7 @@ fn command_fns() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<Original>()
-        .set_command_fns(replace, command_fns::default_remove::<Replaced>)
+        .set_receive_fns(replace, receive_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -148,7 +148,7 @@ fn marker() {
         ))
         .register_marker::<ReplaceMarker>()
         .replicate::<Original>()
-        .set_marker_fns::<ReplaceMarker, _>(replace, command_fns::default_remove::<Replaced>)
+        .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -252,7 +252,7 @@ fn not_replicated() {
 
     let client_entity = client_app
         .world_mut()
-        .query_filtered::<Entity, (With<Replicated>, Without<NotReplicated>)>()
+        .query_filtered::<Entity, (With<Remote>, Without<NotReplicated>)>()
         .single(client_app.world())
         .unwrap();
 
@@ -297,8 +297,8 @@ fn with_client_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query_filtered::<Entity, With<A>>();
-    let client_entity = components.single(client_app.world()).unwrap();
+    let mut with_components = client_app.world_mut().query_filtered::<Entity, With<A>>();
+    let client_entity = with_components.single(client_app.world()).unwrap();
 
     server_app
         .world_mut()
@@ -311,8 +311,8 @@ fn with_client_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -377,10 +377,10 @@ fn after_spawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app
+    let mut remote = client_app
         .world_mut()
-        .query_filtered::<&Replicated, Without<A>>();
-    assert_eq!(components.iter(client_app.world()).len(), 1);
+        .query_filtered::<&Remote, Without<A>>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -406,8 +406,8 @@ fn after_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).len(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 
     // Un-replicate and remove at the same time.
     server_app
@@ -420,7 +420,7 @@ fn after_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(replicated.iter(client_app.world()).len(), 0);
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -637,10 +637,11 @@ struct Replaced;
 struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }
 
@@ -649,10 +650,11 @@ impl VisibilityFilter for EntityVisibility {
 struct ComponentVisibility;
 
 impl VisibilityFilter for ComponentVisibility {
-    type Scope = ComponentScope<A>;
+    type ClientComponent = Self;
+    type Scope = SingleComponent<A>;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }
 

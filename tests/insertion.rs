@@ -6,7 +6,7 @@ use bevy_replicon::{
     shared::{
         replication::{
             deferred_entity::DeferredEntity,
-            registry::{command_fns, ctx::WriteCtx},
+            registry::{ctx::WriteCtx, receive_fns},
         },
         server_entity_map::ServerEntityMap,
     },
@@ -225,8 +225,8 @@ fn mapped_new_entity() {
         .unwrap();
     assert!(client_app.world().get_entity(mapped_component.0).is_ok());
 
-    let mut replicated = client_app.world_mut().query::<&Replicated>();
-    assert_eq!(replicated.iter(client_app.world()).count(), 1);
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).count(), 1);
 }
 
 #[test]
@@ -298,7 +298,7 @@ fn multiple_components_sequential() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A)>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
 
     // Insert another replicated component.
@@ -308,7 +308,7 @@ fn multiple_components_sequential() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<(&Replicated, &A, &B)>();
+    let mut components = client_app.world_mut().query::<(&Remote, &A, &B)>();
     assert_eq!(components.iter(client_app.world()).count(), 1);
 }
 
@@ -350,7 +350,7 @@ fn rule_split_across_ticks() {
 }
 
 #[test]
-fn command_fns() {
+fn receive_fns() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -360,7 +360,7 @@ fn command_fns() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<Original>()
-        .set_command_fns(replace, command_fns::default_remove::<Replaced>)
+        .set_receive_fns(replace, receive_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -400,7 +400,7 @@ fn marker() {
         ))
         .register_marker::<ReplaceMarker>()
         .replicate::<Original>()
-        .set_marker_fns::<ReplaceMarker, _>(replace, command_fns::default_remove::<Replaced>)
+        .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
         .finish();
     }
 
@@ -573,10 +573,10 @@ fn with_client_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut replicated = client_app
+    let mut remote = client_app
         .world_mut()
-        .query_filtered::<Entity, With<Replicated>>();
-    let client_entity = replicated.single(client_app.world()).unwrap();
+        .query_filtered::<Entity, With<Remote>>();
+    let client_entity = remote.single(client_app.world()).unwrap();
 
     server_app.world_mut().entity_mut(server_entity).insert(A);
 
@@ -799,10 +799,11 @@ struct Replaced;
 struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
     type Scope = Entity;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }
 
@@ -811,10 +812,11 @@ impl VisibilityFilter for EntityVisibility {
 struct ComponentVisibility;
 
 impl VisibilityFilter for ComponentVisibility {
-    type Scope = ComponentScope<A>;
+    type ClientComponent = Self;
+    type Scope = SingleComponent<A>;
 
-    fn is_visible(&self, _entity_filter: &Self) -> bool {
-        true
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
     }
 }
 

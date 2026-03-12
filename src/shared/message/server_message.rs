@@ -379,8 +379,8 @@ impl ServerMessage {
 
         match *mode {
             SendMode::Broadcast => {
-                for client_entity in clients {
-                    server_messages.send(client_entity, self.channel_id, message_bytes.clone());
+                for client in clients {
+                    server_messages.send(client, self.channel_id, message_bytes.clone());
                 }
             }
             SendMode::BroadcastExcept(ignored_id) => {
@@ -683,10 +683,6 @@ impl<E: EntityEvent> EntityEvent for ToClients<E> {
     fn event_target(&self) -> Entity {
         self.message.event_target()
     }
-
-    fn event_target_mut(&mut self) -> &mut Entity {
-        self.message.event_target_mut()
-    }
 }
 
 /// Type of server message sending.
@@ -698,6 +694,14 @@ pub enum SendMode {
     BroadcastExcept(ClientId),
     /// Send only to the specified client.
     Direct(ClientId),
+}
+
+impl SendMode {
+    /// Send to every client except the listen server.
+    pub const CLIENTS_ONLY: SendMode = SendMode::BroadcastExcept(ClientId::Server);
+
+    /// Send only to the server.
+    pub const SERVER_ONLY: SendMode = SendMode::Direct(ClientId::Server);
 }
 
 /// Default message serialization function.
