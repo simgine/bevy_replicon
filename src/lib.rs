@@ -180,7 +180,8 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 
 You don't want to replicate all components because not all of them are
 necessary to send over the network. Components that can be calculated on the client can
-be inserted using Bevy's required components feature.
+be inserted using Bevy's required components feature. You can also mark [`Replicated`]
+as required to automatically replicate all entities with this component.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -202,20 +203,9 @@ fn init_player_mesh(
     **mesh = meshes.add(Capsule2d::default());
 }
 
-/// Main player component.
-///
-/// [`NotReplicatedComponent`] and [`Replicated`] will be implicitly inserted after spawning on
-/// both the server and clients.
-///
-/// [`Replicated`] is always inserted on the client after replication, regardless of whether it is marked
-/// as required. However, it may still be useful to mark it as required if you want to avoid
-/// inserting it explicitly on the server.
 #[derive(Component, Deserialize, Serialize)]
-#[require(Replicated, NotReplicatedComponent, Mesh2d)]
+#[require(Replicated, Mesh2d)]
 struct Player;
-
-#[derive(Default, Component)]
-struct NotReplicatedComponent;
 ```
 
 This pairs nicely with server state serialization and keeps saves clean.
