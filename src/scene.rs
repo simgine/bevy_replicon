@@ -4,13 +4,14 @@ use log::debug;
 use crate::{prelude::*, shared::replication::rules::ReplicationRules};
 
 /**
-Fills scene with all replicated entities and their components.
+Fills the scene with all entities that have either [`Replicated`] or [`Remote`],
+along with their components.
 
 Components will be skipped if they do not have `#[reflect(Component)]`,
 or if they are not registered (when automatic type registration is disabled
 and [`App::register_type`] has not been called).
 
-Entities won't have the [`Replicated`] component.
+Scene entities won't include the [`Replicated`] or [`Remote`] components.
 So on deserialization you need to insert it back if you want entities to continue to replicate.
 
 # Examples
@@ -39,18 +40,18 @@ let mut scene = scene_deserializer
     .deserialize(&mut deserializer)
     .expect("ron should be convertible to scene");
 
-// Re-insert `Replicated` component.
+// Re-insert `Replicated` component if you want to replicate them.
 for entity in &mut scene.entities {
     entity.components.push(Replicated.to_dynamic());
 }
 ```
 */
 pub fn replicate_into(scene: &mut DynamicScene, world: &World) {
-    let Some(marker_id) = world.component_id::<Replicated>() else {
-        // Components are initialized lazily.
-        // If there is no replication marker, then we have nothing to replicate.
-        return;
-    };
+    let replicated_id = world.component_id::<Replicated>();
+    #[cfg(feature = "client")]
+    let remote_id = world.component_id::<Remote>();
+    #[cfg(not(feature = "client"))]
+    let remote_id = None;
 
     let mut entities: EntityHashMap<_> = scene
         .entities
@@ -61,11 +62,13 @@ pub fn replicate_into(scene: &mut DynamicScene, world: &World) {
     let registry = world.resource::<AppTypeRegistry>();
     let rules = world.resource::<ReplicationRules>();
     let registry = registry.read();
-    for archetype in world
-        .archetypes()
-        .iter()
-        .filter(|archetype| archetype.contains(marker_id))
-    {
+    for archetype in world.archetypes().iter() {
+        let has_replicated = replicated_id.is_some_and(|id| archetype.contains(id));
+        let has_remote = remote_id.is_some_and(|id| archetype.contains(id));
+        if !has_replicated && !has_remote {
+            continue;
+        }
+
         // Populate entities ahead of time in order to extract entities without components too.
         for entity in archetype.entities() {
             entities.entry(entity.id()).or_default();

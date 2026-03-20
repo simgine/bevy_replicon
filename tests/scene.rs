@@ -14,7 +14,7 @@ fn replicated_entity() {
         .replicate::<NonReflectedComponent>()
         .finish();
 
-    let entity = app
+    let replicated = app
         .world_mut()
         .spawn((
             Replicated,
@@ -23,20 +23,32 @@ fn replicated_entity() {
             NonReflectedComponent,
         ))
         .id();
+    let remote = app.world_mut().spawn((Remote, TestComponent)).id();
 
     let mut scene = DynamicScene::default();
     scene::replicate_into(&mut scene, app.world());
 
-    assert!(scene.resources.is_empty());
-    assert_eq!(scene.entities.len(), 1);
+    let replicated_dyn = scene
+        .entities
+        .iter()
+        .find(|entity| entity.entity == replicated)
+        .unwrap();
 
-    let dyn_entity = &scene.entities[0];
-    assert_eq!(dyn_entity.entity, entity);
+    let remote_dyn = scene
+        .entities
+        .iter()
+        .find(|entity| entity.entity == remote)
+        .unwrap();
+
+    assert_eq!(replicated_dyn.entity, replicated);
     assert_eq!(
-        dyn_entity.components.len(),
+        replicated_dyn.components.len(),
         1,
         "entity should have only registered components with `#[reflect(Component)]`"
     );
+
+    assert_eq!(remote_dyn.entity, remote);
+    assert_eq!(remote_dyn.components.len(), 1);
 }
 
 #[test]
