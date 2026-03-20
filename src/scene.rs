@@ -56,7 +56,7 @@ pub fn replicate_into(scene: &mut DynamicScene, world: &World) {
     let mut entities: EntityHashMap<_> = scene
         .entities
         .drain(..)
-        .map(|dyn_entity| (dyn_entity.entity, dyn_entity.components))
+        .map(|e| (e.entity, e.components))
         .collect();
 
     let registry = world.resource::<AppTypeRegistry>();
@@ -118,8 +118,9 @@ pub fn replicate_into(scene: &mut DynamicScene, world: &World) {
         }
     }
 
-    let dyn_entities_iter = entities
-        .drain()
-        .map(|(entity, components)| DynamicEntity { entity, components });
-    scene.entities.extend(dyn_entities_iter);
+    scene.entities.extend(
+        entities
+            .drain()
+            .map(|(entity, components)| DynamicEntity { entity, components }),
+    );
 }
