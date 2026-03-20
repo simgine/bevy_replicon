@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use test_log::test;
 
 #[test]
-fn replicated_entity() {
+fn replicated() {
     let mut app = App::new();
     app.add_plugins((StatesPlugin, RepliconPlugins))
         .register_type::<TestComponent>()
@@ -52,7 +52,7 @@ fn replicated_entity() {
 }
 
 #[test]
-fn empty_entity() {
+fn empty() {
     let mut app = App::new();
     app.add_plugins((StatesPlugin, RepliconPlugins)).finish();
 
@@ -71,7 +71,7 @@ fn empty_entity() {
 }
 
 #[test]
-fn not_replicated_entity() {
+fn not_replicated() {
     let mut app = App::new();
     app.add_plugins((StatesPlugin, RepliconPlugins))
         .register_type::<TestComponent>()
@@ -88,7 +88,7 @@ fn not_replicated_entity() {
 }
 
 #[test]
-fn entity_update() {
+fn update_existing() {
     let mut app = App::new();
     app.add_plugins((StatesPlugin, RepliconPlugins))
         .register_type::<TestComponent>()
