@@ -128,7 +128,7 @@ You can also configure the schedule via [`ServerPlugin::tick_schedule`].
 By default no entities are replicated. Add the [`Replicated`] marker
 component on the server for entities you want to replicate.
 
-On clients [`Replicated`] will be automatically inserted to newly-replicated entities.
+On clients newly-replicated entities will be marked with [`Remote`].
 
 If you remove the [`Replicated`] component from an entity on the server, it will be despawned on all clients.
 
