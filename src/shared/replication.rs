@@ -15,9 +15,6 @@ use bevy::prelude::*;
 
 /// Marks an entity for authoritative replication sending.
 ///
-/// Typically inserted on server-owned entities. Received entities are marked
-/// with [`Remote`](crate::prelude::Remote) instead.
-///
 /// See also [`Remote`](crate::prelude::Remote).
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
