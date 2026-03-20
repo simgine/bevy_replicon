@@ -123,7 +123,7 @@ required-features = ["client", "server"]
 
 [[test]]
 name = "scene"
-required-features = ["scene"]
+required-features = ["scene", "client"]
 
 [[test]]
 name = "server_message"

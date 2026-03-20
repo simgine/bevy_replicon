@@ -329,12 +329,7 @@ fn signature_before_replication() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert!(
-        client_app
-            .world()
-            .get::<Replicated>(client_entity)
-            .is_some()
-    );
+    assert!(client_app.world().get::<Remote>(client_entity).is_some());
 }
 
 #[test]
