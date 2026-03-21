@@ -445,12 +445,13 @@ There are 2 ways to support multiple configurations at the same time.
 Just split client and server logic. Then for listen server and singleplayer run both the server and client,
 just don't accept outside connections for singleplayer.
 
-However, **running the client and server in a single app is not supported**. We rely on change detection to
-decide on which data to send, and since the world is shared, applying replication will trigger changes.
-To avoid this, you can use one of the following workarounds:
+However, you can't simply run both the client and server in a single app for a listen server. Since they operate
+on the same world, any changes will trigger replication, which will be sent with a delay and then applied to the
+same entities, overriding the latest values and triggering changes again.
 
 - Two Bevy apps inside a single process, running in separate threads.
 - Two executables. After starting the client app, the server starts in the background.
+- Use [receive markers](#receive-markers) to discard replication on listen server.
 
 It's not easy to set up and requires more resources due to the synchronization between two worlds.
 This is why, while it's possible to use Replicon this way, we recommend a different approach.
