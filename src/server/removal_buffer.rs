@@ -11,7 +11,7 @@ use crate::{
 
 /// Buffer with removed components for the current tick.
 #[derive(Resource, Deref, Default)]
-pub(super) struct RemovalBuffer {
+pub(crate) struct RemovalBuffer {
     /// Component removals grouped by entity.
     #[deref]
     removals: EntityHashMap<Vec<(ComponentIndex, FnsId)>>,
@@ -24,7 +24,7 @@ pub(super) struct RemovalBuffer {
 }
 
 impl RemovalBuffer {
-    pub(super) fn insert(
+    pub(crate) fn insert(
         &mut self,
         entity: Entity,
         components: &[ComponentId],
@@ -51,7 +51,7 @@ impl RemovalBuffer {
     /// Clears all removals.
     ///
     /// Keeps the allocated memory for reuse.
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.pool
             .extend(self.removals.drain().map(|(_, mut components)| {
                 components.clear();

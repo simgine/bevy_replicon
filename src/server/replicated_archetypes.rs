@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[derive(Resource)]
-pub(super) struct ReplicatedArchetypes {
+pub(crate) struct ReplicatedArchetypes {
     /// ID of [`Replicated`] component.
     marker_id: ComponentId,
 
@@ -31,7 +31,7 @@ pub(super) struct ReplicatedArchetypes {
 }
 
 impl ReplicatedArchetypes {
-    pub(super) fn update(&mut self, archetypes: &Archetypes, rules: &ReplicationRules) {
+    pub(crate) fn update(&mut self, archetypes: &Archetypes, rules: &ReplicationRules) {
         let old_generation = mem::replace(&mut self.generation, archetypes.generation());
 
         for archetype in archetypes[old_generation..]
@@ -64,16 +64,16 @@ impl ReplicatedArchetypes {
         }
     }
 
-    pub(super) fn marker_id(&self) -> ComponentId {
+    pub(crate) fn marker_id(&self) -> ComponentId {
         self.marker_id
     }
 
-    pub(super) fn get(&self, id: ArchetypeId) -> Option<&ReplicatedArchetype> {
+    pub(crate) fn get(&self, id: ArchetypeId) -> Option<&ReplicatedArchetype> {
         let index = *self.ids_map.get(&id)?;
         self.list.get(index)
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = &ReplicatedArchetype> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ReplicatedArchetype> {
         self.list.iter()
     }
 }
@@ -90,12 +90,12 @@ impl FromWorld for ReplicatedArchetypes {
 }
 
 /// An archetype that can be stored in [`ReplicatedArchetypes`].
-pub(super) struct ReplicatedArchetype {
+pub(crate) struct ReplicatedArchetype {
     /// Associated archetype ID.
-    pub(super) id: ArchetypeId,
+    pub(crate) id: ArchetypeId,
 
     /// Components marked as replicated.
-    pub(super) components: Vec<(ComponentRule, StorageType)>,
+    pub(crate) components: Vec<(ComponentRule, StorageType)>,
 }
 
 impl ReplicatedArchetype {
@@ -106,7 +106,7 @@ impl ReplicatedArchetype {
         }
     }
 
-    pub(super) fn find_rule(&self, id: ComponentId) -> Option<&ComponentRule> {
+    pub(crate) fn find_rule(&self, id: ComponentId) -> Option<&ComponentRule> {
         self.components.iter().map(|(r, _)| r).find(|r| r.id == id)
     }
 }

@@ -9,7 +9,7 @@ use crate::shared::replication::registry::component_mask::ComponentMask;
 ///
 /// All data is cleared before the insertion.
 #[derive(Resource, Default)]
-pub(super) struct ClientPools {
+pub(crate) struct ClientPools {
     /// Entities with bitvecs for components from
     /// [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo).
     entities: Vec<Vec<(Entity, ComponentMask)>>,
@@ -25,28 +25,28 @@ pub(super) struct ClientPools {
 }
 
 impl ClientPools {
-    pub(super) fn recycle_entities(&mut self, mut entities: Vec<(Entity, ComponentMask)>) {
+    pub(crate) fn recycle_entities(&mut self, mut entities: Vec<(Entity, ComponentMask)>) {
         for (_, components) in entities.drain(..) {
             self.recycle_components(components);
         }
         self.entities.push(entities);
     }
 
-    pub(super) fn recycle_components(&mut self, mut components: ComponentMask) {
+    pub(crate) fn recycle_components(&mut self, mut components: ComponentMask) {
         if components.is_heap() {
             components.clear();
             self.components.push(components);
         }
     }
 
-    pub(super) fn recycle_ranges(&mut self, ranges: impl Iterator<Item = Vec<Range<usize>>>) {
+    pub(crate) fn recycle_ranges(&mut self, ranges: impl Iterator<Item = Vec<Range<usize>>>) {
         self.ranges.extend(ranges.map(|mut ranges| {
             ranges.clear();
             ranges
         }));
     }
 
-    pub(super) fn recycle_mutations(
+    pub(crate) fn recycle_mutations(
         &mut self,
         mutations: impl Iterator<Item = Vec<EntityMutations>>,
     ) {
@@ -56,19 +56,19 @@ impl ClientPools {
         }));
     }
 
-    pub(super) fn take_entities(&mut self) -> Vec<(Entity, ComponentMask)> {
+    pub(crate) fn take_entities(&mut self) -> Vec<(Entity, ComponentMask)> {
         self.entities.pop().unwrap_or_default()
     }
 
-    pub(super) fn take_components(&mut self) -> ComponentMask {
+    pub(crate) fn take_components(&mut self) -> ComponentMask {
         self.components.pop().unwrap_or_default()
     }
 
-    pub(super) fn take_ranges(&mut self) -> Vec<Range<usize>> {
+    pub(crate) fn take_ranges(&mut self) -> Vec<Range<usize>> {
         self.ranges.pop().unwrap_or_default()
     }
 
-    pub(super) fn take_mutations(&mut self) -> Vec<EntityMutations> {
+    pub(crate) fn take_mutations(&mut self) -> Vec<EntityMutations> {
         self.mutations.pop().unwrap_or_default()
     }
 }

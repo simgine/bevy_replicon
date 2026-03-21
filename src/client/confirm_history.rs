@@ -114,7 +114,7 @@ impl ConfirmHistory {
     ///
     /// Panics if `debug_assertions` are enabled and
     /// `ago` is bigger then [`u64::BITS`].
-    pub(super) fn set(&mut self, ago: u32) {
+    pub(crate) fn set(&mut self, ago: u32) {
         debug_assert!(ago < u64::BITS);
         self.mask |= 1 << ago;
     }
@@ -125,7 +125,7 @@ impl ConfirmHistory {
     ///
     /// Panics if `debug_assertions` are enabled and
     /// `tick` is less then the last tick.
-    pub(super) fn set_last_tick(&mut self, tick: RepliconTick) {
+    pub(crate) fn set_last_tick(&mut self, tick: RepliconTick) {
         debug_assert!(tick >= self.last_tick);
         let diff = tick - self.last_tick;
         self.mask = self.mask.wrapping_shl(diff);

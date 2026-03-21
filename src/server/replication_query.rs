@@ -30,7 +30,7 @@ impl<'w> ReplicationQuery<'w, '_> {
     /// # Safety
     ///
     /// The component must be present in this archetype, have the specified storage type, and be previously marked for replication.
-    pub(super) unsafe fn get_component_unchecked(
+    pub(crate) unsafe fn get_component_unchecked(
         &self,
         entity: &ArchetypeEntity,
         table_id: TableId,
