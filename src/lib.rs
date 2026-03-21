@@ -610,6 +610,10 @@ and associate functions for components with this marker using [`AppMarkerExt::se
 if the marker `M` is present. You can also control marker priority or enable processing of old values using
 [`AppMarkerExt::register_marker_with<M>`].
 
+It's also possible to override despawns received from the server via
+[`ReplicationRegistry::despawn`](shared::replication::registry::ReplicationRegistry::despawn), which is also often used together
+with receive markers.
+
 ### Ticks information
 
 This requires an understanding of how replication works. See the documentation on
