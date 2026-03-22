@@ -10,7 +10,7 @@ use crate::{
 /// Explicit receive-side state for one upstream sender.
 ///
 /// In the ordinary client path this is built from the existing singleton
-/// resources. Later phases can host multiple receive contexts in one app.
+/// resources.
 pub(crate) struct ReceiveContext<'a> {
     pub(crate) entity_map: &'a mut ServerEntityMap,
     pub(crate) update_tick: &'a mut ServerUpdateTick,

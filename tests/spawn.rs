@@ -330,7 +330,6 @@ fn signature_before_replication() {
     client_app.update();
 
     assert!(client_app.world().get::<Remote>(client_entity).is_some());
-    assert!(client_app.world().get::<Remote>(client_entity).is_none());
 }
 
 #[test]
