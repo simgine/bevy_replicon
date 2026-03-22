@@ -13,7 +13,7 @@ pub mod update_message_flags;
 
 use bevy::prelude::*;
 
-/// Marks an entity for authoritative replication sending.
+/// Marks an entity for replication on the server.
 ///
 /// See also [`Remote`](crate::prelude::Remote).
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
