@@ -77,11 +77,15 @@ pub(super) fn buffer_removals(
         return;
     }
 
+    // Observers can't use run conditions. We return early on the client, but system parameters
+    // are validated before the observer runs. Because of this, the registry may not be present
+    // in the world during replication receive, so it needs to be optional.
     let registry = registry.expect("registry should always exist on the server");
 
     replicated_archetypes.update(archetypes, &rules);
     let location = entities.get_spawned(remove.entity).unwrap();
     let Some(archetype) = replicated_archetypes.get(location.archetype_id) else {
+        // `Replicated` component is missing.
         trace!(
             "ignoring `{components:?}` removal for non-replicated `{}`",
             remove.entity
@@ -212,10 +216,13 @@ fn should_send_mapping(
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
+    // Since despawns processed later, we need to explicitly check for them here
+    // because we can't distinguish between a despawn and removal of a visibility filter.
     if visibility.get(entity).is_hidden(registry) || despawn_buffer.contains(&entity) {
         return false;
     }
 
+    // Check if the client already received the entity.
     !ticks.entities.contains_key(&entity)
 }
 
@@ -237,6 +244,8 @@ pub(super) fn collect_despawns(
         let entity_range = entity.write(&mut serialized)?;
         for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
             if let Some(entity_ticks) = ticks.entities.remove(&entity) {
+                // Write despawn only if the entity was previously sent because
+                // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client}`");
                 message.add_despawn(entity_range.clone());
                 pools.recycle_components(entity_ticks.components);
@@ -248,6 +257,7 @@ pub(super) fn collect_despawns(
 
     for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
+            // Skip visibility changes that hide only components.
             if !filter_mask.is_hidden(&registry) {
                 continue;
             }
@@ -296,6 +306,9 @@ pub(super) fn collect_removals(
         for &(component_index, fns_id) in remove_ids {
             let mut fns_id_range = None;
             for (client, mut message, mut ticks, _) in &mut clients {
+                // Only send removals for components that were previously sent.
+                // If the entity was despawned or lost visibility, it was removed
+                // from ticks earlier during despawn collection.
                 let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
                     continue;
                 };
@@ -318,9 +331,11 @@ pub(super) fn collect_removals(
     for (client, mut message, mut ticks, mut visibility) in &mut clients {
         for (entity, filter_mask) in visibility.drain_lost() {
             if filter_mask.is_hidden(&filter_registry) {
+                // Was processed earlier during collecting despawns.
                 continue;
             }
             let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
+                // The client didn't see this entity.
                 continue;
             };
             let Ok(location) = entities.get_spawned(entity) else {
@@ -344,6 +359,7 @@ pub(super) fn collect_removals(
             for components in filter_mask.hidden_components(&filter_registry) {
                 for component_index in components.iter() {
                     if !entity_ticks.components.contains(component_index) {
+                        // The client didn't see this component.
                         continue;
                     }
 
@@ -403,6 +419,7 @@ pub(super) fn collect_changes(
     replicated_archetypes.update(archetypes, &rules);
 
     for replicated_archetype in replicated_archetypes.iter() {
+        // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
         let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
 
         for entity in archetype.entities() {
@@ -415,6 +432,7 @@ pub(super) fn collect_changes(
             for &(rule, storage) in &replicated_archetype.components {
                 let (component_index, component_id, fns) = registry.get(rule.fns_id);
 
+                // SAFETY: component and storage were obtained from this archetype.
                 let (ptr, ticks) = unsafe {
                     query.get_component_unchecked(
                         entity,
@@ -424,6 +442,7 @@ pub(super) fn collect_changes(
                     )
                 };
 
+                // SAFETY: `fns` and `ptr` were created for the same component type.
                 let component = unsafe {
                     WritableComponent::new(
                         fns,
@@ -509,6 +528,8 @@ pub(super) fn collect_changes(
                     || updates.changed_entity_added()
                     || removal_buffer.contains_key(&entity.id())
                 {
+                    // If there is any insertion, removal, or it's a new entity for a client, include all mutations
+                    // into update message and bump the last acknowledged tick to keep entity updates atomic.
                     if mutations.entity_added() {
                         trace!(
                             "merging mutations for `{}` with updates for client `{client}`",
@@ -529,6 +550,7 @@ pub(super) fn collect_changes(
                 if new_for_client && !updates.changed_entity_added() {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
+                    // Force-write new entity even if it doesn't have any components.
                     let entity_range = entity
                         .id()
                         .write_cached(&mut serialized, &mut entity_range)?;
@@ -626,7 +648,7 @@ pub(super) fn send_messages(
 ///
 /// Used to share the same tick in [`collect_changes`] and [`send_messages`].
 #[derive(Resource, Deref, DerefMut, Default)]
-pub(super) struct ServerChangeTick(pub(super) Tick);
+pub(super) struct ServerChangeTick(Tick);
 
 /// Buffer with all despawned entities.
 ///
@@ -634,4 +656,4 @@ pub(super) struct ServerChangeTick(pub(super) Tick);
 /// to avoid missing events in case the server's tick policy is
 /// not [`TickPolicy::EveryFrame`].
 #[derive(Resource, Deref, DerefMut, Default)]
-pub(super) struct DespawnBuffer(pub(super) Vec<Entity>);
+pub(super) struct DespawnBuffer(Vec<Entity>);
