@@ -2,6 +2,7 @@ pub mod confirm_history;
 #[cfg(feature = "client_diagnostics")]
 pub mod diagnostics;
 pub mod message;
+mod receive;
 pub mod server_mutate_ticks;
 
 use bevy::prelude::*;
@@ -10,14 +11,12 @@ use log::{Level, debug, error, log_enabled};
 use crate::{
     prelude::*,
     shared::{
-        replication::{
-            context::BufferedMutations, receive::receive_replication,
-            track_mutate_messages::TrackMutateMessages,
-        },
-        server_entity_map::ServerEntityMap,
+        replication::track_mutate_messages::TrackMutateMessages, server_entity_map::ServerEntityMap,
     },
 };
 use confirm_history::EntityReplicated;
+pub use receive::ServerUpdateTick;
+use receive::{BufferedMutations, receive_replication};
 use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 
 /// Client functionality and replication receiving.
@@ -166,15 +165,6 @@ pub enum ClientSystems {
     /// Runs in [`OnExit`] for [`ClientState::Connected`].
     Reset,
 }
-
-/// Last received tick for update messages from the server.
-///
-/// In other words, the last [`RepliconTick`] with a removal, insertion, spawn or despawn.
-/// This value is not updated when mutation messages are received from the server.
-///
-/// See also [`ServerMutateTicks`].
-#[derive(Resource, Deref, Default, Reflect, Debug, Clone, Copy)]
-pub struct ServerUpdateTick(pub(crate) RepliconTick);
 
 /// Replication stats during message processing.
 ///

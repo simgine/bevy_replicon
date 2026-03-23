@@ -5,6 +5,7 @@ pub(super) mod removal_buffer;
 pub mod replicated_archetypes;
 pub(super) mod replication_messages;
 pub(super) mod replication_query;
+mod send;
 pub mod server_tick;
 pub mod visibility;
 
@@ -18,6 +19,11 @@ use bevy::{
 };
 use log::{Level, debug, log_enabled, trace};
 
+use self::send::{
+    DespawnBuffer, ServerChangeTick, buffer_despawn, buffer_removals, check_mutation_ticks,
+    cleanup_acks, collect_changes, collect_despawns, collect_mappings, collect_removals,
+    prepare_messages, receive_acks, send_messages,
+};
 use crate::{
     prelude::*,
     server::{
@@ -34,15 +40,7 @@ use crate::{
     },
     shared::{
         message::server_message::message_buffer::MessageBuffer,
-        replication::{
-            client_ticks::ClientTicks,
-            rules::ReplicationRules,
-            send::{
-                DespawnBuffer, ServerChangeTick, buffer_despawn, buffer_removals,
-                check_mutation_ticks, cleanup_acks, collect_changes, collect_despawns,
-                collect_mappings, collect_removals, prepare_messages, receive_acks, send_messages,
-            },
-        },
+        replication::{client_ticks::ClientTicks, rules::ReplicationRules},
     },
 };
 
