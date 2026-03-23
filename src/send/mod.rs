@@ -1,4 +1,4 @@
-mod client_pools;
+pub mod client_pools;
 mod client_ticks;
 pub(super) mod related_entities;
 mod removal_buffer;
