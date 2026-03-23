@@ -61,12 +61,15 @@ pub struct ServerUpdateTick(RepliconTick);
 struct BufferedMutate {
     /// Required tick to wait for.
     update_tick: RepliconTick,
+
     /// The tick this mutations corresponds to.
     message_tick: RepliconTick,
+
     /// Total number of mutate messages sent by the server for this tick.
     ///
     /// May not be equal to the number of received messages.
     messages_count: usize,
+
     /// Mutations data.
     message: Bytes,
 }
