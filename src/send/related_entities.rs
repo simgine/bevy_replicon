@@ -136,7 +136,7 @@ impl RelatedEntities {
     ///
     /// Benchmarks show the performance impact is negligible.
     /// The biggest overhead comes from keeping the main graph in sync via observers.
-    pub(crate) fn rebuild_graphs(&mut self) {
+    pub(super) fn rebuild_graphs(&mut self) {
         if !self.rebuild_needed {
             return;
         }
@@ -158,7 +158,7 @@ impl RelatedEntities {
     /// Returns graph index for an entity if it has a relationship.
     ///
     /// Should be called only after [`Self::rebuild_graphs`]
-    pub(crate) fn graph_index(&self, entity: Entity) -> Option<usize> {
+    pub(super) fn graph_index(&self, entity: Entity) -> Option<usize> {
         debug_assert!(
             !self.rebuild_needed,
             "`rebuild_graphs` should be called beforehand"
@@ -166,7 +166,7 @@ impl RelatedEntities {
         self.entity_graphs.get(&entity).copied()
     }
 
-    pub(crate) fn graphs_count(&self) -> usize {
+    pub(super) fn graphs_count(&self) -> usize {
         self.graphs_count
     }
 
@@ -184,7 +184,7 @@ impl RelatedEntities {
 ///
 /// Used to gather previously spawned entities when the server starts,
 /// since [`add_relation`] triggers only on hierarchy changes.
-pub(crate) fn read_relations<C: Relationship>(
+pub(super) fn read_relations<C: Relationship>(
     mut related_entities: ResMut<RelatedEntities>,
     components: Query<(Entity, &C), With<Replicated>>,
 ) {
@@ -193,7 +193,7 @@ pub(crate) fn read_relations<C: Relationship>(
     }
 }
 
-pub(crate) fn add_relation<C: Relationship>(
+pub(super) fn add_relation<C: Relationship>(
     insert: On<Insert, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -206,7 +206,7 @@ pub(crate) fn add_relation<C: Relationship>(
     }
 }
 
-pub(crate) fn remove_relation<C: Relationship>(
+pub(super) fn remove_relation<C: Relationship>(
     replace: On<Replace, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -219,7 +219,7 @@ pub(crate) fn remove_relation<C: Relationship>(
     }
 }
 
-pub(crate) fn start_replication<C: Relationship>(
+pub(super) fn start_replication<C: Relationship>(
     insert: On<Insert, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -232,7 +232,7 @@ pub(crate) fn start_replication<C: Relationship>(
     }
 }
 
-pub(crate) fn stop_replication<C: Relationship>(
+pub(super) fn stop_replication<C: Relationship>(
     replace: On<Replace, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -243,4 +243,394 @@ pub(crate) fn stop_replication<C: Relationship>(
     {
         related_entities.remove_relation::<C>(replace.entity, relationship.get());
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::state::app::StatesPlugin;
+    use test_log::test;
+
+    use super::*;
+    use crate::server::related_entities::SyncRelatedAppExt;
+
+    #[test]
+    fn orphan() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let entity1 = app
+            .world_mut()
+            .spawn((Replicated, Children::default()))
+            .id();
+        let entity2 = app
+            .world_mut()
+            .spawn((Replicated, Children::default()))
+            .id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 0);
+        assert_eq!(related.graph_index(entity1), None);
+        assert_eq!(related.graph_index(entity2), None);
+    }
+
+    #[test]
+    fn single() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child1), Some(0));
+        assert_eq!(related.graph_index(child2), Some(0));
+    }
+
+    #[test]
+    fn disjoint() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root1))).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root2))).id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 2);
+        assert_eq!(related.graph_index(root1), Some(0));
+        assert_eq!(related.graph_index(child1), Some(0));
+        assert_eq!(related.graph_index(root2), Some(1));
+        assert_eq!(related.graph_index(child2), Some(1));
+    }
+
+    #[test]
+    fn nested() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let grandchild = app.world_mut().spawn((Replicated, ChildOf(child))).id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+        assert_eq!(related.graph_index(grandchild), Some(0));
+    }
+
+    #[test]
+    fn split() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let grandchild = app.world_mut().spawn((Replicated, ChildOf(child))).id();
+        let grandgrandchild = app
+            .world_mut()
+            .spawn((Replicated, ChildOf(grandchild)))
+            .id();
+
+        app.world_mut().entity_mut(grandchild).remove::<ChildOf>();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 2);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+        assert_eq!(related.graph_index(grandchild), Some(1));
+        assert_eq!(related.graph_index(grandgrandchild), Some(1));
+    }
+
+    #[test]
+    fn join() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root1))).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root2))).id();
+
+        app.world_mut().entity_mut(child1).add_child(root2);
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root1), Some(0));
+        assert_eq!(related.graph_index(child1), Some(0));
+        assert_eq!(related.graph_index(root2), Some(0));
+        assert_eq!(related.graph_index(child2), Some(0));
+    }
+
+    #[test]
+    fn reparent() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root1))).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root2))).id();
+
+        app.world_mut().entity_mut(child1).insert(ChildOf(root2));
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root1), None);
+        assert_eq!(related.graph_index(child1), Some(0));
+        assert_eq!(related.graph_index(root2), Some(0));
+        assert_eq!(related.graph_index(child2), Some(0));
+    }
+
+    #[test]
+    fn orphan_after_split() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+
+        app.world_mut().entity_mut(child).remove::<ChildOf>();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 0);
+        assert_eq!(related.graph_index(root), None);
+        assert_eq!(related.graph_index(child), None);
+    }
+
+    #[test]
+    fn despawn() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+
+        app.world_mut().despawn(root);
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 0);
+        assert_eq!(related.graph_index(root), None);
+        assert_eq!(related.graph_index(child1), None);
+        assert_eq!(related.graph_index(child2), None);
+    }
+
+    #[test]
+    fn intersection() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>()
+            .sync_related_entities::<OwnedBy>();
+
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child = app
+            .world_mut()
+            .spawn((Replicated, ChildOf(root1), OwnedBy(root2)))
+            .id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root1), Some(0));
+        assert_eq!(related.graph_index(root2), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+    }
+
+    #[test]
+    fn overlap() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>()
+            .sync_related_entities::<OwnedBy>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app
+            .world_mut()
+            .spawn((Replicated, ChildOf(root), OwnedBy(root)))
+            .id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+    }
+
+    #[test]
+    fn overlap_removal() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>()
+            .sync_related_entities::<OwnedBy>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app
+            .world_mut()
+            .spawn((Replicated, ChildOf(root), OwnedBy(root)))
+            .id();
+
+        app.world_mut().entity_mut(child).remove::<ChildOf>();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+    }
+
+    #[test]
+    fn connected() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>()
+            .sync_related_entities::<OwnedBy>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let grandchild = app.world_mut().spawn((Replicated, OwnedBy(child))).id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+        assert_eq!(related.graph_index(grandchild), Some(0));
+    }
+
+    #[test]
+    fn replication_start() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>()
+            .sync_related_entities::<OwnedBy>();
+
+        let root = app.world_mut().spawn_empty().id();
+        let child = app.world_mut().spawn(ChildOf(root)).id();
+
+        app.world_mut().entity_mut(child).insert(Replicated);
+        app.world_mut().entity_mut(root).insert(Replicated);
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+    }
+
+    #[test]
+    fn replication_stop() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .insert_state(ServerState::Running)
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>()
+            .sync_related_entities::<OwnedBy>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app
+            .world_mut()
+            .spawn((Replicated, ChildOf(root), OwnedBy(root)))
+            .id();
+
+        app.world_mut().entity_mut(child).remove::<Replicated>();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 0);
+        assert_eq!(related.graph_index(root), None);
+        assert_eq!(related.graph_index(child), None);
+    }
+
+    #[test]
+    fn runs_only_with_server() {
+        let mut app = App::new();
+        app.add_plugins(StatesPlugin)
+            .init_state::<ServerState>()
+            .init_resource::<RelatedEntities>()
+            .sync_related_entities::<ChildOf>();
+
+        let root = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 0);
+        assert_eq!(related.graph_index(root), None);
+        assert_eq!(related.graph_index(child1), None);
+        assert_eq!(related.graph_index(child2), None);
+
+        app.world_mut()
+            .resource_mut::<NextState<ServerState>>()
+            .set(ServerState::Running);
+
+        app.update();
+
+        let mut related = app.world_mut().resource_mut::<RelatedEntities>();
+        related.rebuild_graphs();
+        assert_eq!(related.graphs_count(), 1);
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child1), Some(0));
+        assert_eq!(related.graph_index(child2), Some(0));
+    }
+
+    #[derive(Component)]
+    #[relationship(relationship_target = Owning)]
+    struct OwnedBy(Entity);
+
+    #[derive(Component)]
+    #[relationship_target(relationship = OwnedBy)]
+    struct Owning(Vec<Entity>);
 }
