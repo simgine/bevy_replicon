@@ -5,9 +5,7 @@ use bevy::{
 use log::trace;
 
 use super::replicated_archetypes::ReplicatedArchetype;
-use crate::{
-    shared::replication::registry::{ComponentIndex, FnsId, ReplicationRegistry},
-};
+use crate::shared::replication::registry::{ComponentIndex, FnsId, ReplicationRegistry};
 
 /// Buffer with removed components for the current tick.
 #[derive(Resource, Deref, Default)]

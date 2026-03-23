@@ -731,9 +731,8 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, SyncRelatedAppExt,
         message::ServerMessagePlugin,
-        SyncRelatedAppExt,
         visibility::{
             AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
         },
