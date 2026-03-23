@@ -42,7 +42,7 @@ use crate::{
     },
 };
 
-pub(crate) fn check_mutation_ticks(
+pub(super) fn check_mutation_ticks(
     check: On<CheckChangeTicks>,
     mut clients: Query<&mut ClientTicks>,
 ) {
@@ -57,7 +57,7 @@ pub(crate) fn check_mutation_ticks(
     }
 }
 
-pub(crate) fn buffer_removals(
+pub(super) fn buffer_removals(
     remove: On<Remove>,
     entities: &Entities,
     archetypes: &Archetypes,
@@ -92,7 +92,7 @@ pub(crate) fn buffer_removals(
     removals.insert(remove.entity, components, archetype, &registry);
 }
 
-pub(crate) fn buffer_despawn(
+pub(super) fn buffer_despawn(
     remove: On<Remove, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     state: Res<State<ServerState>>,
@@ -103,7 +103,7 @@ pub(crate) fn buffer_despawn(
     }
 }
 
-pub(crate) fn cleanup_acks(
+pub(super) fn cleanup_acks(
     mutations_timeout: Duration,
 ) -> impl FnMut(Query<&mut ClientTicks>, ResMut<ClientPools>, Res<Time<Real>>) {
     move |mut clients: Query<&mut ClientTicks>,
@@ -118,7 +118,7 @@ pub(crate) fn cleanup_acks(
     }
 }
 
-pub(crate) fn receive_acks(
+pub(super) fn receive_acks(
     mut messages: ResMut<ServerMessages>,
     mut pools: ResMut<ClientPools>,
     mut clients: Query<&mut ClientTicks>,
@@ -144,7 +144,7 @@ pub(crate) fn receive_acks(
     }
 }
 
-pub(crate) fn prepare_messages(
+pub(super) fn prepare_messages(
     change_tick: SystemChangeTick,
     mut related_entities: ResMut<RelatedEntities>,
     mut server_change_tick: ResMut<ServerChangeTick>,
@@ -162,7 +162,7 @@ pub(crate) fn prepare_messages(
 }
 
 /// Collects and writes any new entity mappings that happened in this tick.
-pub(crate) fn collect_mappings(
+pub(super) fn collect_mappings(
     despawn_buffer: Res<DespawnBuffer>,
     registry: Res<FilterRegistry>,
     mut serialized: ResMut<SerializedData>,
@@ -220,7 +220,7 @@ fn should_send_mapping(
 }
 
 /// Collect entity despawns from this tick into update messages.
-pub(crate) fn collect_despawns(
+pub(super) fn collect_despawns(
     registry: Res<FilterRegistry>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
@@ -268,7 +268,7 @@ pub(crate) fn collect_despawns(
 /// Collects component removals from this tick into update messages.
 ///
 /// The removal buffer will be cleaned later in [`collect_changes`].
-pub(crate) fn collect_removals(
+pub(super) fn collect_removals(
     archetypes: &Archetypes,
     entities: &Entities,
     removal_buffer: Res<RemovalBuffer>,
@@ -377,7 +377,7 @@ pub(crate) fn collect_removals(
 }
 
 /// Collects component changes from this tick into update and mutate messages since the last entity tick.
-pub(crate) fn collect_changes(
+pub(super) fn collect_changes(
     archetypes: &Archetypes,
     query: ReplicationQuery,
     server_tick: Res<ServerTick>,
@@ -569,7 +569,7 @@ fn update_ticks(
 }
 
 /// Sends previously constructed [`Updates`] and [`Mutations`].
-pub(crate) fn send_messages(
+pub(super) fn send_messages(
     mut split_buffer: Local<Vec<MutationsSplit>>,
     time: Res<Time<Real>>,
     server_tick: Res<ServerTick>,
@@ -626,7 +626,7 @@ pub(crate) fn send_messages(
 ///
 /// Used to share the same tick in [`collect_changes`] and [`send_messages`].
 #[derive(Resource, Deref, DerefMut, Default)]
-pub(crate) struct ServerChangeTick(pub(crate) Tick);
+pub(super) struct ServerChangeTick(pub(super) Tick);
 
 /// Buffer with all despawned entities.
 ///
@@ -634,4 +634,4 @@ pub(crate) struct ServerChangeTick(pub(crate) Tick);
 /// to avoid missing events in case the server's tick policy is
 /// not [`TickPolicy::EveryFrame`].
 #[derive(Resource, Deref, DerefMut, Default)]
-pub(crate) struct DespawnBuffer(pub(crate) Vec<Entity>);
+pub(super) struct DespawnBuffer(pub(super) Vec<Entity>);

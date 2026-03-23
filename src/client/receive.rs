@@ -82,7 +82,7 @@ struct BufferedMutate {
 /// Acknowledgments for received mutate messages are sent back to the server.
 ///
 /// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
-pub(crate) fn receive_replication(
+pub(super) fn receive_replication(
     world: &mut World,
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,

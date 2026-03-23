@@ -75,7 +75,7 @@ impl SyncRelatedAppExt for App {
 ///
 /// Updated only when the server is running and cleared on stop.
 #[derive(Resource, Default)]
-pub(crate) struct RelatedEntities {
+pub(super) struct RelatedEntities {
     /// Global graph of all relationship types marked for replication in sync.
     ///
     /// We use a stable graph to avoid indices invalidation since we map them to entities and
@@ -189,7 +189,7 @@ impl RelatedEntities {
     ///
     /// Benchmarks show the performance impact is negligible.
     /// The biggest overhead comes from keeping the main graph in sync via observers.
-    pub(crate) fn rebuild_graphs(&mut self) {
+    pub(super) fn rebuild_graphs(&mut self) {
         if !self.rebuild_needed {
             return;
         }
@@ -211,7 +211,7 @@ impl RelatedEntities {
     /// Returns graph index for an entity if it has a relationship.
     ///
     /// Should be called only after [`Self::rebuild_graphs`]
-    pub(crate) fn graph_index(&self, entity: Entity) -> Option<usize> {
+    pub(super) fn graph_index(&self, entity: Entity) -> Option<usize> {
         debug_assert!(
             !self.rebuild_needed,
             "`rebuild_graphs` should be called beforehand"
@@ -219,11 +219,11 @@ impl RelatedEntities {
         self.entity_graphs.get(&entity).copied()
     }
 
-    pub(crate) fn graphs_count(&self) -> usize {
+    pub(super) fn graphs_count(&self) -> usize {
         self.graphs_count
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub(super) fn clear(&mut self) {
         self.graph.clear();
         self.entity_to_node.clear();
         self.node_to_entity.clear();
