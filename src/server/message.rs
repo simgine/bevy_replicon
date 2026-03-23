@@ -6,13 +6,11 @@ use bevy::{
 use super::server_tick::ServerTick;
 use crate::{
     prelude::*,
-    shared::{
-        message::{
-            ctx::{ServerReceiveCtx, ServerSendCtx},
-            registry::RemoteMessageRegistry,
-            server_message::message_buffer::MessageBuffer,
-        },
-        replication::client_ticks::ClientTicks,
+    send::ClientTicks,
+    shared::message::{
+        ctx::{ServerReceiveCtx, ServerSendCtx},
+        registry::RemoteMessageRegistry,
+        server_message::message_buffer::MessageBuffer,
     },
 };
 

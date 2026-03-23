@@ -680,8 +680,12 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
+#[cfg(feature = "client")]
+mod receive;
 #[cfg(feature = "scene")]
 pub mod scene;
+#[cfg(feature = "server")]
+pub(crate) mod send;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;

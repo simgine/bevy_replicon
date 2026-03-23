@@ -1,14 +1,18 @@
+pub mod confirm_history;
+pub mod server_mutate_ticks;
+
+use core::mem;
 use bevy::prelude::*;
 use bytes::{Buf, Bytes};
 use log::{debug, error, trace};
 use postcard::experimental::max_size::MaxSize;
 
-use super::{
-    ClientReplicationStats, Remote,
+use self::{
     confirm_history::{ConfirmHistory, EntityReplicated},
     server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
 };
 use crate::{
+    client::{ClientReplicationStats, Remote},
     postcard_utils,
     prelude::*,
     shared::{
@@ -44,7 +48,7 @@ use crate::{
 /// Acknowledgments for received mutate messages are sent back to the server.
 ///
 /// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
-pub(super) fn receive_replication(
+pub(crate) fn receive_replication(
     world: &mut World,
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,

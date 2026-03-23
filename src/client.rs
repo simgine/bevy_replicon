@@ -1,23 +1,23 @@
-pub mod confirm_history;
 #[cfg(feature = "client_diagnostics")]
 pub mod diagnostics;
 pub mod message;
-mod receive;
-pub mod server_mutate_ticks;
+pub use crate::receive::{ServerUpdateTick, confirm_history, server_mutate_ticks};
 
 use bevy::prelude::*;
 use log::{Level, debug, error, log_enabled};
 
 use crate::{
     prelude::*,
+    receive::{
+        BufferedMutations,
+        confirm_history::EntityReplicated,
+        receive_replication,
+        server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
+    },
     shared::{
         replication::track_mutate_messages::TrackMutateMessages, server_entity_map::ServerEntityMap,
     },
 };
-use confirm_history::EntityReplicated;
-pub use receive::ServerUpdateTick;
-use receive::{BufferedMutations, receive_replication};
-use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 
 /// Client functionality and replication receiving.
 ///

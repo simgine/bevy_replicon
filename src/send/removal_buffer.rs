@@ -5,13 +5,13 @@ use bevy::{
 use log::trace;
 
 use crate::{
-    server::replicated_archetypes::ReplicatedArchetype,
+    send::ReplicatedArchetype,
     shared::replication::registry::{ComponentIndex, FnsId, ReplicationRegistry},
 };
 
 /// Buffer with removed components for the current tick.
 #[derive(Resource, Deref, Default)]
-pub(super) struct RemovalBuffer {
+pub(crate) struct RemovalBuffer {
     /// Component removals grouped by entity.
     #[deref]
     removals: EntityHashMap<Vec<(ComponentIndex, FnsId)>>,

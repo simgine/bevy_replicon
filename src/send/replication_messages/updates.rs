@@ -7,7 +7,7 @@ use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
-    server::ClientPools,
+    send::ClientPools,
     shared::{
         backend::channels::ServerChannel,
         replication::{

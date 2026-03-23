@@ -1,11 +1,5 @@
-pub mod client_pools;
 pub mod message;
 pub mod related_entities;
-pub(super) mod removal_buffer;
-pub mod replicated_archetypes;
-pub(super) mod replication_messages;
-pub(super) mod replication_query;
-mod send;
 pub mod server_tick;
 pub mod visibility;
 
@@ -19,28 +13,21 @@ use bevy::{
 };
 use log::{Level, debug, log_enabled, trace};
 
-use self::send::{
-    DespawnBuffer, ServerChangeTick, buffer_despawn, buffer_removals, check_mutation_ticks,
-    cleanup_acks, collect_changes, collect_despawns, collect_mappings, collect_removals,
-    prepare_messages, receive_acks, send_messages,
-};
 use crate::{
     prelude::*,
+    send::{
+        ClientPools, ClientTicks, DespawnBuffer, Mutations, RemovalBuffer, ReplicatedArchetypes,
+        SerializedData, ServerChangeTick, Updates, buffer_despawn, buffer_removals,
+        check_mutation_ticks, cleanup_acks, collect_changes, collect_despawns, collect_mappings,
+        collect_removals, prepare_messages, receive_acks, send_messages,
+    },
     server::{
-        client_pools::ClientPools,
-        related_entities::RelatedEntities,
-        removal_buffer::RemovalBuffer,
-        replicated_archetypes::ReplicatedArchetypes,
-        replication_messages::{
-            mutations::Mutations, serialized_data::SerializedData, updates::Updates,
-        },
-        server_tick::ServerTick,
-        visibility::client_visibility::ClientVisibility,
-        visibility::registry::FilterRegistry,
+        related_entities::RelatedEntities, server_tick::ServerTick,
+        visibility::client_visibility::ClientVisibility, visibility::registry::FilterRegistry,
     },
     shared::{
         message::server_message::message_buffer::MessageBuffer,
-        replication::{client_ticks::ClientTicks, rules::ReplicationRules},
+        replication::rules::ReplicationRules,
     },
 };
 

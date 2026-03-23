@@ -8,14 +8,10 @@ use super::{entity_ranges::EntityRanges, serialized_data::SerializedData};
 use crate::{
     postcard_utils,
     prelude::*,
-    server::ClientPools,
+    send::{ClientPools, ClientTicks, MutateInfo},
     shared::{
         backend::channels::ServerChannel,
-        replication::{
-            client_ticks::{ClientTicks, MutateInfo},
-            mutate_index::MutateIndex,
-            registry::component_mask::ComponentMask,
-        },
+        replication::{mutate_index::MutateIndex, registry::component_mask::ComponentMask},
     },
 };
 
