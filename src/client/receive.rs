@@ -28,52 +28,6 @@ use crate::{
     },
 };
 
-/// Cached buffered mutate messages, used to synchronize mutations with update messages.
-#[derive(Resource, Default)]
-pub(super) struct BufferedMutations(Vec<BufferedMutate>);
-
-impl BufferedMutations {
-    pub(super) fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    /// Inserts a new buffered message, maintaining sorting by their message tick in descending order.
-    fn insert(&mut self, mutation: BufferedMutate) {
-        let index = self
-            .0
-            .partition_point(|other_mutation| mutation.message_tick < other_mutation.message_tick);
-        self.0.insert(index, mutation);
-    }
-}
-
-/// Last received tick for update messages from the server.
-///
-/// In other words, the last [`RepliconTick`] with a removal, insertion, spawn or despawn.
-/// This value is not updated when mutation messages are received from the server.
-///
-/// See also [`ServerMutateTicks`].
-#[derive(Resource, Deref, Default, Reflect, Debug, Clone, Copy)]
-pub struct ServerUpdateTick(RepliconTick);
-
-/// Partially-deserialized mutate message that is waiting for its tick to appear in an update message.
-///
-/// See also [`crate::server::replication_messages`].
-struct BufferedMutate {
-    /// Required tick to wait for.
-    update_tick: RepliconTick,
-
-    /// The tick this mutations corresponds to.
-    message_tick: RepliconTick,
-
-    /// Total number of mutate messages sent by the server for this tick.
-    ///
-    /// May not be equal to the number of received messages.
-    messages_count: usize,
-
-    /// Mutations data.
-    message: Bytes,
-}
-
 /// Receives and applies replication messages from the server.
 ///
 /// Update messages are sent over the [`ServerChannel::Updates`] and are applied first to ensure valid state
@@ -694,4 +648,50 @@ struct ReceiveParams<'a> {
     receive_markers: &'a ReceiveMarkers,
     registry: &'a ReplicationRegistry,
     type_registry: &'a AppTypeRegistry,
+}
+
+/// Last received tick for update messages from the server.
+///
+/// In other words, the last [`RepliconTick`] with a removal, insertion, spawn or despawn.
+/// This value is not updated when mutation messages are received from the server.
+///
+/// See also [`ServerMutateTicks`].
+#[derive(Resource, Deref, Default, Reflect, Debug, Clone, Copy)]
+pub struct ServerUpdateTick(RepliconTick);
+
+/// Cached buffered mutate messages, used to synchronize mutations with update messages.
+#[derive(Resource, Default)]
+pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
+
+impl BufferedMutations {
+    pub(super) fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// Inserts a new buffered message, maintaining sorting by their message tick in descending order.
+    fn insert(&mut self, mutation: BufferedMutate) {
+        let index = self
+            .0
+            .partition_point(|other_mutation| mutation.message_tick < other_mutation.message_tick);
+        self.0.insert(index, mutation);
+    }
+}
+
+/// Partially-deserialized mutate message that is waiting for its tick to appear in an update message.
+///
+/// See also [`crate::server::replication_messages`].
+pub(super) struct BufferedMutate {
+    /// Required tick to wait for.
+    update_tick: RepliconTick,
+
+    /// The tick this mutations corresponds to.
+    message_tick: RepliconTick,
+
+    /// Total number of mutate messages sent by the server for this tick.
+    ///
+    /// May not be equal to the number of received messages.
+    messages_count: usize,
+
+    /// Mutations data.
+    message: Bytes,
 }
