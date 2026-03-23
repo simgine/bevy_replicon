@@ -1,10 +1,11 @@
+#[deprecated(note = "Deprecated alias, use send::client_pools")]
 pub use crate::send::client_pools;
 pub mod message;
-pub mod related_entities;
 pub mod server_tick;
 pub mod visibility;
 
-pub use self::related_entities::SyncRelatedAppExt;
+#[deprecated(note = "Deprecated alias, use send::related_entities")]
+pub use crate::send::related_entities::SyncRelatedAppExt;
 
 use core::time::Duration;
 
@@ -23,9 +24,10 @@ use crate::{
         SerializedData, ServerChangeTick, Updates, buffer_despawn, buffer_removals,
         check_mutation_ticks, cleanup_acks, collect_changes, collect_despawns, collect_mappings,
         collect_removals, prepare_messages, receive_acks, send_messages,
+        related_entities::RelatedEntities
     },
     server::{
-        related_entities::RelatedEntities, server_tick::ServerTick,
+        server_tick::ServerTick,
         visibility::client_visibility::ClientVisibility, visibility::registry::FilterRegistry,
     },
     shared::{

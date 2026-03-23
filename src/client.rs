@@ -1,6 +1,8 @@
 #[cfg(feature = "client_diagnostics")]
 pub mod diagnostics;
 pub mod message;
+
+#[deprecated(note="Deprecated alias, use receive::")]
 pub use crate::receive::{ServerUpdateTick, confirm_history, server_mutate_ticks};
 
 use bevy::prelude::*;

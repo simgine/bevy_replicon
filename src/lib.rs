@@ -680,12 +680,10 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
-#[cfg(feature = "client")]
-mod receive;
+pub mod receive;
 #[cfg(feature = "scene")]
 pub mod scene;
-#[cfg(feature = "server")]
-mod send;
+pub mod send;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;
@@ -695,6 +693,7 @@ pub mod test_app;
 pub mod prelude {
     pub use super::{
         RepliconPlugins,
+        send::related_entities::SyncRelatedAppExt,
         shared::{
             AuthMethod, RepliconSharedPlugin,
             backend::{
@@ -731,7 +730,7 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, SyncRelatedAppExt,
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
         visibility::{
             AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
