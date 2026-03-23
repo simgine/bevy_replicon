@@ -1,7 +1,6 @@
 pub mod confirm_history;
 pub mod server_mutate_ticks;
 
-use core::mem;
 use bevy::prelude::*;
 use bytes::{Buf, Bytes};
 use log::{debug, error, trace};
@@ -48,7 +47,7 @@ use crate::{
 /// Acknowledgments for received mutate messages are sent back to the server.
 ///
 /// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
-pub(crate) fn receive_replication(
+pub(super) fn receive_replication(
     world: &mut World,
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,
@@ -665,7 +664,7 @@ pub struct ServerUpdateTick(RepliconTick);
 
 /// Cached buffered mutate messages, used to synchronize mutations with update messages.
 #[derive(Resource, Default)]
-pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
+pub(super) struct BufferedMutations(Vec<BufferedMutate>);
 
 impl BufferedMutations {
     pub(super) fn clear(&mut self) {

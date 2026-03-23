@@ -90,7 +90,7 @@ impl FromWorld for ReplicatedArchetypes {
 }
 
 /// An archetype that can be stored in [`ReplicatedArchetypes`].
-pub(crate) struct ReplicatedArchetype {
+pub(super) struct ReplicatedArchetype {
     /// Associated archetype ID.
     pub(super) id: ArchetypeId,
 

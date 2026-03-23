@@ -4,8 +4,8 @@ use bevy::{
 };
 use log::trace;
 
+use super::replicated_archetypes::ReplicatedArchetype;
 use crate::{
-    send::ReplicatedArchetype,
     shared::replication::registry::{ComponentIndex, FnsId, ReplicationRegistry},
 };
 

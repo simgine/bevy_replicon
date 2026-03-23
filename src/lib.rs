@@ -685,7 +685,7 @@ mod receive;
 #[cfg(feature = "scene")]
 pub mod scene;
 #[cfg(feature = "server")]
-pub(crate) mod send;
+mod send;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;

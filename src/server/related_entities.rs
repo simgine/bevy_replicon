@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    send::related_entities::{
+    send::{
         add_relation, read_relations, remove_relation, start_replication, stop_replication,
     },
 };
@@ -9,7 +9,7 @@ use bevy::{
     prelude::*,
 };
 
-pub(super) use crate::send::related_entities::RelatedEntities;
+pub(super) use crate::send::RelatedEntities;
 
 pub trait SyncRelatedAppExt {
     /// Ensures that entities related by `C` are replicated in sync.
