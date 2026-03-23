@@ -1,6 +1,6 @@
 mod client_pools;
 mod client_ticks;
-mod related_entities;
+pub(super) mod related_entities;
 mod removal_buffer;
 mod replicated_archetypes;
 mod replication_messages;
@@ -12,9 +12,7 @@ use bevy::{
     ecs::{
         archetype::Archetypes,
         change_detection::{CheckChangeTicks, Tick},
-        component::Immutable,
         entity::{Entities, EntityHash},
-        relationship::Relationship,
         system::SystemChangeTick,
     },
     platform::collections::hash_map::Entry,
@@ -48,7 +46,6 @@ use crate::{
 pub(super) use self::{
     client_pools::ClientPools,
     client_ticks::{ClientTicks, EntityTicks, MutateInfo},
-    related_entities::RelatedEntities,
     removal_buffer::RemovalBuffer,
     replicated_archetypes::ReplicatedArchetypes,
     replication_messages::{
@@ -57,19 +54,7 @@ pub(super) use self::{
     replication_query::ReplicationQuery,
 };
 
-pub(super) fn sync_related_entities<C>(app: &mut App) -> &mut App
-where
-    C: Relationship + Component<Mutability = Immutable>,
-{
-    app.add_systems(
-        OnEnter(ServerState::Running),
-        related_entities::read_relations::<C>.in_set(ServerSystems::ReadRelations),
-    )
-    .add_observer(related_entities::add_relation::<C>)
-    .add_observer(related_entities::remove_relation::<C>)
-    .add_observer(related_entities::start_replication::<C>)
-    .add_observer(related_entities::stop_replication::<C>)
-}
+use self::related_entities::RelatedEntities;
 
 pub(super) fn check_mutation_ticks(
     check: On<CheckChangeTicks>,

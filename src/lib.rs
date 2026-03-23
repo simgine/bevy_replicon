@@ -733,7 +733,7 @@ pub mod prelude {
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
-        related_entities::SyncRelatedAppExt,
+        SyncRelatedAppExt,
         visibility::{
             AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
         },

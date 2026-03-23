@@ -3,6 +3,8 @@ pub mod related_entities;
 pub mod server_tick;
 pub mod visibility;
 
+pub use self::related_entities::SyncRelatedAppExt;
+
 use core::time::Duration;
 
 use bevy::{
