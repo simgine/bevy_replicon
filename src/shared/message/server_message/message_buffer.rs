@@ -5,7 +5,11 @@ use bytes::Bytes;
 use log::{debug, error};
 use postcard::experimental::{max_size::MaxSize, serialized_size};
 
-use crate::{postcard_utils, prelude::*, send::ClientTicks};
+use crate::{
+    postcard_utils,
+    prelude::*,
+    shared::replication::send::client_ticks::ClientTicks,
+};
 
 /// Caches synchronization-dependent server messages until they can be sent with an accurate update tick.
 ///

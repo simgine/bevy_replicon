@@ -2,22 +2,21 @@
 pub mod diagnostics;
 pub mod message;
 
-#[deprecated(note="Deprecated alias, use receive::")]
-pub use crate::receive::{ServerUpdateTick, confirm_history, server_mutate_ticks};
-
 use bevy::prelude::*;
 use log::{Level, debug, error, log_enabled};
 
 use crate::{
     prelude::*,
-    receive::{
-        BufferedMutations,
-        confirm_history::EntityReplicated,
-        receive_replication,
-        server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
-    },
     shared::{
-        replication::track_mutate_messages::TrackMutateMessages, server_entity_map::ServerEntityMap,
+        replication::{
+            receive::{
+                BufferedMutations, ServerUpdateTick, confirm_history::EntityReplicated,
+                receive_replication,
+                server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
+            },
+            track_mutate_messages::TrackMutateMessages,
+        },
+        server_entity_map::ServerEntityMap,
     },
 };
 

@@ -11,10 +11,10 @@ use crate::shared::replication::registry::component_mask::ComponentMask;
 #[derive(Resource, Default)]
 pub(crate) struct ClientPools {
     /// Entities with bitvecs for components from
-    /// [`MutateInfo`](crate::send::MutateInfo).
+    /// [`MutateInfo`](crate::shared::replication::send::client_ticks::MutateInfo).
     entities: Vec<Vec<(Entity, ComponentMask)>>,
     /// Bitvecs for components from [`Updates`], [`Mutations`] and
-    /// [`MutateInfo`](crate::send::MutateInfo).
+    /// [`MutateInfo`](crate::shared::replication::send::client_ticks::MutateInfo).
     ///
     /// Only heap-allocated instances are stored.
     components: Vec<ComponentMask>,

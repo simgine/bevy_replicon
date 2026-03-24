@@ -6,10 +6,8 @@ use bytes::{Buf, Bytes};
 use log::{debug, error, trace};
 use postcard::experimental::max_size::MaxSize;
 
-use self::{
-    confirm_history::{ConfirmHistory, EntityReplicated},
-    server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
-};
+use confirm_history::{ConfirmHistory, EntityReplicated};
+use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 use crate::{
     client::{ClientReplicationStats, Remote},
     postcard_utils,
@@ -46,8 +44,8 @@ use crate::{
 ///
 /// Acknowledgments for received mutate messages are sent back to the server.
 ///
-/// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
-pub(super) fn receive_replication(
+/// See also [`ReplicationMessages`](crate::shared::replication::send::replication_messages::ReplicationMessages).
+pub(crate) fn receive_replication(
     world: &mut World,
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,
@@ -664,10 +662,10 @@ pub struct ServerUpdateTick(RepliconTick);
 
 /// Cached buffered mutate messages, used to synchronize mutations with update messages.
 #[derive(Resource, Default)]
-pub(super) struct BufferedMutations(Vec<BufferedMutate>);
+pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
 
 impl BufferedMutations {
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.0.clear();
     }
 

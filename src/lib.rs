@@ -680,10 +680,8 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
-pub mod receive;
 #[cfg(feature = "scene")]
 pub mod scene;
-pub mod send;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;
@@ -693,7 +691,6 @@ pub mod test_app;
 pub mod prelude {
     pub use super::{
         RepliconPlugins,
-        send::related_entities::SyncRelatedAppExt,
         shared::{
             AuthMethod, RepliconSharedPlugin,
             backend::{
@@ -716,6 +713,7 @@ pub mod prelude {
                 receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
+                send::related_entities::SyncRelatedAppExt,
                 signature::Signature,
             },
             replicon_tick::RepliconTick,

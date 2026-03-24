@@ -6,12 +6,12 @@ use bevy::{
 use super::server_tick::ServerTick;
 use crate::{
     prelude::*,
-    send::ClientTicks,
     shared::message::{
         ctx::{ServerReceiveCtx, ServerSendCtx},
         registry::RemoteMessageRegistry,
         server_message::message_buffer::MessageBuffer,
     },
+    shared::replication::send::client_ticks::ClientTicks,
 };
 
 /// Sending messages and events from the server to clients.
