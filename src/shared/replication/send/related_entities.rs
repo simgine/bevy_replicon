@@ -237,7 +237,7 @@ impl RelatedEntities {
 ///
 /// Used to gather previously spawned entities when the server starts,
 /// since [`add_relation`] triggers only on hierarchy changes.
-pub(super) fn read_relations<C: Relationship>(
+fn read_relations<C: Relationship>(
     mut related_entities: ResMut<RelatedEntities>,
     components: Query<(Entity, &C), With<Replicated>>,
 ) {
@@ -246,7 +246,7 @@ pub(super) fn read_relations<C: Relationship>(
     }
 }
 
-pub(super) fn add_relation<C: Relationship>(
+fn add_relation<C: Relationship>(
     insert: On<Insert, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -259,7 +259,7 @@ pub(super) fn add_relation<C: Relationship>(
     }
 }
 
-pub(super) fn remove_relation<C: Relationship>(
+fn remove_relation<C: Relationship>(
     replace: On<Replace, C>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -272,7 +272,7 @@ pub(super) fn remove_relation<C: Relationship>(
     }
 }
 
-pub(super) fn start_replication<C: Relationship>(
+fn start_replication<C: Relationship>(
     insert: On<Insert, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
@@ -285,7 +285,7 @@ pub(super) fn start_replication<C: Relationship>(
     }
 }
 
-pub(super) fn stop_replication<C: Relationship>(
+fn stop_replication<C: Relationship>(
     replace: On<Replace, Replicated>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
