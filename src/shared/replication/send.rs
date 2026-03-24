@@ -21,17 +21,6 @@ use bevy::{
 use bytes::Buf;
 use log::{debug, trace, warn};
 
-use client_pools::ClientPools;
-use client_ticks::{ClientTicks, EntityTicks};
-use related_entities::RelatedEntities;
-use removal_buffer::RemovalBuffer;
-use replicated_archetypes::ReplicatedArchetypes;
-use replication_messages::{
-    mutations::{Mutations, MutationsSplit},
-    serialized_data::{EntityMapping, MessageWrite, SerializedData, WritableComponent},
-    updates::Updates,
-};
-use replication_query::ReplicationQuery;
 use crate::{
     postcard_utils,
     prelude::*,
@@ -49,6 +38,17 @@ use crate::{
         },
     },
 };
+use client_pools::ClientPools;
+use client_ticks::{ClientTicks, EntityTicks};
+use related_entities::RelatedEntities;
+use removal_buffer::RemovalBuffer;
+use replicated_archetypes::ReplicatedArchetypes;
+use replication_messages::{
+    mutations::{Mutations, MutationsSplit},
+    serialized_data::{EntityMapping, MessageWrite, SerializedData, WritableComponent},
+    updates::Updates,
+};
+use replication_query::ReplicationQuery;
 
 pub(crate) fn check_mutation_ticks(
     check: On<CheckChangeTicks>,

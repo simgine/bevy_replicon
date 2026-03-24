@@ -713,12 +713,14 @@ pub mod prelude {
                 receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
-                send::related_entities::SyncRelatedAppExt,
                 signature::Signature,
             },
             replicon_tick::RepliconTick,
         },
     };
+
+    #[cfg(feature = "send")]
+    pub use super::shared::replication::send::related_entities::SyncRelatedAppExt;
 
     #[cfg(feature = "client")]
     pub use super::client::{

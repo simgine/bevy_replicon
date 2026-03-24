@@ -69,11 +69,17 @@ criterion = { version = "0.8", default-features = false, features = [
 [features]
 default = ["scene", "client", "server"]
 
+# Replication receive logic.
+receive = []
+
+# Replication send logic.
+send = []
+
 # Client-related logic.
-client = []
+client = ["receive"]
 
 # Server-related logic.
-server = []
+server = ["send"]
 
 # Integration with Bevy diagnostics for client.
 client_diagnostics = ["client"]

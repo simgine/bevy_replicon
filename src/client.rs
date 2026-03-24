@@ -2,6 +2,10 @@
 pub mod diagnostics;
 pub mod message;
 
+pub use crate::shared::replication::receive::{
+    ServerUpdateTick, confirm_history, server_mutate_ticks,
+};
+
 use bevy::prelude::*;
 use log::{Level, debug, error, log_enabled};
 
@@ -10,7 +14,8 @@ use crate::{
     shared::{
         replication::{
             receive::{
-                BufferedMutations, ServerUpdateTick, confirm_history::EntityReplicated,
+                BufferedMutations,
+                confirm_history::EntityReplicated,
                 receive_replication,
                 server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
             },

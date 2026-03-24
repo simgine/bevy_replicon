@@ -6,8 +6,6 @@ use bytes::{Buf, Bytes};
 use log::{debug, error, trace};
 use postcard::experimental::max_size::MaxSize;
 
-use confirm_history::{ConfirmHistory, EntityReplicated};
-use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 use crate::{
     client::{ClientReplicationStats, Remote},
     postcard_utils,
@@ -28,6 +26,8 @@ use crate::{
         server_entity_map::{EntityEntry, ServerEntityMap},
     },
 };
+use confirm_history::{ConfirmHistory, EntityReplicated};
+use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 
 /// Receives and applies replication messages from the server.
 ///
