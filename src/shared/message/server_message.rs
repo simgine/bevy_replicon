@@ -1,7 +1,7 @@
-#[cfg(feature = "send")]
+#[cfg(feature = "server")]
 pub(crate) mod message_buffer;
 mod message_queue;
-#[cfg(feature = "send")]
+#[cfg(feature = "server")]
 mod send;
 
 use core::any::TypeId;
@@ -232,7 +232,7 @@ pub(crate) struct ServerMessage {
     /// ID of `M`.
     type_id: TypeId,
 
-    #[cfg(feature = "send")]
+    #[cfg(feature = "server")]
     send_or_buffer: send::SendOrBufferFn,
     receive: ReceiveFn,
     send_locally: SendLocallyFn,
@@ -266,7 +266,7 @@ impl ServerMessage {
             queue_id,
             channel_id,
             type_id: TypeId::of::<M>(),
-            #[cfg(feature = "send")]
+            #[cfg(feature = "server")]
             send_or_buffer: Self::send_or_buffer_typed::<M, I>,
             receive: Self::receive_typed::<M, I>,
             send_locally: Self::send_locally_typed::<M>,

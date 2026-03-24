@@ -5,16 +5,19 @@ use log::trace;
 use postcard::experimental::{max_size::MaxSize, serialized_size};
 
 use super::{entity_ranges::EntityRanges, serialized_data::SerializedData};
-use crate::shared::replication::send::{
-    client_pools::ClientPools,
-    client_ticks::{ClientTicks, MutateInfo},
-};
 use crate::{
     postcard_utils,
     prelude::*,
     shared::{
         backend::channels::ServerChannel,
-        replication::{mutate_index::MutateIndex, registry::component_mask::ComponentMask},
+        replication::{
+            mutate_index::MutateIndex,
+            registry::component_mask::ComponentMask,
+            send::{
+                client_pools::ClientPools,
+                client_ticks::{ClientTicks, MutateInfo},
+            },
+        },
     },
 };
 

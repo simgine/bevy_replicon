@@ -719,7 +719,7 @@ pub mod prelude {
         },
     };
 
-    #[cfg(feature = "send")]
+    #[cfg(feature = "server")]
     pub use super::shared::replication::send::related_entities::SyncRelatedAppExt;
 
     #[cfg(feature = "client")]

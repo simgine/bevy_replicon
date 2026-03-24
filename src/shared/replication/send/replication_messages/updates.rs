@@ -4,7 +4,6 @@ use bevy::prelude::*;
 use postcard::experimental::serialized_size;
 
 use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::SerializedData};
-use crate::shared::replication::send::client_pools::ClientPools;
 use crate::{
     postcard_utils,
     prelude::*,
@@ -12,6 +11,7 @@ use crate::{
         backend::channels::ServerChannel,
         replication::{
             registry::{ComponentIndex, component_mask::ComponentMask},
+            send::client_pools::ClientPools,
             update_message_flags::UpdateMessageFlags,
         },
     },

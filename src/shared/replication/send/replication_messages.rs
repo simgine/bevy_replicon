@@ -1,4 +1,4 @@
 mod entity_ranges;
-pub mod mutations;
-pub mod serialized_data;
-pub mod updates;
+pub(crate) mod mutations;
+pub(crate) mod serialized_data;
+pub(crate) mod updates;

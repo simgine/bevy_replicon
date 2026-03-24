@@ -16,7 +16,7 @@ use crate::{
             receive::{
                 BufferedMutations,
                 confirm_history::EntityReplicated,
-                receive_replication,
+                receive_replication, reset,
                 server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
             },
             track_mutate_messages::TrackMutateMessages,
@@ -99,28 +99,6 @@ impl Plugin for ClientPlugin {
                 let channels = world.resource::<RepliconChannels>();
                 messages.setup_server_channels(channels.server_channels().len());
             });
-    }
-}
-
-fn reset(
-    mut messages: ResMut<ClientMessages>,
-    mut stats: ResMut<ClientStats>,
-    mut update_tick: ResMut<ServerUpdateTick>,
-    mut entity_map: ResMut<ServerEntityMap>,
-    mut buffered_mutations: ResMut<BufferedMutations>,
-    mutate_ticks: Option<ResMut<ServerMutateTicks>>,
-    replication_stats: Option<ResMut<ClientReplicationStats>>,
-) {
-    messages.clear();
-    *stats = Default::default();
-    *update_tick = Default::default();
-    entity_map.clear();
-    buffered_mutations.clear();
-    if let Some(mut mutate_ticks) = mutate_ticks {
-        mutate_ticks.clear();
-    }
-    if let Some(mut replication_stats) = replication_stats {
-        *replication_stats = Default::default();
     }
 }
 

@@ -99,6 +99,28 @@ pub(crate) fn receive_replication(
     })
 }
 
+pub(crate) fn reset(
+    mut messages: ResMut<ClientMessages>,
+    mut stats: ResMut<ClientStats>,
+    mut update_tick: ResMut<ServerUpdateTick>,
+    mut entity_map: ResMut<ServerEntityMap>,
+    mut buffered_mutations: ResMut<BufferedMutations>,
+    mutate_ticks: Option<ResMut<ServerMutateTicks>>,
+    replication_stats: Option<ResMut<ClientReplicationStats>>,
+) {
+    messages.clear();
+    *stats = Default::default();
+    *update_tick = Default::default();
+    entity_map.clear();
+    buffered_mutations.clear();
+    if let Some(mut mutate_ticks) = mutate_ticks {
+        mutate_ticks.clear();
+    }
+    if let Some(mut replication_stats) = replication_stats {
+        *replication_stats = Default::default();
+    }
+}
+
 /// Reads all received messages and applies them.
 ///
 /// Sends acknowledgments for mutate messages back.

@@ -120,7 +120,7 @@ impl RepliconChannels {
 /// are split into packet-size messages to allow applying them partially without waiting for all parts of the message.
 /// We guarantee that all mutations for a single entity arrive won't be split across messages, even if they are larger
 /// than the packet size. You can also ensure that mutations for specific entities arrive in sync by using
-/// [`SyncRelatedAppExt::sync_related_entities`](crate::server::related_entities::SyncRelatedAppExt::sync_related_entities).
+/// [`SyncRelatedAppExt::sync_related_entities`](crate::shared::replication::send::related_entities::SyncRelatedAppExt::sync_related_entities).
 ///
 /// Server events also have minimum required tick. For details, see the documentation on
 /// [`ServerMessageAppExt::make_message_independent`](crate::shared::message::server_message::ServerMessageAppExt::make_message_independent).

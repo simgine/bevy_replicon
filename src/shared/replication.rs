@@ -1,11 +1,11 @@
 pub mod deferred_entity;
 pub(crate) mod mutate_index;
-#[cfg(feature = "receive")]
+#[cfg(feature = "client")]
 pub mod receive;
 pub mod receive_markers;
 pub mod registry;
 pub mod rules;
-#[cfg(feature = "send")]
+#[cfg(feature = "server")]
 pub mod send;
 pub mod signature;
 pub mod track_mutate_messages;
