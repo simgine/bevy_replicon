@@ -1,9 +1,11 @@
-pub mod confirm_history;
 #[cfg(feature = "client_diagnostics")]
 pub mod diagnostics;
 pub mod message;
-mod receive;
-pub mod server_mutate_ticks;
+
+pub use crate::shared::replication::receive::{
+    ServerUpdateTick, client_replication_stats::ClientReplicationStats, confirm_history,
+    remote::Remote, server_mutate_ticks,
+};
 
 use bevy::prelude::*;
 use log::{Level, debug, error, log_enabled};
@@ -11,13 +13,18 @@ use log::{Level, debug, error, log_enabled};
 use crate::{
     prelude::*,
     shared::{
-        replication::track_mutate_messages::TrackMutateMessages, server_entity_map::ServerEntityMap,
+        replication::{
+            receive::{
+                BufferedMutations,
+                confirm_history::EntityReplicated,
+                receive_replication, reset,
+                server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
+            },
+            track_mutate_messages::TrackMutateMessages,
+        },
+        server_entity_map::ServerEntityMap,
     },
 };
-use confirm_history::EntityReplicated;
-pub use receive::ServerUpdateTick;
-use receive::{BufferedMutations, receive_replication};
-use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 
 /// Client functionality and replication receiving.
 ///
@@ -96,28 +103,6 @@ impl Plugin for ClientPlugin {
     }
 }
 
-fn reset(
-    mut messages: ResMut<ClientMessages>,
-    mut stats: ResMut<ClientStats>,
-    mut update_tick: ResMut<ServerUpdateTick>,
-    mut entity_map: ResMut<ServerEntityMap>,
-    mut buffered_mutations: ResMut<BufferedMutations>,
-    mutate_ticks: Option<ResMut<ServerMutateTicks>>,
-    replication_stats: Option<ResMut<ClientReplicationStats>>,
-) {
-    messages.clear();
-    *stats = Default::default();
-    *update_tick = Default::default();
-    entity_map.clear();
-    buffered_mutations.clear();
-    if let Some(mut mutate_ticks) = mutate_ticks {
-        mutate_ticks.clear();
-    }
-    if let Some(mut replication_stats) = replication_stats {
-        *replication_stats = Default::default();
-    }
-}
-
 fn send_protocol_hash(mut commands: Commands, protocol: Res<ProtocolHash>) {
     debug!("sending `{:?}` to the server", *protocol);
     commands.client_trigger(*protocol);
@@ -165,35 +150,3 @@ pub enum ClientSystems {
     /// Runs in [`OnExit`] for [`ClientState::Connected`].
     Reset,
 }
-
-/// Replication stats during message processing.
-///
-/// Statistic will be collected only if the resource is present.
-/// The resource is not added by default.
-///
-/// See also [`ClientDiagnosticsPlugin`]
-/// for automatic integration with Bevy diagnostics.
-#[derive(Resource, Default, Reflect, Debug, Clone, Copy)]
-pub struct ClientReplicationStats {
-    /// Incremented per entity that changes.
-    pub entities_changed: usize,
-    /// Incremented for every component that changes.
-    pub components_changed: usize,
-    /// Incremented per client mapping added.
-    pub mappings: usize,
-    /// Incremented per entity despawn.
-    pub despawns: usize,
-    /// Replication messages received.
-    pub messages: usize,
-    /// Replication bytes received in message payloads (without internal messaging plugin data).
-    pub bytes: usize,
-}
-
-/// Marker for entities spawned by replication.
-///
-/// Automatically inserted for each newly received entity.
-///
-/// See also [`Replicated`].
-#[derive(Component, Default, Reflect, Debug, Clone, Copy)]
-#[reflect(Component)]
-pub struct Remote;

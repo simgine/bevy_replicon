@@ -3,16 +3,15 @@ use bevy::{
     prelude::*,
 };
 
-use super::server_tick::ServerTick;
 use crate::{
     prelude::*,
-    shared::{
-        message::{
-            ctx::{ServerReceiveCtx, ServerSendCtx},
-            registry::RemoteMessageRegistry,
-            server_message::message_buffer::MessageBuffer,
-        },
-        replication::client_ticks::ClientTicks,
+    shared::message::{
+        ctx::{ServerReceiveCtx, ServerSendCtx},
+        registry::RemoteMessageRegistry,
+        server_message::message_buffer::MessageBuffer,
+    },
+    shared::replication::send::{
+        self, SendSystems, client_ticks::ClientTicks, server_tick::ServerTick,
     },
 };
 
@@ -97,7 +96,7 @@ impl Plugin for ServerMessagePlugin {
                     trigger_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .in_set(ServerSystems::Receive),
+                    .in_set(SendSystems::Receive),
             )
             .add_systems(
                 PostUpdate,
@@ -109,8 +108,8 @@ impl Plugin for ServerMessagePlugin {
                     send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .after(super::send_messages)
-                    .in_set(ServerSystems::Send),
+                    .after(send::send_messages)
+                    .in_set(SendSystems::Send),
             );
     }
 }

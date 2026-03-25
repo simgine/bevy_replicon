@@ -2,8 +2,7 @@ use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
     prelude::*,
-    server::server_tick::ServerTick,
-    shared::replication::track_mutate_messages::TrackAppExt,
+    shared::replication::{send::server_tick::ServerTick, track_mutate_messages::TrackAppExt},
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};

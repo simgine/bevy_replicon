@@ -1,46 +1,32 @@
-pub mod client_pools;
 pub mod message;
-pub mod related_entities;
-pub(super) mod removal_buffer;
-pub mod replicated_archetypes;
-pub(super) mod replication_messages;
-pub(super) mod replication_query;
-mod send;
-pub mod server_tick;
-pub mod visibility;
 
 use core::time::Duration;
 
 use bevy::{
-    ecs::{entity::EntityHashMap, intern::Interned, schedule::ScheduleLabel},
+    ecs::{intern::Interned, schedule::ScheduleLabel},
     platform::collections::HashSet,
     prelude::*,
     time::common_conditions::on_timer,
 };
-use log::{Level, debug, log_enabled, trace};
+use log::{Level, debug, log_enabled};
 
-use self::send::{
-    DespawnBuffer, ServerChangeTick, buffer_despawn, buffer_removals, check_mutation_ticks,
-    cleanup_acks, collect_changes, collect_despawns, collect_mappings, collect_removals,
-    prepare_messages, receive_acks, send_messages,
-};
 use crate::{
     prelude::*,
-    server::{
-        client_pools::ClientPools,
-        related_entities::RelatedEntities,
-        removal_buffer::RemovalBuffer,
-        replicated_archetypes::ReplicatedArchetypes,
-        replication_messages::{
-            mutations::Mutations, serialized_data::SerializedData, updates::Updates,
-        },
-        server_tick::ServerTick,
-        visibility::client_visibility::ClientVisibility,
-        visibility::registry::FilterRegistry,
-    },
     shared::{
         message::server_message::message_buffer::MessageBuffer,
-        replication::{client_ticks::ClientTicks, rules::ReplicationRules},
+        replication::{
+            rules::ReplicationRules,
+            send::{
+                self, AuthorizedClient, DespawnBuffer, SendSystems, ServerChangeTick,
+                buffer_despawn, buffer_removals, check_mutation_ticks, cleanup_acks,
+                client_pools::ClientPools, collect_changes, collect_despawns, collect_mappings,
+                collect_removals, increment_tick, prepare_messages, receive_acks,
+                related_entities::RelatedEntities, removal_buffer::RemovalBuffer,
+                replicated_archetypes::ReplicatedArchetypes,
+                replication_messages::serialized_data::SerializedData, send_messages,
+                server_tick::ServerTick, visibility::registry::FilterRegistry,
+            },
+        },
     },
 };
 
@@ -114,14 +100,14 @@ impl Plugin for ServerPlugin {
             .init_resource::<FilterRegistry>()
             .configure_sets(
                 PreUpdate,
-                (ServerSystems::ReceivePackets, ServerSystems::Receive).chain(),
+                (SendSystems::ReceivePackets, SendSystems::Receive).chain(),
             )
             .configure_sets(
                 PostUpdate,
                 (
-                    ServerSystems::IncrementTick,
-                    ServerSystems::Send,
-                    ServerSystems::SendPackets,
+                    SendSystems::IncrementTick,
+                    SendSystems::Send,
+                    SendSystems::SendPackets,
                 )
                     .chain(),
             )
@@ -136,10 +122,10 @@ impl Plugin for ServerPlugin {
                     cleanup_acks(self.mutations_timeout).run_if(on_timer(self.mutations_timeout)),
                 )
                     .chain()
-                    .in_set(ServerSystems::Receive)
+                    .in_set(SendSystems::Receive)
                     .run_if(in_state(ServerState::Running)),
             )
-            .add_systems(OnExit(ServerState::Running), reset)
+            .add_systems(OnExit(ServerState::Running), send::reset)
             .add_systems(
                 PostUpdate,
                 (
@@ -152,7 +138,7 @@ impl Plugin for ServerPlugin {
                 )
                     .chain()
                     .run_if(resource_changed::<ServerTick>)
-                    .in_set(ServerSystems::Send)
+                    .in_set(SendSystems::Send)
                     .run_if(in_state(ServerState::Running)),
             );
 
@@ -161,7 +147,7 @@ impl Plugin for ServerPlugin {
             app.add_systems(
                 tick_schedule,
                 increment_tick
-                    .in_set(ServerSystems::IncrementTick)
+                    .in_set(SendSystems::IncrementTick)
                     .run_if(in_state(ServerState::Running)),
             );
         }
@@ -247,97 +233,3 @@ fn check_protocol(
         disconnects.write(DisconnectRequest { client });
     }
 }
-
-/// Increments current server tick which causes the server to replicate this frame.
-pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
-    trace!("incrementing `{:?}`", *server_tick);
-    server_tick.increment();
-}
-
-fn reset(
-    mut commands: Commands,
-    mut messages: ResMut<ServerMessages>,
-    mut server_tick: ResMut<ServerTick>,
-    mut related_entities: ResMut<RelatedEntities>,
-    clients: Query<Entity, With<ConnectedClient>>,
-    mut message_buffer: ResMut<MessageBuffer>,
-) {
-    messages.clear();
-    *server_tick = Default::default();
-    message_buffer.clear();
-    related_entities.clear();
-    for client in &clients {
-        commands.entity(client).despawn();
-    }
-}
-
-/// Set with replication and event systems related to server.
-#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
-pub enum ServerSystems {
-    /// Systems that receive packets from the messaging backend and update [`ServerState`].
-    ///
-    /// Used by the messaging backend.
-    ///
-    /// Runs in [`PreUpdate`].
-    ReceivePackets,
-    /// Systems that read data from [`ServerMessages`].
-    ///
-    /// Runs in [`PreUpdate`].
-    Receive,
-    /// Systems that build the initial graph with all related entities registered via
-    /// [`SyncRelatedAppExt::sync_related_entities`].
-    ///
-    /// The graph is kept in sync with observers.
-    ///
-    /// Runs in [`OnEnter`] for [`ServerState::Running`].
-    ReadRelations,
-    /// System that increments [`ServerTick`].
-    ///
-    /// Runs in [`ServerPlugin::tick_schedule`].
-    IncrementTick,
-    /// Systems that write data to [`ServerMessages`].
-    ///
-    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
-    Send,
-    /// Systems that send packets to the messaging backend.
-    ///
-    /// Used by the messaging backend.
-    ///
-    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
-    SendPackets,
-}
-
-/// Marker that enables replication and all events for a client.
-///
-/// Until authorization happened, the client and server can still exchange network events that are marked as
-/// independent via [`ServerMessageAppExt::make_message_independent`] or [`ServerEventAppExt::make_event_independent`].
-/// **All other events will be ignored**.
-///
-/// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
-#[derive(Component, Reflect, Default)]
-#[component(immutable)]
-#[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
-pub struct AuthorizedClient;
-
-/// Controls how often mutations are sent for an authorized client.
-///
-/// Associates entities with a priority number configurable by the user.
-/// If the priority is not set, it defaults to 1.0.
-///
-/// During replication, we multiply the difference between the last acknowledged tick
-/// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
-/// we send mutations for this entity.
-///
-/// This means the priority accumulates across server ticks until an entity is acknowledged,
-/// at which point its priority is reset. As a result, even low-priority objects eventually
-/// reach a high enough priority to be considered for replication.
-///
-/// For example, if the base priority is 0.5, mutations for an entity will be sent
-/// no more often than once every 2 ticks. With the default priority of 1.0,
-/// all unacknowledged mutations will be sent every tick.
-///
-/// All of this only affects mutations. For any component insertion or removal, the changes
-/// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
-/// See its documentation for more details.
-#[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone)]
-pub struct PriorityMap(EntityHashMap<f32>);

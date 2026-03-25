@@ -94,6 +94,10 @@ name = "mutations"
 required-features = ["client", "server"]
 
 [[test]]
+name = "bidirectional_event"
+required-features = ["client", "server"]
+
+[[test]]
 name = "client_message"
 required-features = ["client", "server"]
 
@@ -115,6 +119,14 @@ required-features = ["client"]
 
 [[test]]
 name = "insertion"
+required-features = ["client", "server"]
+
+[[test]]
+name = "mutate_ticks"
+required-features = ["client", "server"]
+
+[[test]]
+name = "priority"
 required-features = ["client", "server"]
 
 [[test]]

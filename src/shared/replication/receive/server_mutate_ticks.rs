@@ -132,7 +132,7 @@ impl ServerMutateTicks {
         }
     }
 
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for tick in &mut self.ticks {
             *tick = Default::default();
         }

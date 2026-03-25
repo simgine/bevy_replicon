@@ -10,11 +10,11 @@ use bevy::{
 };
 use log::debug;
 
+use self::{client_visibility::ClientVisibility, registry::FilterRegistry};
 use crate::shared::replication::registry::{
     ReplicationRegistry, component_mask::ComponentMask, receive_fns::MutWrite,
 };
-use client_visibility::ClientVisibility;
-use registry::{FilterRegistry, VisibilityScope};
+use registry::VisibilityScope;
 
 /// Remote visibility functions for [`App`].
 pub trait AppVisibilityExt {
@@ -95,7 +95,8 @@ impl AppVisibilityExt for App {
     fn add_visibility_filter<F: VisibilityFilter>(&mut self) -> &mut Self {
         debug!("adding visibility filter `{}`", ShortName::of::<F>());
 
-        self.world_mut()
+        self.init_resource::<FilterRegistry>()
+            .world_mut()
             .resource_scope(|world, mut filter_registry: Mut<FilterRegistry>| {
                 world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
                     filter_registry.register_filter::<F>(world, &mut registry);

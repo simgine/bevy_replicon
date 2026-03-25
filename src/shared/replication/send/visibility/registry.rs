@@ -1,13 +1,13 @@
-use bevy::{
-    prelude::*,
-    utils::{TypeIdMap, TypeIdMapExt},
-};
+use alloc::vec::Vec;
 
-use super::{FilterScope, filters_mask::FilterBit};
-use crate::{
-    prelude::*,
-    shared::replication::registry::{ReplicationRegistry, component_mask::ComponentMask},
-};
+use bevy::prelude::*;
+use bevy::utils::{TypeIdMap, TypeIdMapExt};
+
+use super::{FilterScope, VisibilityFilter};
+use crate::shared::replication::registry::ReplicationRegistry;
+use crate::shared::replication::registry::component_mask::ComponentMask;
+
+use super::filters_mask::FilterBit;
 
 /// Maps the [`VisibilityScope`] of each filter to a [`FilterBit`].
 ///
@@ -23,7 +23,7 @@ pub struct FilterRegistry {
 }
 
 impl FilterRegistry {
-    pub(super) fn register_filter<F: VisibilityFilter>(
+    pub(crate) fn register_filter<F: VisibilityFilter>(
         &mut self,
         world: &mut World,
         registry: &mut ReplicationRegistry,
@@ -61,7 +61,7 @@ impl FilterRegistry {
         bit
     }
 
-    pub(super) fn bit<F: VisibilityFilter>(&self) -> FilterBit {
+    pub(crate) fn bit<F: VisibilityFilter>(&self) -> FilterBit {
         *self.bits.get_type::<F>().unwrap_or_else(|| {
             panic!(
                 "`{}` should've been previously registered",
@@ -70,14 +70,14 @@ impl FilterRegistry {
         })
     }
 
-    pub(super) fn scope(&self, bit: FilterBit) -> &VisibilityScope {
+    pub(crate) fn scope(&self, bit: FilterBit) -> &VisibilityScope {
         self.scopes
             .get(*bit as usize)
             .unwrap_or_else(|| panic!("scope for `{bit:?}` should've been registered"))
     }
 }
 
-/// Data affected by [`VisibilityFilter`].
+/// Data affected by [`VisibilityFilter`](super::VisibilityFilter).
 #[derive(Clone)]
 pub enum VisibilityScope {
     /// Whole entity.
@@ -89,7 +89,9 @@ pub enum VisibilityScope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::visibility::filters_mask::FiltersMask;
+    use crate::shared::replication::send::visibility::{
+        SingleComponent, filters_mask::FiltersMask,
+    };
 
     #[test]
     fn registration() {

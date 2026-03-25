@@ -7,11 +7,11 @@ use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
-    server::ClientPools,
     shared::{
         backend::channels::ServerChannel,
         replication::{
             registry::{ComponentIndex, component_mask::ComponentMask},
+            send::client_pools::ClientPools,
             update_message_flags::UpdateMessageFlags,
         },
     },

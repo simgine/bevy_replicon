@@ -7,8 +7,10 @@ use bevy::{
 };
 use log::{debug, trace};
 
-use super::mutate_index::MutateIndex;
-use crate::{prelude::*, shared::replication::registry::component_mask::ComponentMask};
+use crate::{
+    prelude::*,
+    shared::replication::{mutate_index::MutateIndex, registry::component_mask::ComponentMask},
+};
 
 /// Tracks replication ticks for a client.
 #[derive(Component, Default)]

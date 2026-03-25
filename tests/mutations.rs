@@ -8,12 +8,12 @@ use bevy_replicon::{
         confirm_history::{ConfirmHistory, EntityReplicated},
     },
     prelude::*,
-    server::server_tick::ServerTick,
     shared::{
         replication::{
             deferred_entity::DeferredEntity,
             receive_markers::MarkerConfig,
             registry::{ctx::WriteCtx, receive_fns},
+            send::server_tick::ServerTick,
         },
         server_entity_map::ServerEntityMap,
     },

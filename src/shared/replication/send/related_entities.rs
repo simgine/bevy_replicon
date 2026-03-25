@@ -14,6 +14,7 @@ use petgraph::{
     visit::EdgeRef,
 };
 
+use super::SendSystems;
 use crate::prelude::*;
 
 pub trait SyncRelatedAppExt {
@@ -58,14 +59,15 @@ impl SyncRelatedAppExt for App {
     where
         C: Relationship + Component<Mutability = Immutable>,
     {
-        self.add_systems(
-            OnEnter(ServerState::Running),
-            read_relations::<C>.in_set(ServerSystems::ReadRelations),
-        )
-        .add_observer(add_relation::<C>)
-        .add_observer(remove_relation::<C>)
-        .add_observer(start_replication::<C>)
-        .add_observer(stop_replication::<C>)
+        self.init_resource::<RelatedEntities>()
+            .add_systems(
+                OnEnter(ServerState::Running),
+                read_relations::<C>.in_set(SendSystems::ReadRelations),
+            )
+            .add_observer(add_relation::<C>)
+            .add_observer(remove_relation::<C>)
+            .add_observer(start_replication::<C>)
+            .add_observer(stop_replication::<C>)
     }
 }
 
@@ -75,7 +77,7 @@ impl SyncRelatedAppExt for App {
 ///
 /// Updated only when the server is running and cleared on stop.
 #[derive(Resource, Default)]
-pub(super) struct RelatedEntities {
+pub(crate) struct RelatedEntities {
     /// Global graph of all relationship types marked for replication in sync.
     ///
     /// We use a stable graph to avoid indices invalidation since we map them to entities and
@@ -223,7 +225,7 @@ impl RelatedEntities {
         self.graphs_count
     }
 
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.graph.clear();
         self.entity_to_node.clear();
         self.node_to_entity.clear();

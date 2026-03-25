@@ -1,13 +1,13 @@
+pub mod client_replication_stats;
+pub mod confirm_history;
+pub mod remote;
+pub mod server_mutate_ticks;
+
 use bevy::prelude::*;
 use bytes::{Buf, Bytes};
 use log::{debug, error, trace};
 use postcard::experimental::max_size::MaxSize;
 
-use super::{
-    ClientReplicationStats, Remote,
-    confirm_history::{ConfirmHistory, EntityReplicated},
-    server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
-};
 use crate::{
     postcard_utils,
     prelude::*,
@@ -27,6 +27,10 @@ use crate::{
         server_entity_map::{EntityEntry, ServerEntityMap},
     },
 };
+use client_replication_stats::ClientReplicationStats;
+use confirm_history::{ConfirmHistory, EntityReplicated};
+use remote::Remote;
+use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 
 /// Receives and applies replication messages from the server.
 ///
@@ -43,8 +47,8 @@ use crate::{
 ///
 /// Acknowledgments for received mutate messages are sent back to the server.
 ///
-/// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
-pub(super) fn receive_replication(
+/// See also [`ReplicationMessages`](crate::shared::replication::send::replication_messages::ReplicationMessages).
+pub(crate) fn receive_replication(
     world: &mut World,
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,
@@ -96,6 +100,28 @@ pub(super) fn receive_replication(
             })
         })
     })
+}
+
+pub(crate) fn reset(
+    mut messages: ResMut<ClientMessages>,
+    mut stats: ResMut<ClientStats>,
+    mut update_tick: ResMut<ServerUpdateTick>,
+    mut entity_map: ResMut<ServerEntityMap>,
+    mut buffered_mutations: ResMut<BufferedMutations>,
+    mutate_ticks: Option<ResMut<ServerMutateTicks>>,
+    replication_stats: Option<ResMut<ClientReplicationStats>>,
+) {
+    messages.clear();
+    *stats = Default::default();
+    *update_tick = Default::default();
+    entity_map.clear();
+    buffered_mutations.clear();
+    if let Some(mut mutate_ticks) = mutate_ticks {
+        mutate_ticks.clear();
+    }
+    if let Some(mut replication_stats) = replication_stats {
+        *replication_stats = Default::default();
+    }
 }
 
 /// Reads all received messages and applies them.
@@ -664,7 +690,7 @@ pub struct ServerUpdateTick(RepliconTick);
 pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
 
 impl BufferedMutations {
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.0.clear();
     }
 

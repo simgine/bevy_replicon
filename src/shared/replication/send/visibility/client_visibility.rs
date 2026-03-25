@@ -66,7 +66,7 @@ impl ClientVisibility {
     ```
     use bevy::prelude::*;
     use bevy_replicon::{
-        server::visibility::{
+        shared::replication::send::visibility::{
             client_visibility::ClientVisibility, filters_mask::FilterBit, registry::FilterRegistry,
         },
         shared::replication::registry::ReplicationRegistry,

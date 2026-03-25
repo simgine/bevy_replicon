@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[derive(Resource)]
-pub(super) struct ReplicatedArchetypes {
+pub(crate) struct ReplicatedArchetypes {
     /// ID of [`Replicated`] component.
     marker_id: ComponentId,
 
