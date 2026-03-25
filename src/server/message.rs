@@ -10,7 +10,9 @@ use crate::{
         registry::RemoteMessageRegistry,
         server_message::message_buffer::MessageBuffer,
     },
-    shared::replication::send::{client_ticks::ClientTicks, server_tick::ServerTick},
+    shared::replication::send::{
+        self, SendSystems, client_ticks::ClientTicks, server_tick::ServerTick,
+    },
 };
 
 /// Sending messages and events from the server to clients.
@@ -94,7 +96,7 @@ impl Plugin for ServerMessagePlugin {
                     trigger_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .in_set(ServerSystems::Receive),
+                    .in_set(SendSystems::Receive),
             )
             .add_systems(
                 PostUpdate,
@@ -106,8 +108,8 @@ impl Plugin for ServerMessagePlugin {
                     send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
-                    .after(super::send_messages)
-                    .in_set(ServerSystems::Send),
+                    .after(send::send_messages)
+                    .in_set(SendSystems::Send),
             );
     }
 }

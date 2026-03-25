@@ -1,18 +1,11 @@
 use alloc::vec::Vec;
 
-use bevy::prelude::Resource;
-#[cfg(feature = "server")]
 use bevy::prelude::*;
-#[cfg(not(feature = "server"))]
-use bevy::utils::TypeIdMap;
-#[cfg(feature = "server")]
 use bevy::utils::{TypeIdMap, TypeIdMapExt};
 
-#[cfg(feature = "server")]
-use super::{FilterScope, SingleComponent, VisibilityFilter};
+use super::{FilterScope, VisibilityFilter};
+use crate::shared::replication::registry::ReplicationRegistry;
 use crate::shared::replication::registry::component_mask::ComponentMask;
-#[cfg(feature = "server")]
-use crate::{prelude::*, shared::replication::registry::ReplicationRegistry};
 
 use super::filters_mask::FilterBit;
 
@@ -30,7 +23,6 @@ pub struct FilterRegistry {
 }
 
 impl FilterRegistry {
-    #[cfg(feature = "server")]
     pub(crate) fn register_filter<F: VisibilityFilter>(
         &mut self,
         world: &mut World,
@@ -54,7 +46,6 @@ impl FilterRegistry {
     /// # Panics
     ///
     /// Panics if the number of registered visibility scopes exceeds [`u32::BITS`].
-    #[cfg(feature = "server")]
     pub fn register_scope<S: FilterScope>(
         &mut self,
         world: &mut World,
@@ -70,7 +61,6 @@ impl FilterRegistry {
         bit
     }
 
-    #[cfg(feature = "server")]
     pub(crate) fn bit<F: VisibilityFilter>(&self) -> FilterBit {
         *self.bits.get_type::<F>().unwrap_or_else(|| {
             panic!(
@@ -80,7 +70,7 @@ impl FilterRegistry {
         })
     }
 
-    pub(super) fn scope(&self, bit: FilterBit) -> &VisibilityScope {
+    pub(crate) fn scope(&self, bit: FilterBit) -> &VisibilityScope {
         self.scopes
             .get(*bit as usize)
             .unwrap_or_else(|| panic!("scope for `{bit:?}` should've been registered"))
@@ -96,10 +86,12 @@ pub enum VisibilityScope {
     Components(ComponentMask),
 }
 
-#[cfg(all(test, feature = "server"))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::replication::send::visibility::filters_mask::FiltersMask;
+    use crate::shared::replication::send::visibility::{
+        SingleComponent, filters_mask::FiltersMask,
+    };
 
     #[test]
     fn registration() {

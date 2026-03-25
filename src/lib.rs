@@ -105,7 +105,7 @@ For implementation details see [`ServerChannel`](shared::backend::channels::Serv
 ### Tick rate
 
 By default, updates are not sent every frame in order to save bandwidth. Replication runs
-in [`ServerSystems::Send`] whenever the [`ServerTick`](shared::replication::send::server_tick::ServerTick) resource
+in [`SendSystems::Send`] whenever the [`ServerTick`](shared::replication::send::server_tick::ServerTick) resource
 changes and if the state is [`ServerState::Running`].
 
 By default, the tick is incremented in [`FixedPostUpdate`] each time [`FixedMain`](bevy::app::FixedMain)
@@ -294,7 +294,7 @@ app.add_client_message::<Ping>(Channel::Ordered)
     .add_systems(
         PreUpdate,
         receive
-            .after(ServerSystems::Receive)
+            .after(SendSystems::Receive)
             .run_if(in_state(ServerState::Running)),
     )
     .add_systems(
@@ -380,7 +380,7 @@ app.add_server_message::<Pong>(Channel::Ordered)
     )
     .add_systems(
         PostUpdate,
-        send.before(ServerSystems::Send).run_if(in_state(ServerState::Running)),
+        send.before(SendSystems::Send).run_if(in_state(ServerState::Running)),
     );
 
 fn send(mut pongs: MessageWriter<ToClients<Pong>>) {
@@ -499,8 +499,8 @@ For server messages we drain [`ToClients<E>`] and, if the [`ClientId::Server`] i
 re-emit it as `E` locally. The same applies to the event API. This emulates message receiving for both server
 and singleplayer without actually transmitting data over the network.
 
-We also provide [`ClientSystems`] and [`ServerSystems`] to schedule your system at specific time in the frame.
-For example, you can run your systems right after receive using [`ClientSystems::Receive`] or [`ServerSystems::Receive`].
+We also provide [`ClientSystems`] and [`SendSystems`] to schedule your system at specific time in the frame.
+For example, you can run your systems right after receive using [`ClientSystems::Receive`] or [`SendSystems::Receive`].
 
 ## Organizing your game code
 
@@ -722,7 +722,6 @@ pub mod prelude {
                 receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
-                send::related_entities::SyncRelatedAppExt,
                 signature::Signature,
             },
             replicon_tick::RepliconTick,
@@ -734,17 +733,19 @@ pub mod prelude {
         ClientPlugin, ClientReplicationStats, ClientSystems, Remote, message::ClientMessagePlugin,
     };
 
-    #[cfg(feature = "server")]
-    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
-    pub use super::{
-        server::{AuthorizedClient, ServerPlugin, ServerSystems, message::ServerMessagePlugin},
-        shared::replication::send::{
-            priority_map::PriorityMap,
-            visibility::{
-                AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
-            },
+    #[expect(deprecated, reason = "Re-export of deprecated alias")]
+    pub use super::shared::replication::send::{
+        AuthorizedClient, SendSystems,
+        priority_map::PriorityMap,
+        related_entities::SyncRelatedAppExt,
+        server_tick::ServerTick,
+        visibility::{
+            AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
         },
     };
+
+    #[cfg(feature = "server")]
+    pub use super::server::{ServerPlugin, message::ServerMessagePlugin};
 
     #[cfg(feature = "client_diagnostics")]
     pub use super::client::diagnostics::ClientDiagnosticsPlugin;

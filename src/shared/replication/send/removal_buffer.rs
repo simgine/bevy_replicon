@@ -58,19 +58,43 @@ impl RemovalBuffer {
     }
 }
 
-#[cfg(all(test, feature = "server"))]
+#[cfg(test)]
 mod tests {
     use bevy::state::app::StatesPlugin;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{prelude::*, shared::replication::rules::ReplicationRules};
+    use crate::{
+        prelude::*,
+        shared::replication::{rules::ReplicationRules, send::buffer_removals},
+    };
+
+    fn init_removal_buffer(app: &mut App) {
+        app.init_resource::<RemovalBuffer>()
+            .init_resource::<super::super::replicated_archetypes::ReplicatedArchetypes>();
+
+        let rules = app.world().resource::<ReplicationRules>();
+        let replicated_ids: Vec<_> = rules
+            .iter()
+            .flat_map(|rule| &rule.components)
+            .map(|component| component.id)
+            .collect();
+
+        if !replicated_ids.is_empty() {
+            let mut observer = Observer::new(buffer_removals);
+            for id in replicated_ids {
+                observer = observer.with_component(id);
+            }
+            app.world_mut().spawn(observer);
+        }
+    }
 
     #[test]
     fn not_replicated() {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()
@@ -89,6 +113,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .replicate::<A>()
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()
@@ -110,6 +135,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .replicate_bundle::<(A, B)>()
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()
@@ -135,6 +161,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .replicate_bundle::<(A, B)>()
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()
@@ -157,6 +184,7 @@ mod tests {
             .replicate::<A>()
             .replicate_bundle::<(A, B)>()
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()
@@ -183,6 +211,7 @@ mod tests {
             .replicate::<A>()
             .replicate_bundle::<(A, B)>()
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()
@@ -211,6 +240,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
             .replicate::<A>()
             .finish();
+        init_removal_buffer(&mut app);
 
         app.world_mut()
             .resource_mut::<NextState<ServerState>>()

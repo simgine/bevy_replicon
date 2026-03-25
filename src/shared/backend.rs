@@ -53,7 +53,7 @@ pub enum ClientState {
 /// <div class="warning">
 ///
 /// Should only be changed from the messaging backend when the server changes its state
-/// in [`ServerSystems::ReceivePackets`](crate::server::ServerSystems::ReceivePackets).
+/// in [`SendSystems::ReceivePackets`](crate::prelude::SendSystems::ReceivePackets).
 ///
 /// </div>
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, States)]

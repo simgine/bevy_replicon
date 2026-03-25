@@ -16,6 +16,7 @@ use replication::{
     receive_markers::ReceiveMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
     track_mutate_messages::TrackMutateMessages,
 };
+use server_entity_map::ServerEntityMap;
 
 /// Initializes types, resources and events needed for both client and server.
 #[derive(Default)]
@@ -30,8 +31,6 @@ pub struct RepliconSharedPlugin {
     [`AuthMethod::ProtocolCheck`], but it could be any event.
 
     ```
-    # #[cfg(feature = "server")]
-    # {
     use bevy::{prelude::*, state::app::StatesPlugin};
     use bevy_replicon::prelude::*;
     use serde::{Deserialize, Serialize};
@@ -95,7 +94,6 @@ pub struct RepliconSharedPlugin {
         protocol: ProtocolHash,
         player_name: String,
     }
-    # }
     ```
     **/
     pub auth_method: AuthMethod,
@@ -107,6 +105,7 @@ impl Plugin for RepliconSharedPlugin {
             .init_state::<ServerState>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<NetworkIdMap>()
+            .init_resource::<ServerEntityMap>()
             .init_resource::<TrackMutateMessages>()
             .init_resource::<RepliconChannels>()
             .init_resource::<ReplicationRegistry>()

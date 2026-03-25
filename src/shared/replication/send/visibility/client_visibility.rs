@@ -64,8 +64,6 @@ impl ClientVisibility {
     Update visibility based on distance:
 
     ```
-    # #[cfg(feature = "server")]
-    # {
     use bevy::prelude::*;
     use bevy_replicon::{
         shared::replication::send::visibility::{
@@ -144,7 +142,6 @@ impl ClientVisibility {
             Self(bit)
         }
     }
-    # }
     ```
     */
     pub fn set(&mut self, entity: Entity, bit: FilterBit, visible: bool) {

@@ -34,15 +34,13 @@ use bevy_replicon::{
             test_fns::TestFnsEntityExt, ReplicationRegistry,
         },
         replicon_tick::RepliconTick,
-        server_entity_map::ServerEntityMap,
     },
     prelude::*,
 };
 use serde::{Deserialize, Serialize};
 
 let mut app = App::new();
-app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-    .init_resource::<ServerEntityMap>();
+app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
 
 let tick = RepliconTick::default();
 

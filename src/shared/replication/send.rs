@@ -29,6 +29,7 @@ use crate::{
     prelude::*,
     shared::{
         backend::channels::ClientChannel,
+        message::server_message::message_buffer::MessageBuffer,
         replication::{
             registry::{ReplicationRegistry, component_mask::ComponentMask},
             rules::ReplicationRules,
@@ -64,6 +65,12 @@ pub(crate) fn check_mutation_ticks(
             entity_ticks.system_tick.check_tick(*check);
         }
     }
+}
+
+/// Increments current server tick which causes the server to replicate this frame.
+pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
+    trace!("incrementing `{:?}`", *server_tick);
+    server_tick.increment();
 }
 
 pub(crate) fn buffer_removals(
@@ -652,6 +659,59 @@ pub(crate) fn send_messages(
     Ok(())
 }
 
+pub(crate) fn reset(
+    mut commands: Commands,
+    mut messages: ResMut<ServerMessages>,
+    mut server_tick: ResMut<ServerTick>,
+    mut related_entities: ResMut<RelatedEntities>,
+    clients: Query<Entity, With<ConnectedClient>>,
+    mut message_buffer: ResMut<MessageBuffer>,
+) {
+    messages.clear();
+    *server_tick = Default::default();
+    message_buffer.clear();
+    related_entities.clear();
+    for client in &clients {
+        commands.entity(client).despawn();
+    }
+}
+
+/// Set with replication and event systems related to replication sending.
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone, Copy)]
+pub enum SendSystems {
+    /// Systems that receive packets from the messaging backend and update [`ServerState`].
+    ///
+    /// Used by the messaging backend.
+    ///
+    /// Runs in [`PreUpdate`].
+    ReceivePackets,
+    /// Systems that read data from [`ServerMessages`].
+    ///
+    /// Runs in [`PreUpdate`].
+    Receive,
+    /// Systems that build the initial graph with all related entities registered via
+    /// [`SyncRelatedAppExt::sync_related_entities`].
+    ///
+    /// The graph is kept in sync with observers.
+    ///
+    /// Runs in [`OnEnter`] for [`ServerState::Running`].
+    ReadRelations,
+    /// System that increments [`ServerTick`].
+    ///
+    /// Runs in [`ServerPlugin::tick_schedule`].
+    IncrementTick,
+    /// Systems that write data to [`ServerMessages`].
+    ///
+    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
+    Send,
+    /// Systems that send packets to the messaging backend.
+    ///
+    /// Used by the messaging backend.
+    ///
+    /// Runs in [`PostUpdate`] if [`ServerTick`] changes.
+    SendPackets,
+}
+
 /// System tick used for change detection as the current tick.
 ///
 /// Used to share the same tick in [`collect_changes`] and [`send_messages`].
@@ -665,3 +725,15 @@ pub(crate) struct ServerChangeTick(Tick);
 /// not [`TickPolicy::EveryFrame`].
 #[derive(Resource, Deref, DerefMut, Default)]
 pub(crate) struct DespawnBuffer(Vec<Entity>);
+
+/// Marker that enables replication and all events for a client.
+///
+/// Until authorization happened, the client and server can still exchange network events that are marked as
+/// independent via [`ServerMessageAppExt::make_message_independent`] or [`ServerEventAppExt::make_event_independent`].
+/// **All other events will be ignored**.
+///
+/// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
+#[derive(Component, Reflect, Default)]
+#[component(immutable)]
+#[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
+pub struct AuthorizedClient;
