@@ -1,13 +1,20 @@
-use bevy::{
-    prelude::*,
-    utils::{TypeIdMap, TypeIdMapExt},
-};
+use alloc::vec::Vec;
 
-use super::{FilterScope, filters_mask::FilterBit};
-use crate::{
-    prelude::*,
-    shared::replication::registry::{ReplicationRegistry, component_mask::ComponentMask},
-};
+use bevy::prelude::Resource;
+#[cfg(feature = "server")]
+use bevy::prelude::*;
+#[cfg(not(feature = "server"))]
+use bevy::utils::TypeIdMap;
+#[cfg(feature = "server")]
+use bevy::utils::{TypeIdMap, TypeIdMapExt};
+
+#[cfg(feature = "server")]
+use super::{FilterScope, SingleComponent, VisibilityFilter};
+use crate::shared::replication::registry::component_mask::ComponentMask;
+#[cfg(feature = "server")]
+use crate::{prelude::*, shared::replication::registry::ReplicationRegistry};
+
+use super::filters_mask::FilterBit;
 
 /// Maps the [`VisibilityScope`] of each filter to a [`FilterBit`].
 ///
@@ -23,7 +30,8 @@ pub struct FilterRegistry {
 }
 
 impl FilterRegistry {
-    pub(super) fn register_filter<F: VisibilityFilter>(
+    #[cfg(feature = "server")]
+    pub(crate) fn register_filter<F: VisibilityFilter>(
         &mut self,
         world: &mut World,
         registry: &mut ReplicationRegistry,
@@ -46,6 +54,7 @@ impl FilterRegistry {
     /// # Panics
     ///
     /// Panics if the number of registered visibility scopes exceeds [`u32::BITS`].
+    #[cfg(feature = "server")]
     pub fn register_scope<S: FilterScope>(
         &mut self,
         world: &mut World,
@@ -61,7 +70,8 @@ impl FilterRegistry {
         bit
     }
 
-    pub(super) fn bit<F: VisibilityFilter>(&self) -> FilterBit {
+    #[cfg(feature = "server")]
+    pub(crate) fn bit<F: VisibilityFilter>(&self) -> FilterBit {
         *self.bits.get_type::<F>().unwrap_or_else(|| {
             panic!(
                 "`{}` should've been previously registered",
@@ -77,7 +87,7 @@ impl FilterRegistry {
     }
 }
 
-/// Data affected by [`VisibilityFilter`].
+/// Data affected by [`VisibilityFilter`](super::VisibilityFilter).
 #[derive(Clone)]
 pub enum VisibilityScope {
     /// Whole entity.
@@ -86,10 +96,10 @@ pub enum VisibilityScope {
     Components(ComponentMask),
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
-    use crate::server::visibility::filters_mask::FiltersMask;
+    use crate::shared::replication::send::visibility::filters_mask::FiltersMask;
 
     #[test]
     fn registration() {

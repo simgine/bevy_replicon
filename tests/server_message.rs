@@ -1,9 +1,10 @@
 use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
-    client::ServerUpdateTick,
     prelude::*,
-    server::server_tick::ServerTick,
-    shared::server_entity_map::ServerEntityMap,
+    shared::{
+        replication::{receive::ServerUpdateTick, send::server_tick::ServerTick},
+        server_entity_map::ServerEntityMap,
+    },
     test_app::{ServerTestAppExt, TestClientEntity},
 };
 use serde::{Deserialize, Serialize};

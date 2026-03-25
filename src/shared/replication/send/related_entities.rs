@@ -58,14 +58,20 @@ impl SyncRelatedAppExt for App {
     where
         C: Relationship + Component<Mutability = Immutable>,
     {
+        self.init_resource::<RelatedEntities>();
+
+        #[cfg(feature = "server")]
         self.add_systems(
             OnEnter(ServerState::Running),
-            read_relations::<C>.in_set(ServerSystems::ReadRelations),
-        )
-        .add_observer(add_relation::<C>)
-        .add_observer(remove_relation::<C>)
-        .add_observer(start_replication::<C>)
-        .add_observer(stop_replication::<C>)
+            read_relations::<C>.in_set(crate::server::ServerSystems::ReadRelations),
+        );
+        #[cfg(not(feature = "server"))]
+        self.add_systems(OnEnter(ServerState::Running), read_relations::<C>);
+
+        self.add_observer(add_relation::<C>)
+            .add_observer(remove_relation::<C>)
+            .add_observer(start_replication::<C>)
+            .add_observer(stop_replication::<C>)
     }
 }
 

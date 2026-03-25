@@ -1,4 +1,6 @@
+pub mod client_replication_stats;
 pub mod confirm_history;
+pub mod remote;
 pub mod server_mutate_ticks;
 
 use bevy::prelude::*;
@@ -7,7 +9,6 @@ use log::{debug, error, trace};
 use postcard::experimental::max_size::MaxSize;
 
 use crate::{
-    client::{ClientReplicationStats, Remote},
     postcard_utils,
     prelude::*,
     shared::{
@@ -26,7 +27,9 @@ use crate::{
         server_entity_map::{EntityEntry, ServerEntityMap},
     },
 };
+use client_replication_stats::ClientReplicationStats;
 use confirm_history::{ConfirmHistory, EntityReplicated};
+use remote::Remote;
 use server_mutate_ticks::{MutateTickReceived, ServerMutateTicks};
 
 /// Receives and applies replication messages from the server.

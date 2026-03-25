@@ -105,7 +105,7 @@ For implementation details see [`ServerChannel`](shared::backend::channels::Serv
 ### Tick rate
 
 By default, updates are not sent every frame in order to save bandwidth. Replication runs
-in [`ServerSystems::Send`] whenever the [`ServerTick`](server::server_tick::ServerTick) resource
+in [`ServerSystems::Send`] whenever the [`ServerTick`](shared::replication::send::server_tick::ServerTick) resource
 changes and if the state is [`ServerState::Running`].
 
 By default, the tick is incremented in [`FixedPostUpdate`] each time [`FixedMain`](bevy::app::FixedMain)
@@ -283,6 +283,8 @@ These messages will appear on server as [`FromClient`] wrapper message that
 contains sender ID and the message.
 
 ```
+# #[cfg(all(feature = "client", feature = "server"))]
+# {
 # use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
@@ -312,6 +314,7 @@ fn receive(mut pings: MessageReader<FromClient<Ping>>) {
 
 #[derive(Message, Deserialize, Serialize)]
 struct Ping;
+# }
 ```
 
 If a message contains an entity, implement
@@ -327,6 +330,8 @@ Alternatively, you can use events with a similar API. First, you need to registe
 using [`ClientEventAppExt::add_client_event`], and then use [`ClientTriggerExt::client_trigger`].
 
 ```
+# #[cfg(all(feature = "client", feature = "server"))]
+# {
 # use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
@@ -345,6 +350,7 @@ fn receive(ping: On<FromClient<Ping>>) {
 }
 # #[derive(Event, Deserialize, Serialize)]
 # struct Ping;
+# }
 ```
 
 For events with entities inside use [`ClientEventAppExt::add_mapped_client_event`].
@@ -358,6 +364,8 @@ and send it from server using [`ToClients`]. This wrapper contains send paramete
 and the message itself.
 
 ```
+# #[cfg(all(feature = "client", feature = "server"))]
+# {
 # use bevy::{prelude::*, state::app::StatesPlugin};
 # use bevy_replicon::prelude::*;
 # use serde::{Deserialize, Serialize};
@@ -390,6 +398,7 @@ fn receive(mut pongs: MessageReader<Pong>) {
 
 #[derive(Message, Deserialize, Serialize)]
 struct Pong;
+# }
 ```
 
 Just like for client messages, we provide [`ServerMessageAppExt::add_mapped_server_message`]
@@ -727,11 +736,13 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     #[expect(deprecated, reason = "Re-export of deprecated aliases")]
-    pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
-        message::ServerMessagePlugin,
-        visibility::{
-            AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
+    pub use super::{
+        server::{AuthorizedClient, ServerPlugin, ServerSystems, message::ServerMessagePlugin},
+        shared::replication::send::{
+            priority_map::PriorityMap,
+            visibility::{
+                AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
+            },
         },
     };
 

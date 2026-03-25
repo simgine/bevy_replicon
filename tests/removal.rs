@@ -2,10 +2,10 @@ use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,
-    server::server_tick::ServerTick,
     shared::replication::{
         deferred_entity::DeferredEntity,
         registry::{ctx::WriteCtx, receive_fns},
+        send::server_tick::ServerTick,
     },
     test_app::{ServerTestAppExt, TestClientEntity},
 };

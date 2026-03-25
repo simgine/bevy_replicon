@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// All operations on it are wrapping.
 ///
-/// See also [`ServerUpdateTick`](crate::client::ServerUpdateTick) and
-/// [`ServerTick`](crate::server::server_tick::ServerTick).
+/// See also [`ServerUpdateTick`](crate::shared::replication::receive::ServerUpdateTick) and
+/// [`ServerTick`](crate::shared::replication::send::server_tick::ServerTick).
 #[derive(
     Reflect, Debug, Default, Serialize, Deserialize, Eq, Hash, PartialEq, MaxSize, Clone, Copy,
 )]

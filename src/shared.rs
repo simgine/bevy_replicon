@@ -30,6 +30,8 @@ pub struct RepliconSharedPlugin {
     [`AuthMethod::ProtocolCheck`], but it could be any event.
 
     ```
+    # #[cfg(feature = "server")]
+    # {
     use bevy::{prelude::*, state::app::StatesPlugin};
     use bevy_replicon::prelude::*;
     use serde::{Deserialize, Serialize};
@@ -93,6 +95,7 @@ pub struct RepliconSharedPlugin {
         protocol: ProtocolHash,
         player_name: String,
     }
+    # }
     ```
     **/
     pub auth_method: AuthMethod,

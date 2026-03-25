@@ -9,16 +9,17 @@ use crate::prelude::*;
 /// available to the client in the custom deserialization, despawn, and component
 /// removal functions.
 ///
-/// The server sends replication data in [`ServerSystems::Send`] when the state is
-/// [`ServerState::Running`] any time this resource changes. You can configure
-/// when the tick is incremented via [`ServerPlugin::tick_schedule`].
+/// The server sends replication data in [`ServerSystems::Send`](crate::server::ServerSystems::Send)
+/// when the state is [`ServerState::Running`] any time this resource changes.
+/// You can configure when the tick is incremented via
+/// [`ServerPlugin::tick_schedule`](crate::server::ServerPlugin::tick_schedule).
 ///
 /// Note that component mutations are replicated over the unreliable channel.
 /// If a component mutation message is lost, the mutation will not be resent
 /// until the server's replication system runs again.
 ///
-/// See [`ServerUpdateTick`](crate::client::ServerUpdateTick) for tracking the last received
-/// tick on clients.
+/// See [`ServerUpdateTick`](crate::shared::replication::receive::ServerUpdateTick) for tracking
+/// the last received tick on clients.
 #[derive(Resource, Deref, Default, Serialize, Deserialize, Reflect, Debug, Clone, Copy)]
 pub struct ServerTick(RepliconTick);
 

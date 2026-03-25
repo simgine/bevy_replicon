@@ -2,21 +2,28 @@ pub mod client_visibility;
 pub mod filters_mask;
 pub mod registry;
 
+#[cfg(feature = "server")]
 use core::marker::PhantomData;
 
+#[cfg(feature = "server")]
 use bevy::{
     ecs::{component::Immutable, entity_disabling::Disabled},
     prelude::*,
 };
+#[cfg(feature = "server")]
 use log::debug;
 
+#[cfg(feature = "server")]
+use self::{client_visibility::ClientVisibility, registry::FilterRegistry};
+#[cfg(feature = "server")]
 use crate::shared::replication::registry::{
     ReplicationRegistry, component_mask::ComponentMask, receive_fns::MutWrite,
 };
-use client_visibility::ClientVisibility;
-use registry::{FilterRegistry, VisibilityScope};
+#[cfg(feature = "server")]
+use registry::VisibilityScope;
 
 /// Remote visibility functions for [`App`].
+#[cfg(feature = "server")]
 pub trait AppVisibilityExt {
     /**
     Registers a component as a remote visibility filter.
@@ -91,6 +98,7 @@ pub trait AppVisibilityExt {
     fn add_visibility_filter<F: VisibilityFilter>(&mut self) -> &mut Self;
 }
 
+#[cfg(feature = "server")]
 impl AppVisibilityExt for App {
     fn add_visibility_filter<F: VisibilityFilter>(&mut self) -> &mut Self {
         debug!("adding visibility filter `{}`", ShortName::of::<F>());
@@ -109,6 +117,7 @@ impl AppVisibilityExt for App {
     }
 }
 
+#[cfg(feature = "server")]
 fn update_for_new_clients<F: VisibilityFilter>(
     insert: On<Insert, ClientVisibility>,
     registry: Res<FilterRegistry>,
@@ -129,6 +138,7 @@ fn update_for_new_clients<F: VisibilityFilter>(
     }
 }
 
+#[cfg(feature = "server")]
 fn on_insert<F: VisibilityFilter>(
     insert: On<Insert, F>,
     registry: Res<FilterRegistry>,
@@ -158,6 +168,7 @@ fn on_insert<F: VisibilityFilter>(
     }
 }
 
+#[cfg(feature = "server")]
 fn on_remove<F: VisibilityFilter>(
     remove: On<Remove, F>,
     registry: Res<FilterRegistry>,
@@ -180,6 +191,7 @@ fn on_remove<F: VisibilityFilter>(
     }
 }
 
+#[cfg(feature = "server")]
 fn on_client_remove<F: VisibilityFilter>(
     remove: On<Remove, F::ClientComponent>,
     registry: Res<FilterRegistry>,
@@ -205,6 +217,7 @@ fn on_client_remove<F: VisibilityFilter>(
 /// Component that controls remote entity visibility.
 ///
 /// Should be registered via [`AppVisibilityExt`].
+#[cfg(feature = "server")]
 pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /**
     Component on the client entity that will be passed to [`Self::is_visible`].
@@ -457,11 +470,13 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
 }
 
 /// Associates the type with a visibility scope.
+#[cfg(feature = "server")]
 pub trait FilterScope {
     /// Returns data that should be hidden when [`VisibilityFilter::is_visible`] returns `false`.
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope;
 }
 
+#[cfg(feature = "server")]
 #[deprecated(since = "0.39.0", note = "Renamed into `SingleComponent`")]
 pub type ComponentScope<A> = SingleComponent<A>;
 
@@ -471,8 +486,10 @@ pub type ComponentScope<A> = SingleComponent<A>;
 /// This is why this wrapper is needed to set the scope for only a single component.
 ///
 /// If you need a [`FilterScope`] for multiple components, use a tuple directly, e.g. `(C1, C2)`.
+#[cfg(feature = "server")]
 pub struct SingleComponent<A: Component>(PhantomData<A>);
 
+#[cfg(feature = "server")]
 impl<C: Component<Mutability: MutWrite<C>>> FilterScope for SingleComponent<C> {
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope {
         let mut mask = ComponentMask::default();
@@ -482,6 +499,7 @@ impl<C: Component<Mutability: MutWrite<C>>> FilterScope for SingleComponent<C> {
     }
 }
 
+#[cfg(feature = "server")]
 impl FilterScope for Entity {
     fn visibility_scope(
         _world: &mut World,
@@ -491,6 +509,7 @@ impl FilterScope for Entity {
     }
 }
 
+#[cfg(feature = "server")]
 macro_rules! impl_filter_scope {
     ($($C:ident),*) => {
         impl<$($C: Component<Mutability: MutWrite<$C>>),*> FilterScope for ($($C,)*) {
@@ -506,9 +525,10 @@ macro_rules! impl_filter_scope {
     };
 }
 
+#[cfg(feature = "server")]
 variadics_please::all_tuples!(impl_filter_scope, 2, 10, C);
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use test_log::test;
 

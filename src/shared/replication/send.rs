@@ -1,10 +1,13 @@
 pub mod client_pools;
 pub mod client_ticks;
+pub mod priority_map;
 pub mod related_entities;
 pub mod removal_buffer;
 pub mod replicated_archetypes;
 pub mod replication_messages;
 mod replication_query;
+pub mod server_tick;
+pub mod visibility;
 
 use core::{mem, time::Duration};
 
@@ -24,11 +27,6 @@ use log::{debug, trace, warn};
 use crate::{
     postcard_utils,
     prelude::*,
-    server::{
-        PriorityMap,
-        server_tick::ServerTick,
-        visibility::{client_visibility::ClientVisibility, registry::FilterRegistry},
-    },
     shared::{
         backend::channels::ClientChannel,
         replication::{
@@ -40,6 +38,7 @@ use crate::{
 };
 use client_pools::ClientPools;
 use client_ticks::{ClientTicks, EntityTicks};
+use priority_map::PriorityMap;
 use related_entities::RelatedEntities;
 use removal_buffer::RemovalBuffer;
 use replicated_archetypes::ReplicatedArchetypes;
@@ -49,6 +48,8 @@ use replication_messages::{
     updates::Updates,
 };
 use replication_query::ReplicationQuery;
+use server_tick::ServerTick;
+use visibility::{client_visibility::ClientVisibility, registry::FilterRegistry};
 
 pub(crate) fn check_mutation_ticks(
     check: On<CheckChangeTicks>,
@@ -350,8 +351,7 @@ pub(crate) fn collect_removals(
                 warn!(
                     "`{entity}` was despawned after despawn processing but before sending, \
                      so the despawn will be sent on the next tick; \
-                     consider ordering your despawn before `{:?}`",
-                    ServerSystems::Send
+                     consider ordering your despawn before the replication send systems"
                 );
                 continue;
             };

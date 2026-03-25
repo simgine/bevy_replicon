@@ -3,8 +3,10 @@ use core::marker::PhantomData;
 use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
-    server::server_tick::ServerTick,
-    shared::backend::connected_client::{ConnectedClient, NetworkId, NetworkIdMap},
+    shared::{
+        backend::connected_client::{ConnectedClient, NetworkId, NetworkIdMap},
+        replication::send::server_tick::ServerTick,
+    },
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};

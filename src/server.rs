@@ -1,11 +1,9 @@
 pub mod message;
-pub mod server_tick;
-pub mod visibility;
 
 use core::time::Duration;
 
 use bevy::{
-    ecs::{entity::EntityHashMap, intern::Interned, schedule::ScheduleLabel},
+    ecs::{intern::Interned, schedule::ScheduleLabel},
     platform::collections::HashSet,
     prelude::*,
     time::common_conditions::on_timer,
@@ -14,10 +12,6 @@ use log::{Level, debug, log_enabled, trace};
 
 use crate::{
     prelude::*,
-    server::{
-        server_tick::ServerTick, visibility::client_visibility::ClientVisibility,
-        visibility::registry::FilterRegistry,
-    },
     shared::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
@@ -28,7 +22,9 @@ use crate::{
                 client_pools::ClientPools,
                 client_ticks::ClientTicks,
                 collect_changes, collect_despawns, collect_mappings, collect_removals,
-                prepare_messages, receive_acks,
+                prepare_messages,
+                priority_map::PriorityMap,
+                receive_acks,
                 related_entities::RelatedEntities,
                 removal_buffer::RemovalBuffer,
                 replicated_archetypes::ReplicatedArchetypes,
@@ -36,6 +32,8 @@ use crate::{
                     mutations::Mutations, serialized_data::SerializedData, updates::Updates,
                 },
                 send_messages,
+                server_tick::ServerTick,
+                visibility::{client_visibility::ClientVisibility, registry::FilterRegistry},
             },
         },
     },
@@ -315,26 +313,3 @@ pub enum ServerSystems {
 #[component(immutable)]
 #[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
-
-/// Controls how often mutations are sent for an authorized client.
-///
-/// Associates entities with a priority number configurable by the user.
-/// If the priority is not set, it defaults to 1.0.
-///
-/// During replication, we multiply the difference between the last acknowledged tick
-/// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
-/// we send mutations for this entity.
-///
-/// This means the priority accumulates across server ticks until an entity is acknowledged,
-/// at which point its priority is reset. As a result, even low-priority objects eventually
-/// reach a high enough priority to be considered for replication.
-///
-/// For example, if the base priority is 0.5, mutations for an entity will be sent
-/// no more often than once every 2 ticks. With the default priority of 1.0,
-/// all unacknowledged mutations will be sent every tick.
-///
-/// All of this only affects mutations. For any component insertion or removal, the changes
-/// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
-/// See its documentation for more details.
-#[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone)]
-pub struct PriorityMap(EntityHashMap<f32>);

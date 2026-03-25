@@ -58,7 +58,7 @@ impl RemovalBuffer {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use bevy::state::app::StatesPlugin;
     use serde::{Deserialize, Serialize};

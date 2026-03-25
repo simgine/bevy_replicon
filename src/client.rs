@@ -3,7 +3,8 @@ pub mod diagnostics;
 pub mod message;
 
 pub use crate::shared::replication::receive::{
-    ServerUpdateTick, confirm_history, server_mutate_ticks,
+    ServerUpdateTick, client_replication_stats::ClientReplicationStats, confirm_history,
+    remote::Remote, server_mutate_ticks,
 };
 
 use bevy::prelude::*;
@@ -149,35 +150,3 @@ pub enum ClientSystems {
     /// Runs in [`OnExit`] for [`ClientState::Connected`].
     Reset,
 }
-
-/// Replication stats during message processing.
-///
-/// Statistic will be collected only if the resource is present.
-/// The resource is not added by default.
-///
-/// See also [`ClientDiagnosticsPlugin`]
-/// for automatic integration with Bevy diagnostics.
-#[derive(Resource, Default, Reflect, Debug, Clone, Copy)]
-pub struct ClientReplicationStats {
-    /// Incremented per entity that changes.
-    pub entities_changed: usize,
-    /// Incremented for every component that changes.
-    pub components_changed: usize,
-    /// Incremented per client mapping added.
-    pub mappings: usize,
-    /// Incremented per entity despawn.
-    pub despawns: usize,
-    /// Replication messages received.
-    pub messages: usize,
-    /// Replication bytes received in message payloads (without internal messaging plugin data).
-    pub bytes: usize,
-}
-
-/// Marker for entities spawned by replication.
-///
-/// Automatically inserted for each newly received entity.
-///
-/// See also [`Replicated`].
-#[derive(Component, Default, Reflect, Debug, Clone, Copy)]
-#[reflect(Component)]
-pub struct Remote;
