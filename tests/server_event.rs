@@ -1,6 +1,12 @@
 use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
-    client::ServerUpdateTick, prelude::*, shared::server_entity_map::ServerEntityMap,
+    client::ServerUpdateTick,
+    postcard_utils,
+    prelude::*,
+    shared::{
+        message::{ctx::ServerSendCtx, server_message},
+        server_entity_map::ServerEntityMap,
+    },
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};
@@ -198,6 +204,53 @@ fn independent() {
 
     let independent_reader = client_app.world().resource::<EventReader<Independent>>();
     assert_eq!(independent_reader.events.len(), 1);
+}
+
+#[test]
+fn serialization_preallocates_capacity() {
+    #[derive(Event, Serialize, Deserialize, Clone)]
+    struct Large(u64, u64, u64, u64, u64, u64, u64, u64);
+
+    fn serialize_large_checked(
+        _ctx: &mut ServerSendCtx,
+        event: &Large,
+        message_bytes: &mut Vec<u8>,
+    ) -> Result<()> {
+        assert!(message_bytes.capacity() >= message_bytes.len() + core::mem::size_of::<Large>());
+        postcard_utils::to_extend_mut(event, message_bytes)?;
+        Ok(())
+    }
+
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_server_event_with::<Large>(
+            Channel::Ordered,
+            serialize_large_checked,
+            server_message::default_deserialize::<Large>,
+        )
+        .finish();
+    }
+    client_app.init_resource::<EventReader<Large>>();
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.world_mut().server_trigger(ToClients {
+        mode: SendMode::Broadcast,
+        message: Large(1, 2, 3, 4, 5, 6, 7, 8),
+    });
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let reader = client_app.world().resource::<EventReader<Large>>();
+    assert_eq!(reader.events.len(), 1);
 }
 
 #[derive(Event, Serialize, Deserialize, Clone)]

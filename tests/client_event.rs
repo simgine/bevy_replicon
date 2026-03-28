@@ -1,6 +1,12 @@
 use bevy::{ecs::entity::MapEntities, prelude::*, state::app::StatesPlugin, time::TimePlugin};
 use bevy_replicon::{
-    prelude::*, shared::server_entity_map::ServerEntityMap, test_app::ServerTestAppExt,
+    postcard_utils,
+    prelude::*,
+    shared::{
+        message::{client_message, ctx::ClientSendCtx},
+        server_entity_map::ServerEntityMap,
+    },
+    test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};
 use test_log::test;
@@ -152,6 +158,44 @@ fn with_disconnect() {
         reader.events.is_empty(),
         "client shouldn't resend events locally after disconnect"
     );
+}
+
+#[test]
+fn serialization_preallocates_capacity() {
+    #[derive(Deserialize, Event, Serialize, Clone)]
+    struct Large(u64, u64, u64, u64, u64, u64, u64, u64);
+
+    fn serialize_large_checked(
+        _ctx: &mut ClientSendCtx,
+        event: &Large,
+        message_bytes: &mut Vec<u8>,
+    ) -> Result<()> {
+        assert!(message_bytes.capacity() >= core::mem::size_of::<Large>());
+        postcard_utils::to_extend_mut(event, message_bytes)?;
+        Ok(())
+    }
+
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+            .add_client_event_with::<Large>(
+                Channel::Ordered,
+                serialize_large_checked,
+                client_message::default_deserialize::<Large>,
+            )
+            .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    client_app
+        .world_mut()
+        .client_trigger(Large(1, 2, 3, 4, 5, 6, 7, 8));
+
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    server_app.update();
 }
 
 #[derive(Deserialize, Event, Serialize, Clone)]

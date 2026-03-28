@@ -259,7 +259,7 @@ impl ClientMessage {
         let reader: &mut ClientMessageReader<M> = unsafe { reader.deref_mut() };
         let messages = unsafe { messages.deref() };
         for message in reader.read(messages) {
-            let mut message_bytes = Vec::new();
+            let mut message_bytes = Vec::with_capacity(core::mem::size_of::<I>());
             if let Err(e) = unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes) } {
                 error!(
                     "ignoring message `{}` that failed to serialize: {e}",

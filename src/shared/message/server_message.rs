@@ -373,7 +373,7 @@ impl ServerMessage {
         server_messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
     ) -> Result<()> {
-        let mut message_bytes = Vec::new();
+        let mut message_bytes = Vec::with_capacity(core::mem::size_of::<I>());
         unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes)? }
         let message_bytes: Bytes = message_bytes.into();
 
@@ -431,7 +431,9 @@ impl ServerMessage {
         ctx: &mut ServerSendCtx,
         message: &M,
     ) -> Result<SerializedMessage> {
-        let mut message_bytes = vec![0; RepliconTick::POSTCARD_MAX_SIZE]; // Padding for the tick.
+        let mut message_bytes =
+            Vec::with_capacity(RepliconTick::POSTCARD_MAX_SIZE + core::mem::size_of::<I>());
+        message_bytes.resize(RepliconTick::POSTCARD_MAX_SIZE, 0); // Padding for the tick.
         unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes)? }
         let message = SerializedMessage::Raw(message_bytes);
 
