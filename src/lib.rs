@@ -245,7 +245,8 @@ the desired components. See [receive markers](#receive-markers) for more details
 #### Component relations
 
 Some components depend on each other. For example, [`ChildOf`] and [`Children`]. You can enable
-replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion. Related entities replicate like any others, so children should also have [`Replicated`].
+replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
+Related entities replicate like any others, so children should also have [`Replicated`].
 
 Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
 See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
