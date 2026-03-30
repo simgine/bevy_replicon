@@ -245,9 +245,16 @@ the desired components. See [receive markers](#receive-markers) for more details
 #### Component relations
 
 Some components depend on each other. For example, [`ChildOf`] and [`Children`]. You can enable
-replication only for [`ChildOf`] and [`Children`] will be updated automatically on insertion.
+replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
 This will emit a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
 See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
+
+In order to replicate children with their parent you need to:
+1. `AppRuleExt::replicate` the `ChildOf` component to enable relations themselves.
+2. `AppRuleExt::replicate` all components of the parent that need it.
+3. `AppRuleExt::replicate` all components of the children that need it.
+4. Add `Replicated` component to parent entity.
+5. Add `Replicated` component to child entities.
 
 You can also ensure that their mutations arrive in sync by using [`SyncRelatedAppExt::sync_related_entities`].
 
