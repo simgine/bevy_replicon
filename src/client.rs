@@ -537,7 +537,13 @@ fn apply_changes(
                 return Ok(());
             };
 
-            DeferredEntity::new(client_entity, params.changes)
+            let mut client_entity = DeferredEntity::new(client_entity, params.changes);
+            if !client_entity.contains::<Remote>() {
+                // Even though the entity already exists, it could have been spawned during
+                // deserialization of another component and doesn't have the marker yet.
+                client_entity.insert(Remote);
+            }
+            client_entity
         }
         EntityEntry::Vacant(entry) => {
             let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);

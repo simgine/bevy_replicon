@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
 
+### Fixed
+
+- Entities spawned during component deserialization now also get the `Remote` marker.
+
 ## [0.39.1] - 2026-03-09
 
 ### Fixed
