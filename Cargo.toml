@@ -53,14 +53,16 @@ bytes = { version = "1.10", default-features = false, features = [
 [dev-dependencies]
 ron = { version = "0.12", default-features = false }
 bevy = { version = "0.18", default-features = false, features = [
-  "bevy_log",
-  "bevy_sprite_render",
   "debug",
   "serialize",
 ] }
 test-log = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+bevy = { version = "0.18", default-features = false, features = [
+  "bevy_log",
+  "bevy_sprite_render",
+] }
 criterion = { version = "0.8", default-features = false, features = [
   "cargo_bench_support",
 ] }
