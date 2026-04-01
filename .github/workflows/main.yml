@@ -124,9 +124,9 @@ jobs:
       - name: Install Wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
 
-      # `scene` requires `bevy_asset`, which pulls in `wasm-bindgen` that can't be used with Wasmtime.
+      # Doc tests and `scene` feature require `bevy_asset`, which pulls in `wasm-bindgen` that can't be used with Wasmtime.
       - name: Test
-        run: cargo test --target wasm32-wasip1 --no-default-features --features=client,server
+        run: cargo test --lib --tests --target wasm32-wasip1 --no-default-features --features=client,server
         env:
           CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime
 
