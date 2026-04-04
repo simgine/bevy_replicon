@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Visibility is now properly updated when `VisibilityFilter` and `VisibilityFilter::ClientComponent` are not the same type.
+
 ## [0.39.2] - 2026-04-01
 
 ### Fixed
