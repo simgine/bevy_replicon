@@ -136,26 +136,22 @@ fn on_insert<F: VisibilityFilter>(
     entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
     mut clients: Query<(Entity, Option<&F::ClientComponent>, &mut ClientVisibility)>,
 ) {
+    // `F` and `F::ClientComponent` could be the same,
+    // so we need to ensure that it was not inserted into a client
+    if clients.contains(insert.entity) {
+        return;
+    }
+
     let bit = registry.bit::<F>();
-    if let Ok((client, client_component, mut visibility)) = clients.get_mut(insert.entity) {
-        for (entity, component) in &entities {
-            let visible = component.is_visible(client, client_component);
-            debug!(
-                "evaluating inserted `{}` to client `{client}` for entity `{entity}` to `{visible}`",
-                ShortName::of::<F>(),
-            );
-            visibility.set(entity, bit, visible);
-        }
-    } else {
-        let (entity, component) = entities.get(insert.entity).unwrap();
-        for (client, client_component, mut visibility) in &mut clients {
-            let visible = component.is_visible(client, client_component);
-            debug!(
-                "evaluating inserted `{}` to entity `{entity}` for client `{client}` to `{visible}`",
-                ShortName::of::<F>(),
-            );
-            visibility.set(insert.entity, bit, visible);
-        }
+
+    let (entity, component) = entities.get(insert.entity).unwrap();
+    for (client, client_component, mut visibility) in &mut clients {
+        let visible = component.is_visible(client, client_component);
+        debug!(
+            "evaluating inserted `{}` to entity `{entity}` for client `{client}` to `{visible}`",
+            ShortName::of::<F>(),
+        );
+        visibility.set(insert.entity, bit, visible);
     }
 }
 
@@ -188,7 +184,7 @@ fn on_remove<F: VisibilityFilter>(
 ) {
     // `F` and `F::ClientComponent` could be the same,
     // so we need to ensure that it wasn't removed from a client.
-    if clients.get(remove.entity).is_ok() {
+    if clients.contains(remove.entity) {
         return;
     }
 
