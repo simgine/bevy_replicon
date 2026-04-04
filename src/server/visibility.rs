@@ -597,12 +597,9 @@ mod tests {
             .add_visibility_filter::<SelfFilter>()
             .add_visibility_filter::<EntityFilter>();
 
-        let entity1 = app
-            .world_mut()
-            .spawn(SelfFilter)
-            .id();
+        let entity1 = app.world_mut().spawn(SelfFilter).id();
         let entity2 = app.world_mut().spawn(EntityFilter).id();
-        
+
         let client = app.world_mut().spawn(ClientVisibility::default()).id();
 
         let registry = app.world().resource::<FilterRegistry>();
@@ -611,7 +608,9 @@ mod tests {
         assert!(visibility.get(entity1).is_hidden(registry));
         assert!(visibility.get(entity2).is_hidden(registry));
 
-        app.world_mut().entity_mut(client).insert((SelfFilter, ClientFilter));
+        app.world_mut()
+            .entity_mut(client)
+            .insert((SelfFilter, ClientFilter));
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();

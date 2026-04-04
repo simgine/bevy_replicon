@@ -536,9 +536,7 @@ fn visibility_gain() {
 
     server_app.connect_client(&mut client_app);
 
-    server_app
-        .world_mut()
-        .spawn((Replicated, SelfFilter, A));
+    server_app.world_mut().spawn((Replicated, SelfFilter, A));
 
     server_app.update();
 
@@ -546,10 +544,7 @@ fn visibility_gain() {
     assert_eq!(components.iter(client_app.world()).len(), 0);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    server_app
-        .world_mut()
-        .entity_mut(client)
-        .insert(SelfFilter);
+    server_app.world_mut().entity_mut(client).insert(SelfFilter);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -575,9 +570,7 @@ fn visibility_gain_deferred() {
 
     server_app.connect_client(&mut client_app);
 
-    server_app
-        .world_mut()
-        .spawn((Replicated, EntityFilter, A));
+    server_app.world_mut().spawn((Replicated, EntityFilter, A));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -627,10 +620,7 @@ fn visibility_gain_with_signature() {
     assert_eq!(server_messages.drain_sent().count(), 0);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    server_app
-        .world_mut()
-        .entity_mut(client)
-        .insert(SelfFilter);
+    server_app.world_mut().entity_mut(client).insert(SelfFilter);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
