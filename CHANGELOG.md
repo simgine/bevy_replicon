@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Fixed `VisibilityFilter` not updating when inserted `VisibilityFilter::ClientComponent` is different to `VisibilityFilter`.
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
 
 ## [0.39.2] - 2026-04-01
