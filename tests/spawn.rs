@@ -502,13 +502,13 @@ fn hidden_entity() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<SelfFilter>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    server_app.world_mut().spawn((Replicated, EntityVisibility));
+    server_app.world_mut().spawn((Replicated, SelfFilter));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -530,7 +530,7 @@ fn visibility_gain() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
-        .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<SelfFilter>()
         .finish();
     }
 
@@ -538,7 +538,7 @@ fn visibility_gain() {
 
     server_app
         .world_mut()
-        .spawn((Replicated, EntityVisibility, A));
+        .spawn((Replicated, SelfFilter, A));
 
     server_app.update();
 
@@ -549,7 +549,7 @@ fn visibility_gain() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(EntityVisibility);
+        .insert(SelfFilter);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -559,7 +559,7 @@ fn visibility_gain() {
 }
 
 #[test]
-fn visibility_gain_late_client() {
+fn visibility_gain_deferred() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -569,7 +569,7 @@ fn visibility_gain_late_client() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
-        .add_visibility_filter::<DeferredVisibility>()
+        .add_visibility_filter::<EntityFilter>()
         .finish();
     }
 
@@ -577,7 +577,7 @@ fn visibility_gain_late_client() {
 
     server_app
         .world_mut()
-        .spawn((Replicated, DeferredVisibility, A));
+        .spawn((Replicated, EntityFilter, A));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -590,7 +590,7 @@ fn visibility_gain_late_client() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(CanSeeDeferred);
+        .insert(ClientFilter);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -610,7 +610,7 @@ fn visibility_gain_with_signature() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
-        .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<SelfFilter>()
         .finish();
     }
 
@@ -619,7 +619,7 @@ fn visibility_gain_with_signature() {
     let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
     server_app
         .world_mut()
-        .spawn((Replicated, EntityVisibility, Signature::from(0), A));
+        .spawn((Replicated, SelfFilter, Signature::from(0), A));
 
     server_app.update();
 
@@ -630,7 +630,7 @@ fn visibility_gain_with_signature() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(EntityVisibility);
+        .insert(SelfFilter);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -647,9 +647,9 @@ struct B;
 
 #[derive(Component)]
 #[component(immutable)]
-struct EntityVisibility;
+struct SelfFilter;
 
-impl VisibilityFilter for EntityVisibility {
+impl VisibilityFilter for SelfFilter {
     type ClientComponent = Self;
     type Scope = Entity;
 
@@ -660,14 +660,14 @@ impl VisibilityFilter for EntityVisibility {
 
 #[derive(Component)]
 #[component(immutable)]
-struct DeferredVisibility;
+struct EntityFilter;
 
 #[derive(Component)]
 #[component(immutable)]
-struct CanSeeDeferred;
+struct ClientFilter;
 
-impl VisibilityFilter for DeferredVisibility {
-    type ClientComponent = CanSeeDeferred;
+impl VisibilityFilter for EntityFilter {
+    type ClientComponent = ClientFilter;
     type Scope = Entity;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
