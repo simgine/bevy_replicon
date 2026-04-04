@@ -559,6 +559,47 @@ fn visibility_gain() {
 }
 
 #[test]
+fn visibility_gain_late_client() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .add_visibility_filter::<DeferredVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app
+        .world_mut()
+        .spawn((Replicated, DeferredVisibility, A));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 0);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(CanSeeDeferred);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+}
+
+#[test]
 fn visibility_gain_with_signature() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -610,6 +651,23 @@ struct EntityVisibility;
 
 impl VisibilityFilter for EntityVisibility {
     type ClientComponent = Self;
+    type Scope = Entity;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct DeferredVisibility;
+
+#[derive(Component)]
+#[component(immutable)]
+struct CanSeeDeferred;
+
+impl VisibilityFilter for DeferredVisibility {
+    type ClientComponent = CanSeeDeferred;
     type Scope = Entity;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {

@@ -104,6 +104,7 @@ impl AppVisibilityExt for App {
 
         self.add_observer(update_for_new_clients::<F>)
             .add_observer(on_insert::<F>)
+            .add_observer(on_client_insert::<F>)
             .add_observer(on_remove::<F>)
             .add_observer(on_client_remove::<F>)
     }
@@ -155,6 +156,28 @@ fn on_insert<F: VisibilityFilter>(
             );
             visibility.set(insert.entity, bit, visible);
         }
+    }
+}
+
+fn on_client_insert<F: VisibilityFilter>(
+    insert: On<Insert, F::ClientComponent>,
+    registry: Res<FilterRegistry>,
+    mut clients: Query<(&F::ClientComponent, &mut ClientVisibility)>,
+    entities: Query<(Entity, &F), Without<ClientVisibility>>,
+) {
+    let Ok((client_component, mut visibility)) = clients.get_mut(insert.entity) else {
+        return;
+    };
+
+    let bit = registry.bit::<F>();
+    for (entity, component) in &entities {
+        let visible = component.is_visible(insert.entity, Some(client_component));
+        debug!(
+            "evaluating inserted `{}` to client `{}` for entity `{entity}` to `{visible}`",
+            ShortName::of::<F>(),
+            insert.entity
+        );
+        visibility.set(entity, bit, visible);
     }
 }
 
