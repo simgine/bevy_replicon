@@ -143,7 +143,6 @@ fn on_insert<F: VisibilityFilter>(
     }
 
     let bit = registry.bit::<F>();
-
     let (entity, component) = entities.get(insert.entity).unwrap();
     for (client, client_component, mut visibility) in &mut clients {
         let visible = component.is_visible(client, client_component);
