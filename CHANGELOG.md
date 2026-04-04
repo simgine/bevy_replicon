@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
+
+## [0.39.3] - 2026-04-01
+
+### Fixed
+
+- Visibility is now properly updated when `VisibilityFilter` and `VisibilityFilter::ClientComponent` are not the same type.
+
+## [0.39.2] - 2026-04-01
+
+### Fixed
+
+- Entities spawned during component deserialization now also get the `Remote` marker.
+
+## [0.39.1] - 2026-03-09
+
+### Fixed
+
+- Don't panic when despawning hierarchy with signatures.
+
 ## [0.39.0] - 2026-02-24
 
 ### Added
@@ -1027,7 +1049,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.39.0...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.39.3...HEAD
+[0.39.3]: https://github.com/simgine/bevy_replicon/compare/v0.39.2...v0.39.3
+[0.39.2]: https://github.com/simgine/bevy_replicon/compare/v0.39.1...v0.39.2
+[0.39.1]: https://github.com/simgine/bevy_replicon/compare/v0.39.0...v0.39.1
 [0.39.0]: https://github.com/simgine/bevy_replicon/compare/v0.38.2...v0.39.0
 [0.38.2]: https://github.com/simgine/bevy_replicon/compare/v0.38.1...v0.38.2
 [0.38.1]: https://github.com/simgine/bevy_replicon/compare/v0.38.0...v0.38.1

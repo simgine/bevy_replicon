@@ -1,6 +1,6 @@
 [package]
 name = "bevy_replicon"
-version = "0.39.0"
+version = "0.39.3"
 authors = [
   "Hennadii Chernyshchyk <genaloner@gmail.com>",
   "koe <ukoe@protonmail.com>",
@@ -28,7 +28,7 @@ all-features = true
 members = ["example_backend"]
 
 [dependencies]
-bevy = { git = "https://github.com/cart/bevy", branch = "next-generation-scenes", default-features = false, features = ["bevy_state"] }
+bevy = { version = "0.19-dev", default-features = false, features = ["bevy_state"] }
 log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `bevy_log` currently requires `std`.
 petgraph = { version = "0.8", default-features = false, features = [
   "stable_graph",
@@ -52,15 +52,17 @@ bytes = { version = "1.10", default-features = false, features = [
 
 [dev-dependencies]
 ron = { version = "0.12", default-features = false }
-bevy = { git = "https://github.com/cart/bevy", branch = "next-generation-scenes", default-features = false, features = [
-  "bevy_log",
-  "bevy_sprite_render",
+bevy = { version = "0.19-dev", default-features = false, features = [
   "debug",
   "serialize",
 ] }
 test-log = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+bevy = { version = "0.19-dev", default-features = false, features = [
+  "bevy_log",
+  "bevy_sprite_render",
+] }
 criterion = { version = "0.8", default-features = false, features = [
   "cargo_bench_support",
 ] }
@@ -123,7 +125,7 @@ required-features = ["client", "server"]
 
 [[test]]
 name = "scene"
-required-features = ["scene"]
+required-features = ["scene", "client"]
 
 [[test]]
 name = "server_message"
@@ -147,3 +149,6 @@ too_many_arguments = "allow"
 alloc_instead_of_core = "warn"
 std_instead_of_alloc = "warn"
 std_instead_of_core = "warn"
+
+[patch.crates-io]
+bevy = { git = "https://github.com/bevyengine/bevy" }

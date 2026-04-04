@@ -128,7 +128,7 @@ You can also configure the schedule via [`ServerPlugin::tick_schedule`].
 By default no entities are replicated. Add the [`Replicated`] marker
 component on the server for entities you want to replicate.
 
-On clients [`Replicated`] will be automatically inserted to newly-replicated entities.
+On clients [`Remote`] will be automatically inserted for every entity spawned by replication.
 
 If you remove the [`Replicated`] component from an entity on the server, it will be despawned on all clients.
 
@@ -180,7 +180,8 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 
 You don't want to replicate all components because not all of them are
 necessary to send over the network. Components that can be calculated on the client can
-be inserted using Bevy's required components feature.
+be inserted using Bevy's required components feature. You can also mark [`Replicated`]
+as required to automatically replicate all entities with this component.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -202,20 +203,9 @@ fn init_player_mesh(
     **mesh = meshes.add(Capsule2d::default());
 }
 
-/// Main player component.
-///
-/// [`NotReplicatedComponent`] and [`Replicated`] will be implicitly inserted after spawning on
-/// both the server and clients.
-///
-/// [`Replicated`] is always inserted on the client after replication, regardless of whether it is marked
-/// as required. However, it may still be useful to mark it as required if you want to avoid
-/// inserting it explicitly on the server.
 #[derive(Component, Deserialize, Serialize)]
-#[require(Replicated, NotReplicatedComponent, Mesh2d)]
+#[require(Replicated, Mesh2d)]
 struct Player;
-
-#[derive(Default, Component)]
-struct NotReplicatedComponent;
 ```
 
 This pairs nicely with server state serialization and keeps saves clean.
@@ -255,8 +245,10 @@ the desired components. See [receive markers](#receive-markers) for more details
 #### Component relations
 
 Some components depend on each other. For example, [`ChildOf`] and [`Children`]. You can enable
-replication only for [`ChildOf`] and [`Children`] will be updated automatically on insertion.
-This will emit a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
+replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
+Related entities replicate like any others, so children should also have [`Replicated`].
+
+Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
 See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
 
 You can also ensure that their mutations arrive in sync by using [`SyncRelatedAppExt::sync_related_entities`].
@@ -455,12 +447,13 @@ There are 2 ways to support multiple configurations at the same time.
 Just split client and server logic. Then for listen server and singleplayer run both the server and client,
 just don't accept outside connections for singleplayer.
 
-However, **running the client and server in a single app is not supported**. We rely on change detection to
-decide on which data to send, and since the world is shared, applying replication will trigger changes.
-To avoid this, you can use one of the following workarounds:
+However, you can't simply run both the client and server in a single app for a listen server. Since they operate
+on the same world, any changes will trigger replication, which will be sent with a delay and then applied to the
+same entities, overriding the latest values and triggering changes again.
 
 - Two Bevy apps inside a single process, running in separate threads.
 - Two executables. After starting the client app, the server starts in the background.
+- Use [receive markers](#receive-markers) to discard replication on listen server.
 
 It's not easy to set up and requires more resources due to the synchronization between two worlds.
 This is why, while it's possible to use Replicon this way, we recommend a different approach.
@@ -608,6 +601,10 @@ To select a different writing function for a specific entity, you need to regist
 and associate functions for components with this marker using [`AppMarkerExt::set_marker_fns<M, C>`]. These functions will be called for `C`
 if the marker `M` is present. You can also control marker priority or enable processing of old values using
 [`AppMarkerExt::register_marker_with<M>`].
+
+It's also possible to override despawns received from the server via
+[`ReplicationRegistry::despawn`](shared::replication::registry::ReplicationRegistry::despawn), which is also often used together
+with receive markers.
 
 ### Ticks information
 

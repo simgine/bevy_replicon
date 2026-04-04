@@ -437,16 +437,16 @@ fn apply_despawn(
     // with the last replication message, but the server might not yet have received confirmation
     // from the client and could include the deletion in the this message.
     let server_entity = postcard_utils::entity_from_buf(message)?;
-    if let Some(client_entity) = params
-        .entity_map
-        .server_entry(server_entity)
-        .remove()
-        .and_then(|entity| world.get_entity_mut(entity).ok())
-    {
-        trace!("applying despawn for `{}`", client_entity.id());
-        params.signature_map.remove(client_entity.id()); // Requires manual removal since the map is removed from the world and inaccessible to triggers.
-        let ctx = DespawnCtx { message_tick };
-        (params.registry.despawn)(&ctx, client_entity);
+    if let Some(client_entity) = params.entity_map.server_entry(server_entity).remove() {
+        // Requires manual removal since the map is removed from the world and inaccessible to triggers.
+        // The entity can also be despawned via a relationship when applying
+        // despawn to another entity, so we always need to remove it from the map.
+        params.signature_map.remove(client_entity);
+        if let Ok(client_entity) = world.get_entity_mut(client_entity) {
+            trace!("applying despawn for `{}`", client_entity.id());
+            let ctx = DespawnCtx { message_tick };
+            (params.registry.despawn)(&ctx, client_entity);
+        }
     }
 
     Ok(())
@@ -537,7 +537,13 @@ fn apply_changes(
                 return Ok(());
             };
 
-            DeferredEntity::new(client_entity, params.changes)
+            let mut client_entity = DeferredEntity::new(client_entity, params.changes);
+            if !client_entity.contains::<Remote>() {
+                // Even though the entity already exists, it could have been spawned during
+                // deserialization of another component and doesn't have the marker yet.
+                client_entity.insert(Remote);
+            }
+            client_entity
         }
         EntityEntry::Vacant(entry) => {
             let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
@@ -872,9 +878,9 @@ pub struct ClientReplicationStats {
 
 /// Marker for entities spawned by replication.
 ///
-/// Inserted automatically. Unlike [`Replicated`], it's present only
-/// on the client and can be used for client-specific logic.
+/// Automatically inserted for each newly received entity.
+///
+/// See also [`Replicated`].
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
-#[require(Replicated)]
 pub struct Remote;

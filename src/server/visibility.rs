@@ -104,6 +104,7 @@ impl AppVisibilityExt for App {
 
         self.add_observer(update_for_new_clients::<F>)
             .add_observer(on_insert::<F>)
+            .add_observer(on_client_insert::<F>)
             .add_observer(on_remove::<F>)
             .add_observer(on_client_remove::<F>)
     }
@@ -135,26 +136,43 @@ fn on_insert<F: VisibilityFilter>(
     entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
     mut clients: Query<(Entity, Option<&F::ClientComponent>, &mut ClientVisibility)>,
 ) {
+    // `F` and `F::ClientComponent` could be the same,
+    // so we need to ensure that it was not inserted into a client
+    if clients.contains(insert.entity) {
+        return;
+    }
+
     let bit = registry.bit::<F>();
-    if let Ok((client, client_component, mut visibility)) = clients.get_mut(insert.entity) {
-        for (entity, component) in &entities {
-            let visible = component.is_visible(client, client_component);
-            debug!(
-                "evaluating inserted `{}` to client `{client}` for entity `{entity}` to `{visible}`",
-                ShortName::of::<F>(),
-            );
-            visibility.set(entity, bit, visible);
-        }
-    } else {
-        let (entity, component) = entities.get(insert.entity).unwrap();
-        for (client, client_component, mut visibility) in &mut clients {
-            let visible = component.is_visible(client, client_component);
-            debug!(
-                "evaluating inserted `{}` to entity `{entity}` for client `{client}` to `{visible}`",
-                ShortName::of::<F>(),
-            );
-            visibility.set(insert.entity, bit, visible);
-        }
+    let (entity, component) = entities.get(insert.entity).unwrap();
+    for (client, client_component, mut visibility) in &mut clients {
+        let visible = component.is_visible(client, client_component);
+        debug!(
+            "evaluating inserted `{}` to entity `{entity}` for client `{client}` to `{visible}`",
+            ShortName::of::<F>(),
+        );
+        visibility.set(insert.entity, bit, visible);
+    }
+}
+
+fn on_client_insert<F: VisibilityFilter>(
+    insert: On<Insert, F::ClientComponent>,
+    registry: Res<FilterRegistry>,
+    mut clients: Query<(&F::ClientComponent, &mut ClientVisibility)>,
+    entities: Query<(Entity, &F), Without<ClientVisibility>>,
+) {
+    let Ok((client_component, mut visibility)) = clients.get_mut(insert.entity) else {
+        return;
+    };
+
+    let bit = registry.bit::<F>();
+    for (entity, component) in &entities {
+        let visible = component.is_visible(insert.entity, Some(client_component));
+        debug!(
+            "evaluating inserted `{}` to client `{}` for entity `{entity}` to `{visible}`",
+            ShortName::of::<F>(),
+            insert.entity
+        );
+        visibility.set(entity, bit, visible);
     }
 }
 
@@ -165,7 +183,7 @@ fn on_remove<F: VisibilityFilter>(
 ) {
     // `F` and `F::ClientComponent` could be the same,
     // so we need to ensure that it wasn't removed from a client.
-    if clients.get(remove.entity).is_ok() {
+    if clients.contains(remove.entity) {
         return;
     }
 
@@ -564,6 +582,35 @@ mod tests {
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
         assert!(visibility2.get(entity1).is_hidden(registry));
         assert!(visibility2.get(entity2).is_hidden(registry));
+    }
+
+    #[test]
+    fn insert_filter_on_client() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
+
+        let entity1 = app.world_mut().spawn(SelfFilter).id();
+        let entity2 = app.world_mut().spawn(EntityFilter).id();
+
+        let client = app.world_mut().spawn(ClientVisibility::default()).id();
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client).unwrap();
+
+        assert!(visibility.get(entity1).is_hidden(registry));
+        assert!(visibility.get(entity2).is_hidden(registry));
+
+        app.world_mut()
+            .entity_mut(client)
+            .insert((SelfFilter, ClientFilter));
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client).unwrap();
+        assert!(!visibility.get(entity1).is_hidden(registry));
+        assert!(!visibility.get(entity2).is_hidden(registry));
     }
 
     #[test]

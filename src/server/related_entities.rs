@@ -337,13 +337,9 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child1 = app.world_mut().spawn(Replicated).id();
-        let child2 = app.world_mut().spawn(Replicated).id();
-        let root = app
-            .world_mut()
-            .spawn(Replicated)
-            .add_children(&[child1, child2])
-            .id();
+        let root = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();
@@ -361,10 +357,10 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child1 = app.world_mut().spawn(Replicated).id();
-        let root1 = app.world_mut().spawn(Replicated).add_child(child1).id();
-        let child2 = app.world_mut().spawn(Replicated).id();
-        let root2 = app.world_mut().spawn(Replicated).add_child(child2).id();
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root1))).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root2))).id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();
@@ -383,9 +379,9 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let grandchild = app.world_mut().spawn(Replicated).id();
-        let child = app.world_mut().spawn(Replicated).add_child(grandchild).id();
-        let root = app.world_mut().spawn(Replicated).add_child(child).id();
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let grandchild = app.world_mut().spawn((Replicated, ChildOf(child))).id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();
@@ -403,24 +399,23 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let grandgrandchild = app.world_mut().spawn(Replicated).id();
-        let grandchild = app
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let grandchild = app.world_mut().spawn((Replicated, ChildOf(child))).id();
+        let grandgrandchild = app
             .world_mut()
-            .spawn(Replicated)
-            .add_child(grandgrandchild)
+            .spawn((Replicated, ChildOf(grandchild)))
             .id();
-        let child = app.world_mut().spawn(Replicated).add_child(grandchild).id();
-        let root = app.world_mut().spawn(Replicated).add_child(child).id();
 
         app.world_mut().entity_mut(grandchild).remove::<ChildOf>();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();
         assert_eq!(related.graphs_count(), 2);
-        assert_eq!(related.graph_index(root), Some(1));
-        assert_eq!(related.graph_index(child), Some(1));
-        assert_eq!(related.graph_index(grandchild), Some(0));
-        assert_eq!(related.graph_index(grandgrandchild), Some(0));
+        assert_eq!(related.graph_index(root), Some(0));
+        assert_eq!(related.graph_index(child), Some(0));
+        assert_eq!(related.graph_index(grandchild), Some(1));
+        assert_eq!(related.graph_index(grandgrandchild), Some(1));
     }
 
     #[test]
@@ -431,10 +426,10 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child1 = app.world_mut().spawn(Replicated).id();
-        let root1 = app.world_mut().spawn(Replicated).add_child(child1).id();
-        let child2 = app.world_mut().spawn(Replicated).id();
-        let root2 = app.world_mut().spawn(Replicated).add_child(child2).id();
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root1))).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root2))).id();
 
         app.world_mut().entity_mut(child1).add_child(root2);
 
@@ -455,10 +450,10 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child1 = app.world_mut().spawn(Replicated).id();
-        let root1 = app.world_mut().spawn(Replicated).add_child(child1).id();
-        let child2 = app.world_mut().spawn(Replicated).id();
-        let root2 = app.world_mut().spawn(Replicated).add_child(child2).id();
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root1))).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root2))).id();
 
         app.world_mut().entity_mut(child1).insert(ChildOf(root2));
 
@@ -479,8 +474,8 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child = app.world_mut().spawn(Replicated).id();
-        let root = app.world_mut().spawn(Replicated).add_child(child).id();
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
 
         app.world_mut().entity_mut(child).remove::<ChildOf>();
 
@@ -499,13 +494,9 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child1 = app.world_mut().spawn(Replicated).id();
-        let child2 = app.world_mut().spawn(Replicated).id();
-        let root = app
-            .world_mut()
-            .spawn(Replicated)
-            .add_children(&[child1, child2])
-            .id();
+        let root = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
 
         app.world_mut().despawn(root);
 
@@ -526,12 +517,11 @@ mod tests {
             .sync_related_entities::<ChildOf>()
             .sync_related_entities::<OwnedBy>();
 
-        let child = app.world_mut().spawn(Replicated).id();
-        let root1 = app.world_mut().spawn(Replicated).add_child(child).id();
-        let root2 = app
+        let root1 = app.world_mut().spawn(Replicated).id();
+        let root2 = app.world_mut().spawn(Replicated).id();
+        let child = app
             .world_mut()
-            .spawn(Replicated)
-            .add_one_related::<OwnedBy>(child)
+            .spawn((Replicated, ChildOf(root1), OwnedBy(root2)))
             .id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
@@ -551,12 +541,10 @@ mod tests {
             .sync_related_entities::<ChildOf>()
             .sync_related_entities::<OwnedBy>();
 
-        let child = app.world_mut().spawn(Replicated).id();
-        let root = app
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app
             .world_mut()
-            .spawn(Replicated)
-            .add_child(child)
-            .add_one_related::<OwnedBy>(child)
+            .spawn((Replicated, ChildOf(root), OwnedBy(root)))
             .id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
@@ -575,12 +563,10 @@ mod tests {
             .sync_related_entities::<ChildOf>()
             .sync_related_entities::<OwnedBy>();
 
-        let child = app.world_mut().spawn(Replicated).id();
-        let root = app
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app
             .world_mut()
-            .spawn(Replicated)
-            .add_child(child)
-            .add_one_related::<OwnedBy>(child)
+            .spawn((Replicated, ChildOf(root), OwnedBy(root)))
             .id();
 
         app.world_mut().entity_mut(child).remove::<ChildOf>();
@@ -601,13 +587,9 @@ mod tests {
             .sync_related_entities::<ChildOf>()
             .sync_related_entities::<OwnedBy>();
 
-        let grandchild = app.world_mut().spawn(Replicated).id();
-        let child = app.world_mut().spawn(Replicated).add_child(grandchild).id();
-        let root = app
-            .world_mut()
-            .spawn(Replicated)
-            .add_one_related::<OwnedBy>(child)
-            .id();
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let grandchild = app.world_mut().spawn((Replicated, OwnedBy(child))).id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();
@@ -626,8 +608,8 @@ mod tests {
             .sync_related_entities::<ChildOf>()
             .sync_related_entities::<OwnedBy>();
 
-        let child = app.world_mut().spawn_empty().id();
-        let root = app.world_mut().spawn_empty().add_child(child).id();
+        let root = app.world_mut().spawn_empty().id();
+        let child = app.world_mut().spawn(ChildOf(root)).id();
 
         app.world_mut().entity_mut(child).insert(Replicated);
         app.world_mut().entity_mut(root).insert(Replicated);
@@ -648,12 +630,10 @@ mod tests {
             .sync_related_entities::<ChildOf>()
             .sync_related_entities::<OwnedBy>();
 
-        let child = app.world_mut().spawn(Replicated).id();
-        let root = app
+        let root = app.world_mut().spawn(Replicated).id();
+        let child = app
             .world_mut()
-            .spawn(Replicated)
-            .add_child(child)
-            .add_one_related::<OwnedBy>(child)
+            .spawn((Replicated, ChildOf(root), OwnedBy(root)))
             .id();
 
         app.world_mut().entity_mut(child).remove::<Replicated>();
@@ -673,13 +653,9 @@ mod tests {
             .init_resource::<RelatedEntities>()
             .sync_related_entities::<ChildOf>();
 
-        let child1 = app.world_mut().spawn(Replicated).id();
-        let child2 = app.world_mut().spawn(Replicated).id();
-        let root = app
-            .world_mut()
-            .spawn(Replicated)
-            .add_children(&[child1, child2])
-            .id();
+        let root = app.world_mut().spawn(Replicated).id();
+        let child1 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
+        let child2 = app.world_mut().spawn((Replicated, ChildOf(root))).id();
 
         let mut related = app.world_mut().resource_mut::<RelatedEntities>();
         related.rebuild_graphs();

@@ -85,7 +85,7 @@ fn trigger_remote_toggle(
     mut commands: Commands,
     buttons: Query<(), With<ToggleButton>>,
 ) {
-    if buttons.get(click.entity).is_ok() {
+    if buttons.contains(click.entity) {
         commands.client_trigger(RemoteToggle {
             entity: click.entity,
         });
