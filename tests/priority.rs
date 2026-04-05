@@ -117,7 +117,7 @@ fn with_miss() {
 
     // Take and drop the mutation message.
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(messages.drain_sent().count(), 1);
+    assert_eq!(messages.drain_sent().len(), 1);
 
     server_app.exchange_with_client(&mut client_app);
     client_app.update();

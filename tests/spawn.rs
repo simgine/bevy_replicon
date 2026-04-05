@@ -71,7 +71,7 @@ fn component() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&Remote, &A)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn multiple_components() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&Remote, &A, &B)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
     assert_eq!(
         client_app.world().archetypes().len() - before_archetypes,
         1,
@@ -146,7 +146,7 @@ fn old_component() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&Remote, &A)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn empty_before_connection() {
     client_app.update();
 
     let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).count(), 1);
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn before_connection() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&Remote, &A)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -319,7 +319,7 @@ fn signature() {
 
     let mut remote = client_app.world_mut().query::<&Remote>();
     assert_eq!(
-        remote.iter(client_app.world()).count(),
+        remote.iter(client_app.world()).len(),
         1,
         "new entity shouldn't be spawned on client"
     );
@@ -377,7 +377,7 @@ fn signature_before_replication() {
     server_app.update();
 
     let mut server_messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(server_messages.drain_sent().count(), 0);
+    assert_eq!(server_messages.drain_sent().len(), 0);
 
     server_app
         .world_mut()
@@ -456,7 +456,7 @@ fn before_started_replication() {
 
     let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(
-        components.iter(client_app.world()).count(),
+        components.iter(client_app.world()).len(),
         0,
         "no entities should have been sent to the client"
     );
@@ -472,7 +472,7 @@ fn before_started_replication() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -514,7 +514,7 @@ fn after_started_replication() {
     server_app.exchange_with_client(&mut client_app);
 
     let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -608,7 +608,7 @@ fn visibility_gain_with_signature() {
     server_app.update();
 
     let mut server_messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(server_messages.drain_sent().count(), 0);
+    assert_eq!(server_messages.drain_sent().len(), 0);
 
     let client = **client_app.world().resource::<TestClientEntity>();
     server_app

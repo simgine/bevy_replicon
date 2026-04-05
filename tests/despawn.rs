@@ -146,7 +146,7 @@ fn after_spawn() {
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().count(),
+        messages.drain_sent().len(),
         0,
         "client shouldn't receive anything for a despawned entity"
     );
@@ -254,7 +254,7 @@ fn signature_with_hierarchy() {
 
     let mut remote = client_app.world_mut().query::<&Remote>();
     assert_eq!(
-        remote.iter(client_app.world()).count(),
+        remote.iter(client_app.world()).len(),
         2,
         "entities should be replicated as new due to removal from the signature map"
     );
@@ -292,7 +292,7 @@ fn hidden_entity() {
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().count(),
+        messages.drain_sent().len(),
         0,
         "client shouldn't receive anything for a hidden entity"
     );
@@ -418,7 +418,7 @@ fn with_visibility_gain_and_signature() {
     server_app.update();
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(messages.drain_sent().count(), 0);
+    assert_eq!(messages.drain_sent().len(), 0);
 }
 
 #[derive(Component, Deserialize, Serialize)]
