@@ -679,7 +679,7 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
-#[cfg(feature = "scene")]
+#[cfg(any(feature = "scene", feature = "world_serialization"))]
 pub mod scene;
 #[cfg(feature = "server")]
 pub mod server;
