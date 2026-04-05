@@ -113,7 +113,7 @@ fn custom_auth() {
     let mut clients = server_app
         .world_mut()
         .query_filtered::<&ConnectedClient, Without<AuthorizedClient>>();
-    assert_eq!(clients.iter(server_app.world()).count(), 1);
+    assert_eq!(clients.iter(server_app.world()).len(), 1);
 }
 
 #[test]

@@ -49,7 +49,7 @@ fn table_storage() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<&Table>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn sparse_set_storage() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<&SparseSet>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn mapped_new_entity() {
     assert!(client_app.world().get_entity(mapped_component.0).is_ok());
 
     let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).count(), 1);
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn multiple_components() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&A, &B)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
     assert_eq!(
         client_app.world().archetypes().len() - before_archetypes,
         1,
@@ -309,7 +309,7 @@ fn multiple_components_sequential() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<(&Remote, &A, &B)>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -336,7 +336,7 @@ fn rule_split_across_ticks() {
     server_app.exchange_with_client(&mut client_app);
 
     let mut a_components = client_app.world_mut().query::<&A>();
-    assert_eq!(a_components.iter(client_app.world()).count(), 0);
+    assert_eq!(a_components.iter(client_app.world()).len(), 0);
 
     // Insert component that should trigger replication of another component.
     server_app.world_mut().entity_mut(server_entity).insert(B);
@@ -346,7 +346,7 @@ fn rule_split_across_ticks() {
     client_app.update();
 
     let mut all_components = client_app.world_mut().query::<(&A, &B)>();
-    assert_eq!(all_components.iter(client_app.world()).count(), 1);
+    assert_eq!(all_components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -385,7 +385,7 @@ fn receive_fns() {
     let mut components = client_app
         .world_mut()
         .query_filtered::<&Replaced, Without<Original>>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -468,7 +468,7 @@ fn group() {
     client_app.update();
 
     let mut groups = client_app.world_mut().query::<(&A, &B)>();
-    assert_eq!(groups.iter(client_app.world()).count(), 1);
+    assert_eq!(groups.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -500,7 +500,7 @@ fn not_replicated() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).count(), 0);
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -538,7 +538,7 @@ fn after_removal() {
     client_app.update();
 
     let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 
     let mut system_state: SystemState<RemovedComponents<A>> =
         SystemState::new(client_app.world_mut());
@@ -677,7 +677,7 @@ fn hidden_entity() {
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().count(),
+        messages.drain_sent().len(),
         0,
         "client shouldn't receive insertion for a hidden entity"
     );
@@ -716,7 +716,7 @@ fn hidden_component() {
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().count(),
+        messages.drain_sent().len(),
         0,
         "client shouldn't receive insertion for a hidden component"
     );
@@ -749,7 +749,7 @@ fn visibility_gain() {
     server_app.exchange_with_client(&mut client_app);
 
     let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).count(), 0);
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 
     let client = **client_app.world().resource::<TestClientEntity>();
     server_app
@@ -761,7 +761,7 @@ fn visibility_gain() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(components.iter(client_app.world()).count(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[derive(Component, Deserialize, Serialize)]

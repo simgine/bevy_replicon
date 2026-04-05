@@ -689,7 +689,7 @@ fn many_entities() {
     server_app.exchange_with_client(&mut client_app);
 
     let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).count(), ENTITIES_COUNT);
+    assert_eq!(remote.iter(client_app.world()).len(), ENTITIES_COUNT);
 
     for mut component in server_app
         .world_mut()

@@ -102,7 +102,7 @@ impl ServerMessages {
     /// Should only be called from the messaging backend.
     ///
     /// </div>
-    pub fn drain_sent(&mut self) -> impl Iterator<Item = (Entity, usize, Bytes)> + '_ {
+    pub fn drain_sent(&mut self) -> impl ExactSizeIterator<Item = (Entity, usize, Bytes)> + '_ {
         self.sent_messages.drain(..)
     }
 

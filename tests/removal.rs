@@ -519,7 +519,7 @@ fn hidden_entity() {
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().count(),
+        messages.drain_sent().len(),
         0,
         "client shouldn't receive removal for a hidden entity"
     );
@@ -561,7 +561,7 @@ fn hidden_component() {
 
     let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().count(),
+        messages.drain_sent().len(),
         0,
         "client shouldn't receive removal for a hidden component"
     );

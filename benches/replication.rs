@@ -64,7 +64,7 @@ fn changes_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Durat
             client_app.update();
 
             let mut remote = client_app.world_mut().query::<&Remote>();
-            assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
+            assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
         }
     }
 
@@ -93,7 +93,7 @@ fn mutations_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Dur
         client_app.update();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
     }
 
     let mut elapsed = Duration::ZERO;
@@ -111,7 +111,7 @@ fn mutations_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Dur
             client_app.update();
 
             let mut remote = client_app.world_mut().query::<&Remote>();
-            assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
+            assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
         }
     }
 
@@ -138,7 +138,7 @@ fn changes_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
         elapsed += instant.elapsed();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
     }
 
     elapsed
@@ -159,7 +159,7 @@ fn mutations_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
+    assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
 
     let mut elapsed = Duration::ZERO;
     for _ in 0..iter {
@@ -176,7 +176,7 @@ fn mutations_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
         elapsed += instant.elapsed();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).count(), ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
     }
 
     elapsed
