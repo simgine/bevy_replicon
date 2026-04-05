@@ -623,14 +623,14 @@ fn visibility_gain_with_signature() {
     assert!(client_app.world().get::<A>(client_entity).is_some());
 }
 
-#[derive(Resource, Deserialize, Serialize)]
-struct R;
-
 #[derive(Component, Deserialize, Serialize)]
 struct A;
 
 #[derive(Component, Deserialize, Serialize)]
 struct B;
+
+#[derive(Resource, Deserialize, Serialize)]
+struct R;
 
 #[derive(Component)]
 #[component(immutable)]
