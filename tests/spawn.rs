@@ -150,6 +150,40 @@ fn old_component() {
 }
 
 #[test]
+fn related() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<ChildOf>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_parent = server_app.world_mut().spawn(Replicated).id();
+    server_app
+        .world_mut()
+        .spawn((Replicated, ChildOf(server_parent)));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut children = client_app.world_mut().query::<&ChildOf>();
+    assert_eq!(children.iter(client_app.world()).len(), 1);
+
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 2);
+}
+
+#[test]
 fn resource() {
     let mut server_app = App::new();
     let mut client_app = App::new();
