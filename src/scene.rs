@@ -46,14 +46,14 @@ for entity in &mut scene.entities {
 }
 ```
 */
-pub fn replicate_into(scene: &mut DynamicWorld, world: &World) {
+pub fn replicate_into(dyn_world: &mut DynamicWorld, world: &World) {
     let replicated_id = world.component_id::<Replicated>();
     #[cfg(feature = "client")]
     let remote_id = world.component_id::<Remote>();
     #[cfg(not(feature = "client"))]
     let remote_id = None;
 
-    let mut entities: EntityHashMap<_> = scene
+    let mut entities: EntityHashMap<_> = dyn_world
         .entities
         .drain(..)
         .map(|e| (e.entity, e.components))
@@ -118,7 +118,7 @@ pub fn replicate_into(scene: &mut DynamicWorld, world: &World) {
         }
     }
 
-    scene.entities.extend(
+    dyn_world.entities.extend(
         entities
             .drain()
             .map(|(entity, components)| DynamicEntity { entity, components }),
