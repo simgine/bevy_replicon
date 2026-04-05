@@ -71,7 +71,7 @@ criterion = { version = "0.8", default-features = false, features = [
 
 
 [features]
-default = ["world_serialization", "client", "server"]
+default = ["client", "server", "world_serialization"]
 
 # Client-related logic.
 client = []
