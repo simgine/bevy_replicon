@@ -209,7 +209,7 @@ struct Player;
 ```
 
 This pairs nicely with server state serialization and keeps saves clean.
-You can use [`scene::replicate_into`] to fill [`DynamicScene`] with replicated entities and their components.
+You can use [`scene::replicate_into`] to fill [`DynamicWorld`] with replicated entities and their components.
 On deserialization all missing required components will be inserted, and initialization
 systems will restore the correct game state.
 
