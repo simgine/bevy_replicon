@@ -17,31 +17,32 @@ So on deserialization you need to insert it back if you want entities to continu
 # Examples
 
 ```
-use bevy::{prelude::*, state::app::StatesPlugin, scene::serde::SceneDeserializer};
+use bevy::{prelude::*, state::app::StatesPlugin, world_serialization::serde::WorldDeserializer};
 use bevy_replicon::{prelude::*, scene};
 use serde::de::DeserializeSeed;
 # let mut app = App::new();
-# app.add_plugins((StatesPlugin, RepliconPlugins));
+# app.add_plugins((StatesPlugin, AssetPlugin::default(), RepliconPlugins));
 
 // Serialization
 let registry = app.world().resource::<AppTypeRegistry>();
 let type_registry = &*registry.read();
-let mut scene = DynamicScene::default();
-scene::replicate_into(&mut scene, &app.world());
-let scene = scene
+let mut dyn_world = DynamicWorld::default();
+scene::replicate_into(&mut dyn_world, &app.world());
+let world_ron = dyn_world
     .serialize(type_registry)
     .expect("scene should be serialized");
 
 // Deserialization
-let scene_deserializer = SceneDeserializer { type_registry };
+let mut asset_server = app.world().resource::<AssetServer>().clone();
+let scene_deserializer = WorldDeserializer { type_registry, load_from_path: &mut asset_server };
 let mut deserializer =
-    ron::Deserializer::from_str(&scene).expect("scene should be serialized as valid ron");
-let mut scene = scene_deserializer
+    ron::Deserializer::from_str(&world_ron).expect("scene should be serialized as valid ron");
+let mut dyn_world = scene_deserializer
     .deserialize(&mut deserializer)
     .expect("ron should be convertible to scene");
 
 // Re-insert `Replicated` component if you want to replicate them.
-for entity in &mut scene.entities {
+for entity in &mut dyn_world.entities {
     entity.components.push(Replicated.to_dynamic());
 }
 ```
