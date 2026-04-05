@@ -679,6 +679,8 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
+#[cfg(feature = "scene")]
+pub mod scene;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;
@@ -686,9 +688,6 @@ pub mod shared;
 pub mod test_app;
 #[cfg(any(feature = "scene", feature = "world_serialization"))]
 pub mod world_serialization;
-
-#[cfg(feature = "scene")]
-compile_warning!("The `scene` feature is deprecated. Use `world_serialization` instead.");
 
 pub mod prelude {
     pub use super::{
