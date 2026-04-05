@@ -103,18 +103,18 @@ fn update_existing() {
 
     // Populate scene only with a single non-replicated component.
     let registry = app.world().resource::<AppTypeRegistry>().read();
-    let mut scene = DynamicWorldBuilder::from_world(app.world(), &registry)
+    let mut dyn_world = DynamicWorldBuilder::from_world(app.world(), &registry)
         .allow_component::<ReflectedComponent>()
         .extract_entity(entity)
         .build();
 
     // Update already extracted entity with replicated components.
-    scene::replicate_into(&mut scene, app.world());
+    scene::replicate_into(&mut dyn_world, app.world());
 
-    assert!(scene.resources.is_empty());
-    assert_eq!(scene.entities.len(), 1);
+    assert!(dyn_world.resources.is_empty());
+    assert_eq!(dyn_world.entities.len(), 1);
 
-    let dyn_entity = &scene.entities[0];
+    let dyn_entity = &dyn_world.entities[0];
     assert_eq!(dyn_entity.entity, entity);
     assert_eq!(dyn_entity.components.len(), 2);
 }

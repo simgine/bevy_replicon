@@ -4,15 +4,16 @@ use log::debug;
 use crate::{prelude::*, shared::replication::rules::ReplicationRules};
 
 /**
-Fills the scene with all entities that have either [`Replicated`] or [`Remote`],
+Fills [`DynamicWorld`] with all entities that have either [`Replicated`] or [`Remote`],
 along with their components.
 
 Components will be skipped if they do not have `#[reflect(Component)]`,
 or if they are not registered (when automatic type registration is disabled
 and [`App::register_type`] has not been called).
 
-Scene entities won't include the [`Replicated`] or [`Remote`] components.
-So on deserialization you need to insert it back if you want entities to continue to replicate.
+World entities won't include the [`Replicated`] or [`Remote`] components.
+So on deserialization you need to insert [`Replicated`] back if you want entities to
+start replicating them again.
 
 # Examples
 
