@@ -545,7 +545,7 @@ fn after_removal() {
 
     let mut system_state: SystemState<RemovedComponents<A>> =
         SystemState::new(client_app.world_mut());
-    let removals = system_state.get(client_app.world());
+    let removals = system_state.get(client_app.world()).unwrap();
     assert_eq!(
         removals.len(),
         1,

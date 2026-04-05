@@ -28,7 +28,7 @@ all-features = true
 members = ["example_backend"]
 
 [dependencies]
-bevy = { version = "0.19-dev", default-features = false, features = ["bevy_state"] }
+bevy = { version = "0.19.0-dev", default-features = false, features = ["bevy_state"] }
 log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `bevy_log` currently requires `std`.
 petgraph = { version = "0.8", default-features = false, features = [
   "stable_graph",
@@ -52,14 +52,14 @@ bytes = { version = "1.10", default-features = false, features = [
 
 [dev-dependencies]
 ron = { version = "0.12", default-features = false }
-bevy = { version = "0.19-dev", default-features = false, features = [
+bevy = { version = "0.19.0-dev", default-features = false, features = [
   "debug",
   "serialize",
 ] }
 test-log = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-bevy = { version = "0.19-dev", default-features = false, features = [
+bevy = { version = "0.19.0-dev", default-features = false, features = [
   "bevy_log",
   "bevy_sprite_render",
 ] }
@@ -81,7 +81,7 @@ server = []
 client_diagnostics = ["client"]
 
 # Replication into a scene.
-scene = ["bevy/bevy_scene"]
+scene = ["bevy/bevy_world_serialization"]
 
 [[bench]]
 name = "replication"

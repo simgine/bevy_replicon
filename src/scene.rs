@@ -1,4 +1,4 @@
-use bevy::{ecs::entity::hash_map::EntityHashMap, prelude::*, scene::DynamicEntity};
+use bevy::{ecs::entity::hash_map::EntityHashMap, prelude::*, world_serialization::DynamicEntity};
 use log::debug;
 
 use crate::{prelude::*, shared::replication::rules::ReplicationRules};
@@ -46,7 +46,7 @@ for entity in &mut scene.entities {
 }
 ```
 */
-pub fn replicate_into(scene: &mut DynamicScene, world: &World) {
+pub fn replicate_into(scene: &mut DynamicWorld, world: &World) {
     let replicated_id = world.component_id::<Replicated>();
     #[cfg(feature = "client")]
     let remote_id = world.component_id::<Remote>();
