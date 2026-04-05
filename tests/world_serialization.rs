@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use test_log::test;
 
 #[test]
-#[should_panic] // Fails because https://github.com/bevyengine/bevy/pull/23446 accidentally enabled reflect auto registration.
 fn replicated() {
     let mut app = App::new();
     app.add_plugins((StatesPlugin, RepliconPlugins))
