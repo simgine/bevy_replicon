@@ -19,7 +19,7 @@ start replicating them again.
 
 ```
 use bevy::{prelude::*, state::app::StatesPlugin, world_serialization::serde::WorldDeserializer};
-use bevy_replicon::{prelude::*, scene};
+use bevy_replicon::{prelude::*, world_serialization};
 use serde::de::DeserializeSeed;
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, AssetPlugin::default(), RepliconPlugins));
@@ -28,19 +28,14 @@ use serde::de::DeserializeSeed;
 let registry = app.world().resource::<AppTypeRegistry>();
 let type_registry = &*registry.read();
 let mut dyn_world = DynamicWorld::default();
-scene::replicate_into(&mut dyn_world, &app.world());
-let world_ron = dyn_world
-    .serialize(type_registry)
-    .expect("scene should be serialized");
+world_serialization::replicate_into(&mut dyn_world, &app.world());
+let world_ron = dyn_world.serialize(type_registry).unwrap();
 
 // Deserialization
 let mut asset_server = app.world().resource::<AssetServer>().clone();
-let scene_deserializer = WorldDeserializer { type_registry, load_from_path: &mut asset_server };
-let mut deserializer =
-    ron::Deserializer::from_str(&world_ron).expect("scene should be serialized as valid ron");
-let mut dyn_world = scene_deserializer
-    .deserialize(&mut deserializer)
-    .expect("ron should be convertible to scene");
+let world_deserializer = WorldDeserializer { type_registry, load_from_path: &mut asset_server };
+let mut deserializer = ron::Deserializer::from_str(&world_ron).unwrap();
+let mut dyn_world = world_deserializer.deserialize(&mut deserializer).unwrap();
 
 // Re-insert `Replicated` component if you want to replicate them.
 for entity in &mut dyn_world.entities {

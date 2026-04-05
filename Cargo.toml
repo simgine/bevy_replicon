@@ -71,7 +71,7 @@ criterion = { version = "0.8", default-features = false, features = [
 
 
 [features]
-default = ["scene", "client", "server"]
+default = ["world_serialization", "client", "server"]
 
 # Client-related logic.
 client = []
@@ -81,6 +81,9 @@ server = []
 
 # Integration with Bevy diagnostics for client.
 client_diagnostics = ["client"]
+
+# State serialization based on replication rules.
+world_serialization = ["bevy/bevy_world_serialization"]
 
 # Replication into a scene.
 scene = ["bevy/bevy_world_serialization"]
@@ -126,8 +129,8 @@ name = "removal"
 required-features = ["client", "server"]
 
 [[test]]
-name = "scene"
-required-features = ["scene", "client"]
+name = "world_serialization"
+required-features = ["world_serialization", "client"]
 
 [[test]]
 name = "server_message"

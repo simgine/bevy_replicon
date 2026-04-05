@@ -1,5 +1,5 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::{prelude::*, scene};
+use bevy_replicon::{prelude::*, world_serialization};
 use serde::{Deserialize, Serialize};
 use test_log::test;
 
@@ -27,7 +27,7 @@ fn replicated() {
     let remote = app.world_mut().spawn((Remote, TestComponent)).id();
 
     let mut dyn_world = DynamicWorld::default();
-    scene::replicate_into(&mut dyn_world, app.world());
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
     let replicated_dyn = dyn_world
         .entities
@@ -61,7 +61,7 @@ fn empty() {
 
     // Extend with replicated components.
     let mut dyn_world = DynamicWorld::default();
-    scene::replicate_into(&mut dyn_world, app.world());
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
     assert!(dyn_world.resources.is_empty());
     assert_eq!(dyn_world.entities.len(), 1);
@@ -82,7 +82,7 @@ fn not_replicated() {
     app.world_mut().spawn(TestComponent);
 
     let mut dyn_world = DynamicWorld::default();
-    scene::replicate_into(&mut dyn_world, app.world());
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
     assert!(dyn_world.resources.is_empty());
     assert!(dyn_world.entities.is_empty());
@@ -110,7 +110,7 @@ fn update_existing() {
         .build();
 
     // Update already extracted entity with replicated components.
-    scene::replicate_into(&mut dyn_world, app.world());
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
     assert!(dyn_world.resources.is_empty());
     assert_eq!(dyn_world.entities.len(), 1);
