@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
 
+## [0.39.4] - 2026-04-08
+
 ### Fixed
 
 - Deferred component insertions no longer cause undefined behavior.
 
-## [0.39.3] - 2026-04-01
+## [0.39.3] - 2026-04-05
 
 ### Fixed
 
@@ -1053,7 +1055,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.39.3...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.39.4...HEAD
+[0.39.4]: https://github.com/simgine/bevy_replicon/compare/v0.39.3...v0.39.4
 [0.39.3]: https://github.com/simgine/bevy_replicon/compare/v0.39.2...v0.39.3
 [0.39.2]: https://github.com/simgine/bevy_replicon/compare/v0.39.1...v0.39.2
 [0.39.1]: https://github.com/simgine/bevy_replicon/compare/v0.39.0...v0.39.1
