@@ -1,0 +1,123 @@
+use bevy::{ecs::entity::hash_map::EntityHashMap, prelude::*, world_serialization::DynamicEntity};
+use log::debug;
+
+use crate::{prelude::*, shared::replication::rules::ReplicationRules};
+
+/**
+Fills [`DynamicWorld`] with all entities that have either [`Replicated`] or [`Remote`],
+along with their components.
+
+Components will be skipped if they do not have `#[reflect(Component)]`,
+or if they are not registered (when automatic type registration is disabled
+and [`App::register_type`] has not been called).
+
+World entities won't include the [`Replicated`] or [`Remote`] components.
+So on deserialization you need to insert [`Replicated`] back if you want entities to
+start replicating them again.
+
+# Examples
+
+```
+use bevy::{prelude::*, state::app::StatesPlugin, world_serialization::serde::WorldDeserializer};
+use bevy_replicon::{prelude::*, world_serialization};
+use serde::de::DeserializeSeed;
+# let mut app = App::new();
+# app.add_plugins((StatesPlugin, AssetPlugin::default(), RepliconPlugins));
+
+// Serialization
+let registry = app.world().resource::<AppTypeRegistry>();
+let type_registry = &*registry.read();
+let mut dyn_world = DynamicWorld::default();
+world_serialization::replicate_into(&mut dyn_world, &app.world());
+let world_ron = dyn_world.serialize(type_registry).unwrap();
+
+// Deserialization
+let mut asset_server = app.world().resource::<AssetServer>().clone();
+let world_deserializer = WorldDeserializer { type_registry, load_from_path: &mut asset_server };
+let mut deserializer = ron::Deserializer::from_str(&world_ron).unwrap();
+let mut dyn_world = world_deserializer.deserialize(&mut deserializer).unwrap();
+
+// Re-insert `Replicated` component if you want to replicate them.
+for entity in &mut dyn_world.entities {
+    entity.components.push(Replicated.to_dynamic());
+}
+```
+*/
+pub fn replicate_into(dyn_world: &mut DynamicWorld, world: &World) {
+    let replicated_id = world.component_id::<Replicated>();
+    #[cfg(feature = "client")]
+    let remote_id = world.component_id::<Remote>();
+    #[cfg(not(feature = "client"))]
+    let remote_id = None;
+
+    let mut entities: EntityHashMap<_> = dyn_world
+        .entities
+        .drain(..)
+        .map(|e| (e.entity, e.components))
+        .collect();
+
+    let registry = world.resource::<AppTypeRegistry>();
+    let rules = world.resource::<ReplicationRules>();
+    let registry = registry.read();
+    for archetype in world.archetypes().iter() {
+        let has_replicated = replicated_id.is_some_and(|id| archetype.contains(id));
+        let has_remote = remote_id.is_some_and(|id| archetype.contains(id));
+        if !has_replicated && !has_remote {
+            continue;
+        }
+
+        // Populate entities ahead of time in order to extract entities without components too.
+        for entity in archetype.entities() {
+            entities.entry(entity.id()).or_default();
+        }
+
+        for rule in rules.iter().filter(|rule| rule.matches(archetype)) {
+            for component in &rule.components {
+                // SAFETY: replication rules can be registered only with valid component IDs.
+                let replicated_component =
+                    unsafe { world.components().get_info_unchecked(component.id) };
+                let type_name = replicated_component.name();
+                let type_id = replicated_component
+                    .type_id()
+                    .unwrap_or_else(|| panic!("`{type_name}` should be a Rust type"));
+                let Some(registration) = registry.get(type_id) else {
+                    debug!("ignoring `{type_name}` because it's not registered");
+                    continue;
+                };
+                let Some(reflect_component) = registration.data::<ReflectComponent>() else {
+                    debug!("ignoring `{type_name}` because it's missing `#[reflect(Component)]`");
+                    continue;
+                };
+                let from_reflect = registration
+                    .data::<ReflectFromReflect>()
+                    .unwrap_or_else(|| panic!("`{type_name}` should reflect `FromReflect`"));
+
+                for entity in archetype.entities() {
+                    let component = reflect_component
+                        .reflect(world.entity(entity.id()))
+                        .unwrap_or_else(|| panic!("entity should have `{type_name}`"));
+
+                    // Clone via `FromReflect`. Unlike `PartialReflect::clone_value` this
+                    // retains the original type and `ReflectSerialize` type data which is needed to
+                    // deserialize.
+                    let component = from_reflect
+                        .from_reflect(component.as_partial_reflect())
+                        .unwrap_or_else(|| panic!("`{type_name}` should be dynamically cloneable"));
+
+                    let components = entities
+                        .get_mut(&entity.id())
+                        .expect("all entities should be populated ahead of time");
+
+                    debug!("adding `{type_name}` to `{}`", entity.id());
+                    components.push(component.into_partial_reflect());
+                }
+            }
+        }
+    }
+
+    dyn_world.entities.extend(
+        entities
+            .drain()
+            .map(|(entity, components)| DynamicEntity { entity, components }),
+    );
+}

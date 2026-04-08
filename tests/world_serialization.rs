@@ -1,5 +1,5 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::{prelude::*, scene};
+use bevy_replicon::{prelude::*, world_serialization};
 use serde::{Deserialize, Serialize};
 use test_log::test;
 
@@ -25,16 +25,16 @@ fn replicated() {
         .id();
     let remote = app.world_mut().spawn((Remote, TestComponent)).id();
 
-    let mut scene = DynamicScene::default();
-    scene::replicate_into(&mut scene, app.world());
+    let mut dyn_world = DynamicWorld::default();
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
-    let replicated_dyn = scene
+    let replicated_dyn = dyn_world
         .entities
         .iter()
         .find(|entity| entity.entity == replicated)
         .unwrap();
 
-    let remote_dyn = scene
+    let remote_dyn = dyn_world
         .entities
         .iter()
         .find(|entity| entity.entity == remote)
@@ -59,13 +59,13 @@ fn empty() {
     let entity = app.world_mut().spawn(Replicated).id();
 
     // Extend with replicated components.
-    let mut scene = DynamicScene::default();
-    scene::replicate_into(&mut scene, app.world());
+    let mut dyn_world = DynamicWorld::default();
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
-    assert!(scene.resources.is_empty());
-    assert_eq!(scene.entities.len(), 1);
+    assert!(dyn_world.resources.is_empty());
+    assert_eq!(dyn_world.entities.len(), 1);
 
-    let dyn_entity = &scene.entities[0];
+    let dyn_entity = &dyn_world.entities[0];
     assert_eq!(dyn_entity.entity, entity);
     assert!(dyn_entity.components.is_empty());
 }
@@ -80,11 +80,11 @@ fn not_replicated() {
 
     app.world_mut().spawn(TestComponent);
 
-    let mut scene = DynamicScene::default();
-    scene::replicate_into(&mut scene, app.world());
+    let mut dyn_world = DynamicWorld::default();
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
-    assert!(scene.resources.is_empty());
-    assert!(scene.entities.is_empty());
+    assert!(dyn_world.resources.is_empty());
+    assert!(dyn_world.entities.is_empty());
 }
 
 #[test]
@@ -102,18 +102,19 @@ fn update_existing() {
         .id();
 
     // Populate scene only with a single non-replicated component.
-    let mut scene = DynamicSceneBuilder::from_world(app.world())
+    let registry = app.world().resource::<AppTypeRegistry>().read();
+    let mut dyn_world = DynamicWorldBuilder::from_world(app.world(), &registry)
         .allow_component::<ReflectedComponent>()
         .extract_entity(entity)
         .build();
 
     // Update already extracted entity with replicated components.
-    scene::replicate_into(&mut scene, app.world());
+    world_serialization::replicate_into(&mut dyn_world, app.world());
 
-    assert!(scene.resources.is_empty());
-    assert_eq!(scene.entities.len(), 1);
+    assert!(dyn_world.resources.is_empty());
+    assert_eq!(dyn_world.entities.len(), 1);
 
-    let dyn_entity = &scene.entities[0];
+    let dyn_entity = &dyn_world.entities[0];
     assert_eq!(dyn_entity.entity, entity);
     assert_eq!(dyn_entity.components.len(), 2);
 }
