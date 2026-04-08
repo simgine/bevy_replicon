@@ -23,7 +23,11 @@ pub struct DeferredEntity<'w> {
 impl<'w> DeferredEntity<'w> {
     /// Wraps entity with a differed buffer.
     pub fn new(entity: EntityWorldMut<'w>, changes: &'w mut DeferredChanges) -> Self {
-        changes.clear();
+        debug_assert!(
+            changes.is_empty(),
+            "deferred changes buffer must be empty before reuse"
+        );
+
         Self { entity, changes }
     }
 
@@ -90,17 +94,15 @@ impl DeferredChanges {
         if !self.removals.is_empty() {
             entity.remove_by_ids(&self.removals);
         }
+        self.removals.clear();
 
         if !self.insertions.is_empty() {
             self.insertions.apply(entity);
         }
-
-        self.clear();
     }
 
-    fn clear(&mut self) {
-        self.removals.clear();
-        self.insertions.clear();
+    fn is_empty(&self) -> bool {
+        self.removals.is_empty() && self.insertions.is_empty()
     }
 }
 
@@ -125,19 +127,20 @@ impl DeferredInsertions {
         self.ids.push(component_id);
     }
 
+    /// Applies all deferred component insertions.
+    ///
+    /// Must be called, otherwise [`Drop`] won't run for buffered components.
     fn apply(&mut self, entity: &mut EntityWorldMut) {
         // SAFETY: each pointer is valid and points to a value of the type corresponding to its ID.
         unsafe { entity.insert_by_ids(&self.ids, self.ptrs.iter().map(|&p| OwningPtr::new(p))) };
+
+        self.ids.clear();
+        self.ptrs.clear();
+        self.bump.reset();
     }
 
     fn is_empty(&self) -> bool {
         self.ids.is_empty()
-    }
-
-    fn clear(&mut self) {
-        self.ids.clear();
-        self.ptrs.clear();
-        self.bump.reset();
     }
 }
 
@@ -166,7 +169,6 @@ mod tests {
             .insert(WithArc(Arc::new(Trivial(5))));
 
         entity.flush();
-        let after_archetypes = entity.world().archetypes().len();
 
         assert!(entity.get::<Unit>().is_some());
         assert_eq!(**entity.get::<Trivial>().unwrap(), 1);
@@ -179,6 +181,7 @@ mod tests {
         assert_eq!(Arc::strong_count(with_arc), 1);
         assert_eq!(**with_arc.downcast_ref::<Trivial>().unwrap(), 5);
 
+        let after_archetypes = entity.world().archetypes().len();
         assert_eq!(
             after_archetypes - before_archetypes,
             1,
