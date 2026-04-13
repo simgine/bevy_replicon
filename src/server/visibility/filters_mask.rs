@@ -3,8 +3,8 @@ use core::iter;
 use bevy::prelude::*;
 
 use super::registry::FilterRegistry;
-use crate::shared::{
-    replication::registry::{ComponentIndex, component_mask::ComponentMask},
+use crate::shared::replication::{
+    registry::{ComponentIndex, component_mask::ComponentMask},
     visibility::VisibilityScope,
 };
 

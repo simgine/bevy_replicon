@@ -6,7 +6,7 @@ use bevy::{
 use super::{FilterScope, filters_mask::FilterBit};
 use crate::{
     prelude::*,
-    shared::{replication::registry::ReplicationRegistry, visibility::VisibilityScope},
+    shared::replication::{registry::ReplicationRegistry, visibility::VisibilityScope},
 };
 
 /// Maps the [`VisibilityScope`] of each filter to a [`FilterBit`].

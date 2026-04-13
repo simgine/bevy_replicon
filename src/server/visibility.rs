@@ -5,8 +5,8 @@ pub mod registry;
 use bevy::{ecs::entity_disabling::Disabled, prelude::*};
 use log::debug;
 
-use crate::shared::{
-    replication::registry::ReplicationRegistry,
+use crate::shared::replication::{
+    registry::ReplicationRegistry,
     visibility::{FilterScope, VisibilityFilter},
 };
 use client_visibility::ClientVisibility;
