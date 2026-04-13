@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `VisibilityFilter` trait moved to `shared`. No longer feature gated by the `server` feature.
+
 ### Changed
 
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.

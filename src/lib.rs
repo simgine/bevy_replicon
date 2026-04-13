@@ -691,6 +691,7 @@ pub mod shared;
 pub mod test_app;
 
 pub mod prelude {
+    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::{
         RepliconPlugins,
         shared::{
@@ -718,6 +719,9 @@ pub mod prelude {
                 signature::Signature,
             },
             replicon_tick::RepliconTick,
+            visibility::{
+                ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
+            },
         },
     };
 
@@ -727,13 +731,12 @@ pub mod prelude {
     };
 
     #[cfg(feature = "server")]
-    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::server::{
         AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
         message::ServerMessagePlugin,
         related_entities::SyncRelatedAppExt,
         visibility::{
-            AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
+            AppVisibilityExt
         },
     };
 

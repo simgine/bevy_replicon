@@ -5,6 +5,7 @@ pub mod protocol;
 pub mod replication;
 pub mod replicon_tick;
 pub mod server_entity_map;
+pub mod visibility;
 
 use bevy::prelude::*;
 
