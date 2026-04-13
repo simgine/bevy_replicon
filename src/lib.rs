@@ -719,9 +719,7 @@ pub mod prelude {
                 signature::Signature,
             },
             replicon_tick::RepliconTick,
-            visibility::{
-                ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
-            },
+            visibility::{ComponentScope, FilterScope, SingleComponent, VisibilityFilter},
         },
     };
 
@@ -732,12 +730,8 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
-        message::ServerMessagePlugin,
-        related_entities::SyncRelatedAppExt,
-        visibility::{
-            AppVisibilityExt
-        },
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, message::ServerMessagePlugin,
+        related_entities::SyncRelatedAppExt, visibility::AppVisibilityExt,
     };
 
     #[cfg(feature = "client_diagnostics")]

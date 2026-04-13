@@ -1,16 +1,10 @@
-use bevy::prelude::*;
-
 use core::marker::PhantomData;
 
-use bevy::{
-    ecs::{component::Immutable},
-    prelude::*,
-};
+use bevy::{ecs::component::Immutable, prelude::*};
 
-use crate::shared::{
-    replication::registry::{
+use crate::shared::replication::registry::{
     ReplicationRegistry, component_mask::ComponentMask, receive_fns::MutWrite,
-}};
+};
 
 /// Component that controls remote entity visibility.
 ///

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- `VisibilityFilter` trait moved to `shared`. No longer feature gated by the `server` feature.
+- `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
 
 ### Changed
 

@@ -2,16 +2,15 @@ pub mod client_visibility;
 pub mod filters_mask;
 pub mod registry;
 
-use bevy::{
-    ecs::{entity_disabling::Disabled},
-    prelude::*,
-};
+use bevy::{ecs::entity_disabling::Disabled, prelude::*};
 use log::debug;
 
 use crate::shared::{
-    replication::registry::ReplicationRegistry, visibility::{FilterScope, SingleComponent, VisibilityFilter}};
+    replication::registry::ReplicationRegistry,
+    visibility::{FilterScope, VisibilityFilter},
+};
 use client_visibility::ClientVisibility;
-use registry::{FilterRegistry};
+use registry::FilterRegistry;
 
 /// Remote visibility functions for [`App`].
 pub trait AppVisibilityExt {
