@@ -6,7 +6,7 @@ use bevy::{
 use super::{FilterScope, filters_mask::FilterBit};
 use crate::{
     prelude::*,
-    shared::replication::registry::{ReplicationRegistry, component_mask::ComponentMask},
+    shared::replication::{registry::ReplicationRegistry, visibility::VisibilityScope},
 };
 
 /// Maps the [`VisibilityScope`] of each filter to a [`FilterBit`].
@@ -75,15 +75,6 @@ impl FilterRegistry {
             .get(*bit as usize)
             .unwrap_or_else(|| panic!("scope for `{bit:?}` should've been registered"))
     }
-}
-
-/// Data affected by [`VisibilityFilter`].
-#[derive(Clone)]
-pub enum VisibilityScope {
-    /// Whole entity.
-    Entity,
-    /// Specific components on the entity.
-    Components(ComponentMask),
 }
 
 #[cfg(test)]
