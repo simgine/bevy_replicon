@@ -8,10 +8,7 @@ use crate::shared::replication::registry::{
 
 /// Component that controls remote entity visibility.
 ///
-#[cfg_attr(
-    doc,
-    doc = "Should be registered via [`crate::server::visibility::AppVisibilityExt`]."
-)]
+/// Should be registered via [`crate::server::visibility::AppVisibilityExt`].
 pub trait VisibilityFilter: Component<Mutability = Immutable> {
     /**
     Component on the client entity that will be passed to [`Self::is_visible`].
