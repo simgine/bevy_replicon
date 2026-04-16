@@ -690,6 +690,7 @@ pub mod test_app;
 pub mod world_serialization;
 
 pub mod prelude {
+    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::{
         RepliconPlugins,
         shared::{
@@ -715,6 +716,7 @@ pub mod prelude {
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
+                visibility::{ComponentScope, FilterScope, SingleComponent, VisibilityFilter},
             },
             replicon_tick::RepliconTick,
         },
@@ -726,14 +728,9 @@ pub mod prelude {
     };
 
     #[cfg(feature = "server")]
-    #[expect(deprecated, reason = "Re-export of deprecated aliases")]
     pub use super::server::{
-        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems,
-        message::ServerMessagePlugin,
-        related_entities::SyncRelatedAppExt,
-        visibility::{
-            AppVisibilityExt, ComponentScope, FilterScope, SingleComponent, VisibilityFilter,
-        },
+        AuthorizedClient, PriorityMap, ServerPlugin, ServerSystems, message::ServerMessagePlugin,
+        related_entities::SyncRelatedAppExt, visibility::AppVisibilityExt,
     };
 
     #[cfg(feature = "client_diagnostics")]

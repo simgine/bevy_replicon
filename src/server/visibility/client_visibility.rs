@@ -46,7 +46,7 @@ impl ClientVisibility {
     }
 
     /**
-    Sets the visibility for a [`VisibilityScope`](super::registry::VisibilityScope) by updating
+    Sets the visibility for a [`VisibilityScope`](crate::shared::replication::visibility::VisibilityScope) by updating
     the associated filter bit on the given entity.
 
     Registered [`VisibilityFilter`](super::VisibilityFilter)s automatically call this method

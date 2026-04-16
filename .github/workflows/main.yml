@@ -59,7 +59,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run Clippy
-        run: cargo clippy --workspace --all-features --tests --benches --examples -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Check docs
         run: |
@@ -163,12 +163,11 @@ jobs:
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
-
-      - name: Install LLVM tools
-        run: rustup component add llvm-tools-preview
 
       - name: Install Tarpaulin
         run: cargo install cargo-tarpaulin

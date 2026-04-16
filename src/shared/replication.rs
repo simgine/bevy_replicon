@@ -7,6 +7,7 @@ pub mod rules;
 pub mod signature;
 pub mod track_mutate_messages;
 pub mod update_message_flags;
+pub mod visibility;
 
 use bevy::prelude::*;
 

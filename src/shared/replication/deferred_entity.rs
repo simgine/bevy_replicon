@@ -1,10 +1,11 @@
-use core::{alloc::Layout, ptr::NonNull};
+use core::ptr::NonNull;
 
 use bevy::{
     ecs::component::{ComponentId, Mutable},
     prelude::*,
-    ptr::PtrMut,
+    ptr::OwningPtr,
 };
+use bumpalo::Bump;
 
 /// Like [`EntityWorldMut`], but buffers all structural changes.
 ///
@@ -22,7 +23,11 @@ pub struct DeferredEntity<'w> {
 impl<'w> DeferredEntity<'w> {
     /// Wraps entity with a differed buffer.
     pub fn new(entity: EntityWorldMut<'w>, changes: &'w mut DeferredChanges) -> Self {
-        changes.clear();
+        debug_assert!(
+            changes.is_empty(),
+            "deferred changes buffer must be empty before reuse"
+        );
+
         Self { entity, changes }
     }
 
@@ -89,26 +94,24 @@ impl DeferredChanges {
         if !self.removals.is_empty() {
             entity.remove_by_ids(&self.removals);
         }
+        self.removals.clear();
 
         if !self.insertions.is_empty() {
             self.insertions.apply(entity);
         }
-
-        self.clear();
     }
 
-    fn clear(&mut self) {
-        self.removals.clear();
-        self.insertions.clear();
+    fn is_empty(&self) -> bool {
+        self.removals.is_empty() && self.insertions.is_empty()
     }
 }
 
 /// Buffered insertions stored in type-erased way.
 #[derive(Default)]
 pub(crate) struct DeferredInsertions {
+    ptrs: Vec<NonNull<u8>>,
     ids: Vec<ComponentId>,
-    offsets: Vec<usize>,
-    data: Vec<u8>,
+    bump: Bump,
 }
 
 impl DeferredInsertions {
@@ -119,51 +122,30 @@ impl DeferredInsertions {
     /// Component ID should correspond to the passed type, otherwise [`Self::apply`] won't
     /// write the data correctly.
     unsafe fn insert<C: Component>(&mut self, component: C, component_id: ComponentId) {
-        let layout = Layout::new::<C>();
-
-        // If items would otherwise not be aligned, add alignment.
-        let align = layout.align();
-        let extra_offset = if !self.data.len().is_multiple_of(align) {
-            align - (self.data.len() % align)
-        } else {
-            0
-        };
-
-        let grow = layout.size() + extra_offset;
-        let offset = self.data.len() + extra_offset;
-
+        let ptr: NonNull<_> = self.bump.alloc(component).into();
+        self.ptrs.push(ptr.cast());
         self.ids.push(component_id);
-        self.offsets.push(offset);
-        self.data.resize(self.data.len() + grow, 0);
-
-        // SAFETY: pointer references a properly allocated memory.
-        unsafe {
-            let ptr = self.data.as_mut_ptr().byte_add(offset) as *mut C;
-            ptr.write(component);
-        }
     }
 
+    /// Applies all deferred component insertions.
+    ///
+    /// Must be called, otherwise [`Drop`] won't run for buffered components.
     fn apply(&mut self, entity: &mut EntityWorldMut) {
-        // SAFETY: iterator produces valid pointers for each component ID.
-        unsafe {
-            let iter = self.offsets.iter().map(|&offset| {
-                let ptr = PtrMut::new(NonNull::new_unchecked(self.data.as_mut_ptr()));
-                ptr.byte_add(offset).promote()
-            });
-            entity.insert_by_ids(&self.ids, iter);
-        }
+        // SAFETY: each pointer is valid and points to a value of the type corresponding to its ID.
+        unsafe { entity.insert_by_ids(&self.ids, self.ptrs.iter().map(|&p| OwningPtr::new(p))) };
+
+        self.ids.clear();
+        self.ptrs.clear();
+        self.bump.reset();
     }
 
     fn is_empty(&self) -> bool {
         self.ids.is_empty()
     }
-
-    fn clear(&mut self) {
-        self.ids.clear();
-        self.offsets.clear();
-        self.data.clear();
-    }
 }
+
+// SAFETY: `NonNull` pointers are unique and allocated by a private arena.
+unsafe impl Send for DeferredInsertions {}
 
 #[cfg(test)]
 mod tests {
@@ -187,7 +169,6 @@ mod tests {
             .insert(WithArc(Arc::new(Trivial(5))));
 
         entity.flush();
-        let after_archetypes = entity.world().archetypes().len();
 
         assert!(entity.get::<Unit>().is_some());
         assert_eq!(**entity.get::<Trivial>().unwrap(), 1);
@@ -200,6 +181,7 @@ mod tests {
         assert_eq!(Arc::strong_count(with_arc), 1);
         assert_eq!(**with_arc.downcast_ref::<Trivial>().unwrap(), 5);
 
+        let after_archetypes = entity.world().archetypes().len();
         assert_eq!(
             after_archetypes - before_archetypes,
             1,
