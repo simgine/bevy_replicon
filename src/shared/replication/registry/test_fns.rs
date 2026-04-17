@@ -9,7 +9,7 @@ use crate::{
     prelude::*,
     shared::{
         replication::{
-            deferred_entity::{DeferredChanges, DeferredEntity},
+            deferred_entity::{DeferredEntity, EntityScratch},
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::ctx::EntitySpawner,
         },
@@ -144,8 +144,8 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                     let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
                     let world = unsafe { world_cell.world_mut() };
 
-                    let mut changes = DeferredChanges::default();
-                    let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
+                    let mut scratch = EntityScratch::default();
+                    let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut scratch);
 
                     let (_, component_id, fns) = registry.get(fns_id);
                     let mut ctx = WriteCtx {
@@ -176,8 +176,8 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
         let entity = self.id();
         self.world_scope(|world| {
             world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
-                let mut changes = DeferredChanges::default();
-                let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
+                let mut scratch = EntityScratch::default();
+                let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut scratch);
 
                 let (_, component_id, fns) = registry.get(fns_id);
                 let mut ctx = RemoveCtx {
