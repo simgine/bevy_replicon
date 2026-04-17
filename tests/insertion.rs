@@ -406,6 +406,9 @@ fn marker() {
 
     server_app.connect_client(&mut client_app);
 
+    // Make entity IDs different between client and server.
+    client_app.world_mut().spawn_empty();
+
     let server_entity = server_app
         .world_mut()
         .spawn((Replicated, Signature::from(0)))
@@ -542,7 +545,7 @@ fn after_removal() {
 
     let mut system_state: SystemState<RemovedComponents<A>> =
         SystemState::new(client_app.world_mut());
-    let removals = system_state.get(client_app.world());
+    let removals = system_state.get(client_app.world()).unwrap();
     assert_eq!(
         removals.len(),
         1,
