@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Don't panic when receiving acks from disconnected clients (backends might not discard messages immediately, allowing to react to them).
+
 ## [0.39.4] - 2026-04-08
 
 ### Fixed
