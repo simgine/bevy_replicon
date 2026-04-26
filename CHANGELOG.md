@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
 
+### Fixed
+
+- Don't panic when receiving acks from disconnected clients (backends might not discard messages immediately, allowing to react to them).
+
 ## [0.39.4] - 2026-04-08
 
 ### Fixed
