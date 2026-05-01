@@ -33,7 +33,7 @@ log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `b
 petgraph = { version = "0.8", default-features = false, features = [
   "stable_graph",
 ] }
-variadics_please = "1.0"
+variadics_please = "2.0"
 typeid = "1.0"
 bytes = { version = "1.10", default-features = false }
 serde = { version = "1.0", default-features = false }
