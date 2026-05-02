@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
+- `DeferredEntity::flush` now consumes the entity.
+- Rename `scene` module and feature into `world_serialization`.
+- Rename `DeferredChanges` into `EntityScratch`.
 
 ## [0.39.5] - 2026-04-26
 

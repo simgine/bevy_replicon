@@ -1,43 +1,50 @@
-use core::ptr::NonNull;
-
 use bevy::{
-    ecs::component::{ComponentId, Mutable},
+    ecs::{
+        bundle::{BundleScratch, BundleWriter},
+        component::{ComponentId, Components, ComponentsRegistrator, Mutable},
+    },
     prelude::*,
-    ptr::OwningPtr,
 };
-use bumpalo::Bump;
 
 /// Like [`EntityWorldMut`], but buffers all structural changes.
 ///
-/// Components are deserialized one by one, and to avoid causing archetype moves
-/// or triggering observers without all components being inserted, we buffer all
-/// insertions and removals and apply them as a single removal bundle and a single
-/// insertion bundle.
+/// Components are deserialized one by one. To avoid archetype moves or
+/// triggering observers before all components have been processed, insertions
+/// and removals are buffered and then applied together as a single removal
+/// bundle and a single insertion bundle.
 #[derive(Deref)]
 pub struct DeferredEntity<'w> {
     #[deref]
     entity: EntityWorldMut<'w>,
-    changes: &'w mut DeferredChanges,
+    buffer: EntityBuffer<'w>,
 }
 
 impl<'w> DeferredEntity<'w> {
-    /// Wraps entity with a differed buffer.
-    pub fn new(entity: EntityWorldMut<'w>, changes: &'w mut DeferredChanges) -> Self {
-        debug_assert!(
-            changes.is_empty(),
-            "deferred changes buffer must be empty before reuse"
-        );
-
-        Self { entity, changes }
+    /// Wraps an entity with scratch space to make deferred changes.
+    ///
+    /// For safety / correctness, this will clear the scratch.
+    ///
+    /// Note that for performance reasons this does _not_ clear the
+    /// allocator used for inserted components. To avoid leaking,
+    /// make sure insertions are followed by either
+    /// [`Self::flush`] or [`EntityScratch::manual_drop`].
+    pub fn new(entity: EntityWorldMut<'w>, scratch: &'w mut EntityScratch) -> Self {
+        Self {
+            entity,
+            buffer: scratch.buffer(),
+        }
     }
 
     /// Like [`EntityWorldMut::insert`], but accepts only a single component insertion and buffers it.
     ///
     /// Calling this function multiple times for different components is equivalent to inserting a bundle with them.
     pub fn insert<C: Component>(&mut self, component: C) -> &mut Self {
-        let component_id = self.register_component::<C>();
-        // SAFETY: component ID belongs to this type.
-        unsafe { self.changes.insertions.insert(component, component_id) };
+        // SAFETY: no location update is needed because we only access the registrator
+        // from the world, and it is from the same world as the entity.
+        unsafe {
+            let mut registrator = self.entity.world_mut().components_registrator();
+            self.buffer.push_component(&mut registrator, component);
+        }
         self
     }
 
@@ -45,8 +52,9 @@ impl<'w> DeferredEntity<'w> {
     ///
     /// Calling this function multiple times for different components is equivalent to removing a bundle with them.
     pub fn remove<C: Component>(&mut self) -> &mut Self {
-        let component_id = self.register_component::<C>();
-        self.changes.removals.push(component_id);
+        // SAFETY: no location update is needed because we only access the registrator.
+        let mut registrator = unsafe { self.entity.world_mut().components_registrator() };
+        self.buffer.push_removal::<C>(&mut registrator);
         self
     }
 
@@ -56,11 +64,6 @@ impl<'w> DeferredEntity<'w> {
     #[inline]
     pub fn get_mut<C: Component<Mutability = Mutable>>(&mut self) -> Option<Mut<'_, C>> {
         self.entity.get_mut()
-    }
-
-    fn register_component<C: Component>(&mut self) -> ComponentId {
-        // SAFETY: no location update is needed because we only register the component ID.
-        unsafe { self.world_mut().register_component::<C>() }
     }
 
     /// Returns this entity's world.
@@ -73,79 +76,79 @@ impl<'w> DeferredEntity<'w> {
         unsafe { self.entity.world_mut() }
     }
 
-    /// Flushes the world and applies all buffered changes.
-    ///
-    /// Needed to be called after processing each entity
-    /// to spawn all allocated entities from mappings.
-    pub fn flush(&mut self) {
-        self.changes.apply(&mut self.entity);
+    /// Flushes buffered changes to the entity and clears the scratch.
+    pub fn flush(mut self) {
+        // SAFETY: All buffered components were recorded using the same world
+        // that entity belongs to.
+        unsafe { self.buffer.write(&mut self.entity) };
     }
 }
 
-/// Buffered changes for [`DeferredEntity`].
+#[deprecated(note = "renamed into `EntityScratch`")]
+pub type DeferredChanges = EntityScratch;
+
+/// Like [`BundleScratch`], but can also buffer removals.
 #[derive(Default)]
-pub struct DeferredChanges {
+pub struct EntityScratch {
+    insertions: BundleScratch,
     removals: Vec<ComponentId>,
-    insertions: DeferredInsertions,
 }
 
-impl DeferredChanges {
-    fn apply(&mut self, entity: &mut EntityWorldMut) {
-        if !self.removals.is_empty() {
-            entity.remove_by_ids(&self.removals);
-        }
+impl EntityScratch {
+    fn buffer<'a>(&'a mut self) -> EntityBuffer<'a> {
+        debug_assert!(
+            self.insertions.is_empty(),
+            "insertions should be cleared to avoid leaking"
+        );
         self.removals.clear();
-
-        if !self.insertions.is_empty() {
-            self.insertions.apply(entity);
+        EntityBuffer {
+            removals: &mut self.removals,
+            insertions: self.insertions.writer(),
         }
     }
 
-    fn is_empty(&self) -> bool {
-        self.removals.is_empty() && self.insertions.is_empty()
-    }
-}
-
-/// Buffered insertions stored in type-erased way.
-#[derive(Default)]
-pub(crate) struct DeferredInsertions {
-    ptrs: Vec<NonNull<u8>>,
-    ids: Vec<ComponentId>,
-    bump: Bump,
-}
-
-impl DeferredInsertions {
-    /// Moves component data into a dynamically allocated buffer.
+    /// Drops all components currently stored in the scratch space.
     ///
     /// # Safety
     ///
-    /// Component ID should correspond to the passed type, otherwise [`Self::apply`] won't
-    /// write the data correctly.
-    unsafe fn insert<C: Component>(&mut self, component: C, component_id: ComponentId) {
-        let ptr: NonNull<_> = self.bump.alloc(component).into();
-        self.ptrs.push(ptr.cast());
-        self.ids.push(component_id);
-    }
-
-    /// Applies all deferred component insertions.
-    ///
-    /// Must be called, otherwise [`Drop`] won't run for buffered components.
-    fn apply(&mut self, entity: &mut EntityWorldMut) {
-        // SAFETY: each pointer is valid and points to a value of the type corresponding to its ID.
-        unsafe { entity.insert_by_ids(&self.ids, self.ptrs.iter().map(|&p| OwningPtr::new(p))) };
-
-        self.ids.clear();
-        self.ptrs.clear();
-        self.bump.reset();
-    }
-
-    fn is_empty(&self) -> bool {
-        self.ids.is_empty()
+    /// `components` must come from the same world as the components that
+    /// were pushed into this buffer.
+    pub unsafe fn manual_drop(&mut self, components: &Components) {
+        unsafe { self.insertions.manual_drop(components) };
     }
 }
 
-// SAFETY: `NonNull` pointers are unique and allocated by a private arena.
-unsafe impl Send for DeferredInsertions {}
+/// Borrowed buffer used by [`DeferredEntity`] to stage structural changes.
+#[derive(Deref, DerefMut)]
+struct EntityBuffer<'a> {
+    #[deref]
+    insertions: BundleWriter<'a>,
+    removals: &'a mut Vec<ComponentId>,
+}
+
+impl EntityBuffer<'_> {
+    fn push_removal<C: Component>(&mut self, registrator: &mut ComponentsRegistrator) {
+        let id = registrator.register_component::<C>();
+        self.removals.push(id);
+    }
+
+    /// Writes all buffered changes to the entity.
+    ///
+    /// # Safety
+    ///
+    /// All insertions must have been pushed using the same world
+    /// as the entity.
+    unsafe fn write(self, entity: &mut EntityWorldMut) {
+        if !self.removals.is_empty() {
+            entity.remove_by_ids(self.removals);
+            self.removals.clear();
+        }
+
+        if !self.insertions.is_empty() {
+            unsafe { self.insertions.write(entity) };
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -158,8 +161,9 @@ mod tests {
     fn buffering() {
         let mut world = World::new();
         let before_archetypes = world.archetypes().len();
-        let mut changes = DeferredChanges::default();
-        let mut entity = DeferredEntity::new(world.spawn_empty(), &mut changes);
+        let mut scratch = EntityScratch::default();
+        let mut entity = DeferredEntity::new(world.spawn_empty(), &mut scratch);
+        let entity_id = entity.id();
 
         entity
             .insert(Unit)
@@ -169,6 +173,8 @@ mod tests {
             .insert(WithArc(Arc::new(Trivial(5))));
 
         entity.flush();
+
+        let mut entity = DeferredEntity::new(world.entity_mut(entity_id), &mut scratch);
 
         assert!(entity.get::<Unit>().is_some());
         assert_eq!(**entity.get::<Trivial>().unwrap(), 1);
@@ -197,13 +203,15 @@ mod tests {
 
         entity.flush();
 
+        let entity = world.entity(entity_id);
+
         assert!(!entity.contains::<Unit>());
         assert!(!entity.contains::<Trivial>());
         assert!(!entity.contains::<WithVec>());
         assert!(!entity.contains::<WithBox>());
         assert!(!entity.contains::<WithArc>());
         assert_eq!(
-            entity.world().archetypes().len(),
+            world.archetypes().len(),
             after_archetypes,
             "removals shouldn't create intermediate archetypes"
         );
