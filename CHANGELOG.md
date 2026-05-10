@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `iter_received` and `iter_sent` methods on `ClientMessages` and `ServerMessages` to inspect inbound and outbound messages on a channel without consuming them.
+
 ### Changed
 
 - `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
