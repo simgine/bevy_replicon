@@ -86,9 +86,7 @@ impl ServerMessages {
     }
 
     /// Retains only the messages specified by the predicate.
-    ///
-    /// Used for testing.
-    pub(crate) fn retain_sent<F>(&mut self, f: F)
+    pub fn retain_sent<F>(&mut self, f: F)
     where
         F: FnMut(&(Entity, usize, Bytes)) -> bool,
     {
