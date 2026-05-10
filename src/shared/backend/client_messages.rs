@@ -40,6 +40,22 @@ impl ClientMessages {
         channel_messages.len()
     }
 
+    /// Returns an iterator over received messages from the server on a channel without consuming them.
+    ///
+    /// Unlike [`Self::receive`], the messages stay in the resource. Intended for tools
+    /// that need to observe inbound traffic (e.g. debug overlays or client-side replay
+    /// recording) alongside Replicon's normal consumption.
+    pub fn iter_received<I: Into<usize>>(
+        &self,
+        channel_id: I,
+    ) -> impl ExactSizeIterator<Item = &Bytes> + '_ {
+        let channel_id = channel_id.into();
+        self.received_messages
+            .get(channel_id)
+            .unwrap_or_else(|| panic!("client should have a receive channel with id {channel_id}"))
+            .iter()
+    }
+
     /// Receives all available messages from the server over a channel.
     ///
     /// All messages will be drained.
@@ -88,6 +104,17 @@ impl ClientMessages {
             channel_messages.clear();
         }
         self.sent_messages.clear();
+    }
+
+    /// Returns an iterator over sent messages without consuming them.
+    ///
+    /// Unlike [`Self::drain_sent`], the messages stay in the resource. Intended for
+    /// tools that need to observe outbound traffic before the messaging backend drains
+    /// them.
+    pub fn iter_sent(&self) -> impl ExactSizeIterator<Item = (usize, &Bytes)> + '_ {
+        self.sent_messages
+            .iter()
+            .map(|(channel_id, bytes)| (*channel_id, bytes))
     }
 
     /// Removes all sent messages, returning them as an iterator with channel.
