@@ -42,9 +42,9 @@ impl ClientMessages {
 
     /// Returns an iterator over received messages from the server on a channel without consuming them.
     ///
-    /// Unlike [`Self::receive`], the messages stay in the resource. Intended for tools
-    /// that need to observe inbound traffic (such as client-side replay
-    /// recording) before Replicon consumes them.
+    /// The messages stay in the resource. Intended for tools that need to
+    /// observe inbound traffic (such as client-side replay recording) before
+    /// Replicon consumes them.
     pub fn iter_received<I: Into<usize>>(
         &self,
         channel_id: I,
