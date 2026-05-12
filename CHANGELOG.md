@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `iter_received` and `iter_sent` methods on `ClientMessages` and `ServerMessages` to inspect inbound and outbound messages on a channel without consuming them.
 
+### Added
+
+- Broadcast messages and events via `BroadcastMessageAppExt` and `BroadcastEventAppExt`. Emitted as `Broadcast<M>` on both the sender and the receiver to allow shared logic for client-side prediction.
+
 ### Changed
 
 - `ServerMessages::retain_sent` is now public, allowing users to filter outbound messages before the backend drains them.

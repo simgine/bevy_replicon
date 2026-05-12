@@ -51,6 +51,37 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(send);
 
+        let broadcast_send_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_broadcast() {
+                    builder.add_write_by_id(message.messages_id());
+                }
+            }),
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_broadcast() {
+                    builder.add_write_by_id(message.broadcast_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(broadcast_send);
+
+        let broadcast_trigger_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for event in registry.iter_broadcast_events() {
+                    builder.add_write_by_id(event.message().broadcast_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(broadcast_trigger);
+
         let receive_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_server() {
@@ -113,6 +144,22 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(send_locally);
 
+        let broadcast_send_locally_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_broadcast() {
+                    builder.add_write_by_id(message.broadcast_id());
+                }
+            }),
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_broadcast() {
+                    builder.add_write_by_id(message.messages_id());
+                }
+            }),
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(broadcast_send_locally);
+
         let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_client() {
@@ -122,6 +169,11 @@ impl Plugin for ClientMessagePlugin {
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_server() {
                     builder.add_write_by_id(message.queue_id());
+                }
+            }),
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_broadcast() {
+                    builder.add_write_by_id(message.messages_id());
                 }
             }),
             ParamBuilder,
@@ -155,7 +207,10 @@ impl Plugin for ClientMessagePlugin {
                 PostUpdate,
                 (
                     send_fn.run_if(in_state(ClientState::Connected)),
+                    broadcast_send_fn.run_if(in_state(ClientState::Connected)),
                     send_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    broadcast_send_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    broadcast_trigger_fn,
                 )
                     .chain()
                     .in_set(ClientSystems::Send),
@@ -191,6 +246,40 @@ fn send(
                 &mut ctx,
                 &messages,
                 reader.into_inner(),
+                &mut client_messages,
+            );
+        }
+    }
+}
+
+fn broadcast_send(
+    mut messages: FilteredResourcesMut,
+    mut broadcasts: FilteredResourcesMut,
+    mut client_messages: ResMut<ClientMessages>,
+    type_registry: Res<AppTypeRegistry>,
+    entity_map: Res<ServerEntityMap>,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    let mut ctx = ClientSendCtx {
+        entity_map: &entity_map,
+        type_registry: &type_registry,
+        invalid_entities: Vec::new(),
+    };
+
+    for message in registry.iter_all_broadcast() {
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
+        let broadcasts = broadcasts
+            .get_mut_by_id(message.broadcast_id())
+            .expect("broadcast messages resource should be accessible");
+
+        // SAFETY: passed pointers were obtained using this message data.
+        unsafe {
+            message.send(
+                &mut ctx,
+                messages.into_inner(),
+                broadcasts.into_inner(),
                 &mut client_messages,
             );
         }
@@ -246,6 +335,20 @@ fn trigger(
     }
 }
 
+fn broadcast_trigger(
+    mut broadcasts: FilteredResourcesMut,
+    mut commands: Commands,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    for event in registry.iter_broadcast_events() {
+        let broadcasts = broadcasts
+            .get_mut_by_id(event.message().broadcast_id())
+            .expect("broadcast messages resource should be accessible");
+        // SAFETY: passed pointer was obtained using this event data.
+        unsafe { event.trigger(&mut commands, broadcasts.into_inner()) };
+    }
+}
+
 fn send_locally(
     mut from_messages: FilteredResourcesMut,
     mut messages: FilteredResourcesMut,
@@ -264,9 +367,28 @@ fn send_locally(
     }
 }
 
+fn broadcast_send_locally(
+    mut broadcasts: FilteredResourcesMut,
+    mut messages: FilteredResourcesMut,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    for message in registry.iter_all_broadcast() {
+        let broadcasts = broadcasts
+            .get_mut_by_id(message.broadcast_id())
+            .expect("broadcast messages resource should be accessible");
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
+
+        // SAFETY: passed pointers were obtained using this message data.
+        unsafe { message.send_locally(broadcasts.into_inner(), messages.into_inner()) };
+    }
+}
+
 fn reset(
     mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
+    mut broadcast_messages: FilteredResourcesMut,
     registry: Res<RemoteMessageRegistry>,
 ) {
     for message in registry.iter_all_client() {
@@ -285,5 +407,14 @@ fn reset(
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { messages.reset(queue.into_inner()) };
+    }
+
+    for message in registry.iter_all_broadcast() {
+        let messages = broadcast_messages
+            .get_mut_by_id(message.messages_id())
+            .expect("broadcast messages resource should be accessible");
+
+        // SAFETY: passed pointer was obtained using this message data.
+        unsafe { message.reset(messages.into_inner()) };
     }
 }

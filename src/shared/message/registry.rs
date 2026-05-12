@@ -3,6 +3,7 @@ use core::any::TypeId;
 use bevy::prelude::*;
 
 use super::{
+    broadcast_event::BroadcastEvent, broadcast_message::BroadcastMessage,
     client_event::ClientEvent, client_message::ClientMessage, server_event::ServerEvent,
     server_message::ServerMessage,
 };
@@ -14,8 +15,10 @@ pub struct RemoteMessageRegistry {
     // but they are messages under the hood.
     server_messages: Vec<ServerMessage>,
     client_messages: Vec<ClientMessage>,
+    broadcast_messages: Vec<BroadcastMessage>,
     server_events: Vec<ServerEvent>,
     client_events: Vec<ClientEvent>,
+    broadcast_events: Vec<BroadcastEvent>,
 }
 
 impl RemoteMessageRegistry {
@@ -27,12 +30,20 @@ impl RemoteMessageRegistry {
         self.client_messages.push(message);
     }
 
+    pub(super) fn register_broadcast_message(&mut self, message: BroadcastMessage) {
+        self.broadcast_messages.push(message);
+    }
+
     pub(super) fn register_server_event(&mut self, event: ServerEvent) {
         self.server_events.push(event);
     }
 
     pub(super) fn register_client_event(&mut self, event: ClientEvent) {
         self.client_events.push(event);
+    }
+
+    pub(super) fn register_broadcast_event(&mut self, event: BroadcastEvent) {
+        self.broadcast_events.push(event);
     }
 
     pub(super) fn iter_server_messages_mut(&mut self) -> impl Iterator<Item = &mut ServerMessage> {
@@ -55,12 +66,22 @@ impl RemoteMessageRegistry {
             .chain(self.client_events.iter().map(|e| e.message()))
     }
 
+    pub(crate) fn iter_all_broadcast(&self) -> impl Iterator<Item = &BroadcastMessage> {
+        self.broadcast_messages
+            .iter()
+            .chain(self.broadcast_events.iter().map(|e| e.message()))
+    }
+
     pub(crate) fn iter_server_events(&self) -> impl Iterator<Item = &ServerEvent> {
         self.server_events.iter()
     }
 
     pub(crate) fn iter_client_events(&self) -> impl Iterator<Item = &ClientEvent> {
         self.client_events.iter()
+    }
+
+    pub(crate) fn iter_broadcast_events(&self) -> impl Iterator<Item = &BroadcastEvent> {
+        self.broadcast_events.iter()
     }
 
     /// Returns registered channel ID for server message `M`.
@@ -98,6 +119,26 @@ impl RemoteMessageRegistry {
     /// See also [`ClientEventAppExt::add_client_event`](super::client_event::ClientEventAppExt::add_client_event).
     pub fn client_event_channel<E: Event>(&self) -> Option<usize> {
         self.client_events
+            .iter()
+            .find(|e| e.type_id() == TypeId::of::<E>())
+            .map(|e| e.message().channel_id())
+    }
+
+    /// Returns registered channel ID for broadcast message `M`.
+    ///
+    /// See also [`BroadcastMessageAppExt::add_broadcast_message`](super::broadcast_message::BroadcastMessageAppExt::add_broadcast_message).
+    pub fn broadcast_message_channel<M: Message>(&self) -> Option<usize> {
+        self.broadcast_messages
+            .iter()
+            .find(|m| m.type_id() == TypeId::of::<M>())
+            .map(|m| m.channel_id())
+    }
+
+    /// Returns registered channel ID for broadcast event `E`.
+    ///
+    /// See also [`BroadcastEventAppExt::add_broadcast_event`](super::broadcast_event::BroadcastEventAppExt::add_broadcast_event).
+    pub fn broadcast_event_channel<E: Event>(&self) -> Option<usize> {
+        self.broadcast_events
             .iter()
             .find(|e| e.type_id() == TypeId::of::<E>())
             .map(|e| e.message().channel_id())

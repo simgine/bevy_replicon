@@ -61,6 +61,19 @@ impl Plugin for ServerMessagePlugin {
             .build_state(app.world_mut())
             .build_system(receive);
 
+        let broadcast_receive_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_broadcast() {
+                    builder.add_write_by_id(message.broadcast_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(broadcast_receive);
+
         let trigger_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in registry.iter_client_events() {
@@ -72,6 +85,18 @@ impl Plugin for ServerMessagePlugin {
         )
             .build_state(app.world_mut())
             .build_system(trigger);
+
+        let broadcast_trigger_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for event in registry.iter_broadcast_events() {
+                    builder.add_write_by_id(event.message().broadcast_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(broadcast_trigger);
 
         let send_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
@@ -93,8 +118,9 @@ impl Plugin for ServerMessagePlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    receive_fn.run_if(in_state(ServerState::Running)),
+                    (receive_fn, broadcast_receive_fn).run_if(in_state(ServerState::Running)),
                     trigger_fn.run_if(in_state(ClientState::Disconnected)),
+                    broadcast_trigger_fn,
                 )
                     .chain()
                     .in_set(ServerSystems::Receive),
@@ -176,6 +202,26 @@ fn receive(
     }
 }
 
+fn broadcast_receive(
+    mut broadcasts: FilteredResourcesMut,
+    mut server_messages: ResMut<ServerMessages>,
+    type_registry: Res<AppTypeRegistry>,
+    message_registry: Res<RemoteMessageRegistry>,
+) {
+    let mut ctx = ServerReceiveCtx {
+        type_registry: &type_registry,
+    };
+
+    for message in message_registry.iter_all_broadcast() {
+        let broadcasts = broadcasts
+            .get_mut_by_id(message.broadcast_id())
+            .expect("broadcast messages resource should be accessible");
+
+        // SAFETY: passed pointer was obtained using this message data.
+        unsafe { message.receive(&mut ctx, broadcasts.into_inner(), &mut server_messages) };
+    }
+}
+
 fn trigger(
     mut from_messages: FilteredResourcesMut,
     mut commands: Commands,
@@ -187,6 +233,20 @@ fn trigger(
             .expect("client messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { event.trigger(&mut commands, from_messages.into_inner()) };
+    }
+}
+
+fn broadcast_trigger(
+    mut broadcasts: FilteredResourcesMut,
+    mut commands: Commands,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    for event in registry.iter_broadcast_events() {
+        let broadcasts = broadcasts
+            .get_mut_by_id(event.message().broadcast_id())
+            .expect("broadcast messages resource should be accessible");
+        // SAFETY: passed pointer was obtained using this event data.
+        unsafe { event.trigger(&mut commands, broadcasts.into_inner()) };
     }
 }
 

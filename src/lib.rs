@@ -352,6 +352,32 @@ fn receive(ping: On<FromClient<Ping>>) {
 For events with entities inside use [`ClientEventAppExt::add_mapped_client_event`].
 Similar to messages, serialization can also be customized with [`ClientEventAppExt::add_client_event_with`].
 
+If you need to react to the same message on both the client and the server (for example,
+to share logic between client-side prediction and authoritative server processing), use
+[`BroadcastMessageAppExt::add_broadcast_message`] or
+[`BroadcastEventAppExt::add_broadcast_event`]. The message is emitted as [`Broadcast<M>`]
+on both sides, with the [`Broadcaster`] field indicating its origin.
+
+```
+# use bevy::{prelude::*, state::app::StatesPlugin};
+# use bevy_replicon::prelude::*;
+# use serde::{Deserialize, Serialize};
+# let mut app = App::new();
+# app.add_plugins((StatesPlugin, RepliconPlugins));
+app.add_broadcast_event::<Attack>(Channel::Ordered)
+    .add_observer(on_attack);
+
+fn on_attack(on: On<Broadcast<Attack>>) {
+    info!("attack from `{:?}`", on.broadcaster);
+}
+
+#[derive(Event, Deserialize, Serialize)]
+struct Attack;
+```
+
+For events with entities inside use [`BroadcastEventAppExt::add_mapped_broadcast_event`].
+Serialization can also be customized with [`BroadcastEventAppExt::add_broadcast_event_with`].
+
 ### From server to client
 
 A similar technique is used to send messages from server to clients. To do this,
@@ -705,6 +731,8 @@ pub mod prelude {
             },
             client_id::ClientId,
             message::{
+                broadcast_event::{BroadcastEventAppExt, BroadcastTriggerExt},
+                broadcast_message::{Broadcast, BroadcastMessageAppExt, Broadcaster},
                 client_event::{ClientEventAppExt, ClientTriggerExt},
                 client_message::{ClientMessageAppExt, FromClient},
                 server_event::{ServerEventAppExt, ServerTriggerExt},
