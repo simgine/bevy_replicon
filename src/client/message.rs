@@ -206,10 +206,9 @@ impl Plugin for ClientMessagePlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    send_fn.run_if(in_state(ClientState::Connected)),
-                    broadcast_send_fn.run_if(in_state(ClientState::Connected)),
-                    send_locally_fn.run_if(in_state(ClientState::Disconnected)),
-                    broadcast_send_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    (send_fn, broadcast_send_fn).run_if(in_state(ClientState::Connected)),
+                    (send_locally_fn, broadcast_send_locally_fn)
+                        .run_if(in_state(ClientState::Disconnected)),
                     broadcast_trigger_fn,
                 )
                     .chain()
