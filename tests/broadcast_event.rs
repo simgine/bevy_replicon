@@ -26,19 +26,19 @@ fn regular() {
 
     client_app.update();
 
-    let local_events = &client_app.world().resource::<EventReader<Test>>().events;
-    assert_eq!(local_events.len(), 1);
-    assert!(matches!(local_events[0].broadcaster, Broadcaster::Local));
+    let local_reader = client_app.world().resource::<EventReader<Test>>();
+    assert_eq!(local_reader.events.len(), 1);
+    assert_eq!(local_reader.events[0].broadcaster, Broadcaster::Local);
 
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let remote_events = &server_app.world().resource::<EventReader<Test>>().events;
-    assert_eq!(remote_events.len(), 1);
-    assert!(matches!(
-        remote_events[0].broadcaster,
-        Broadcaster::Remote(ClientId::Client(entity)) if entity == client_entity
-    ));
+    let remote_reader = server_app.world().resource::<EventReader<Test>>();
+    assert_eq!(remote_reader.events.len(), 1);
+    assert_eq!(
+        remote_reader.events[0].broadcaster,
+        Broadcaster::Remote(ClientId::Client(client_entity))
+    );
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn local_sending() {
 
     let reader = app.world().resource::<EventReader<Test>>();
     assert_eq!(reader.events.len(), 1);
-    assert!(matches!(reader.events[0].broadcaster, Broadcaster::Local));
+    assert_eq!(reader.events[0].broadcaster, Broadcaster::Local);
 }
 
 #[test]

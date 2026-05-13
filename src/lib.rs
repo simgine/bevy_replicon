@@ -375,8 +375,8 @@ fn on_attack(on: On<Broadcast<Attack>>) {
 struct Attack;
 ```
 
-For events with entities inside use [`BroadcastEventAppExt::add_mapped_broadcast_event`].
-Serialization can also be customized with [`BroadcastEventAppExt::add_broadcast_event_with`].
+Similar to regular client messages, we also provide [`BroadcastEventAppExt::add_mapped_broadcast_event`].
+and [`BroadcastEventAppExt::add_broadcast_event_with`].
 
 ### From server to client
 

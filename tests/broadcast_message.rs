@@ -24,23 +24,27 @@ fn regular() {
 
     client_app.update();
 
-    let local = client_app.world().resource::<Messages<Broadcast<Test>>>();
-    let mut cursor = local.get_cursor();
-    let broadcasts: Vec<_> = cursor.read(local).collect();
-    assert_eq!(broadcasts.len(), 1);
-    assert!(matches!(broadcasts[0].broadcaster, Broadcaster::Local));
+    let local_broadcasts: Vec<_> = client_app
+        .world_mut()
+        .resource_mut::<Messages<Broadcast<Test>>>()
+        .drain()
+        .collect();
+    assert_eq!(local_broadcasts.len(), 1);
+    assert_eq!(local_broadcasts[0].broadcaster, Broadcaster::Local);
 
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let received = server_app.world().resource::<Messages<Broadcast<Test>>>();
-    let mut cursor = received.get_cursor();
-    let broadcasts: Vec<_> = cursor.read(received).collect();
-    assert_eq!(broadcasts.len(), 1);
-    assert!(matches!(
-        broadcasts[0].broadcaster,
-        Broadcaster::Remote(ClientId::Client(entity)) if entity == client_entity
-    ));
+    let remote_broadcasts: Vec<_> = server_app
+        .world_mut()
+        .resource_mut::<Messages<Broadcast<Test>>>()
+        .drain()
+        .collect();
+    assert_eq!(remote_broadcasts.len(), 1);
+    assert_eq!(
+        remote_broadcasts[0].broadcaster,
+        Broadcaster::Remote(ClientId::Client(client_entity))
+    );
 }
 
 #[test]
@@ -78,22 +82,24 @@ fn mapped() {
 
     client_app.update();
 
-    let local = client_app
-        .world()
-        .resource::<Messages<Broadcast<WithEntity>>>();
-    let mut cursor = local.get_cursor();
-    let local_entities: Vec<_> = cursor.read(local).map(|m| m.0).collect();
+    let local_entities: Vec<_> = client_app
+        .world_mut()
+        .resource_mut::<Messages<Broadcast<WithEntity>>>()
+        .drain()
+        .map(|m| m.0)
+        .collect();
     assert_eq!(local_entities, [client_entity]);
 
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let received = server_app
-        .world()
-        .resource::<Messages<Broadcast<WithEntity>>>();
-    let mut cursor = received.get_cursor();
-    let received_entities: Vec<_> = cursor.read(received).map(|m| m.0).collect();
-    assert_eq!(received_entities, [server_entity]);
+    let mapped_entities: Vec<_> = server_app
+        .world_mut()
+        .resource_mut::<Messages<Broadcast<WithEntity>>>()
+        .drain()
+        .map(|m| m.0)
+        .collect();
+    assert_eq!(mapped_entities, [server_entity]);
 }
 
 #[test]
@@ -131,14 +137,13 @@ fn without_plugins() {
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let received = server_app.world().resource::<Messages<Broadcast<Test>>>();
-    let mut cursor = received.get_cursor();
-    let broadcasts: Vec<_> = cursor.read(received).collect();
+    let broadcasts: Vec<_> = server_app
+        .world_mut()
+        .resource_mut::<Messages<Broadcast<Test>>>()
+        .drain()
+        .collect();
     assert_eq!(broadcasts.len(), 1);
-    assert!(matches!(
-        broadcasts[0].broadcaster,
-        Broadcaster::Remote(ClientId::Client(_))
-    ));
+    assert!(broadcasts[0].broadcaster.is_remote());
 }
 
 #[test]
@@ -155,11 +160,13 @@ fn local_sending() {
     let messages = app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 
-    let broadcasts = app.world().resource::<Messages<Broadcast<Test>>>();
-    let mut cursor = broadcasts.get_cursor();
-    let collected: Vec<_> = cursor.read(broadcasts).collect();
-    assert_eq!(collected.len(), 1);
-    assert!(matches!(collected[0].broadcaster, Broadcaster::Local));
+    let broadcasts: Vec<_> = app
+        .world_mut()
+        .resource_mut::<Messages<Broadcast<Test>>>()
+        .drain()
+        .collect();
+    assert_eq!(broadcasts.len(), 1);
+    assert_eq!(broadcasts[0].broadcaster, Broadcaster::Local);
 }
 
 #[test]
