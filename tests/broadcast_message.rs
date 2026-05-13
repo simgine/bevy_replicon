@@ -143,7 +143,7 @@ fn without_plugins() {
         .drain()
         .collect();
     assert_eq!(broadcasts.len(), 1);
-    assert!(broadcasts[0].broadcaster.is_remote());
+    assert!(matches!(broadcasts[0].broadcaster, Broadcaster::Remote(_)));
 }
 
 #[test]
