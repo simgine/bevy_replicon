@@ -68,7 +68,7 @@ fn mapped() {
         .world_mut()
         .resource_mut::<Messages<FromClient<WithEntity>>>()
         .drain()
-        .map(|event| event.0)
+        .map(|m| m.0)
         .collect();
     assert_eq!(mapped_entities, [server_entity]);
 }
