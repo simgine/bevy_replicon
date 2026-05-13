@@ -119,7 +119,10 @@ impl Plugin for ServerMessagePlugin {
                 PreUpdate,
                 (
                     (receive_fn, broadcast_receive_fn).run_if(in_state(ServerState::Running)),
-                    (trigger_fn, broadcast_trigger_fn).run_if(in_state(ClientState::Disconnected)),
+                    (
+                        trigger_fn.run_if(in_state(ClientState::Disconnected)),
+                        broadcast_trigger_fn,
+                    ),
                 )
                     .chain()
                     .in_set(ServerSystems::Receive),
