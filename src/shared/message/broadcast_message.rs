@@ -406,11 +406,6 @@ pub enum Broadcaster {
 }
 
 impl Broadcaster {
-    /// Returns `true` if the message was written locally.
-    pub fn is_local(self) -> bool {
-        matches!(self, Self::Local)
-    }
-
     /// Returns `true` if the message was received from a remote client.
     pub fn is_remote(self) -> bool {
         matches!(self, Self::Remote(_))
