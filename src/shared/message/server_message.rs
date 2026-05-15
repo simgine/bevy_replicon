@@ -689,6 +689,9 @@ impl<E: EntityEvent> EntityEvent for ToClients<E> {
 #[derive(Clone, Copy, Debug)]
 pub enum SendMode {
     /// Send to every client.
+    ///
+    /// This will also send the message locally to support listen server configuration.
+    /// Use [`Self::CLIENTS_ONLY`] if you want to send messages only to the clients.
     Broadcast,
     /// Send to every client except the specified connected client.
     BroadcastExcept(ClientId),
