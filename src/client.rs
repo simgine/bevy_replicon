@@ -880,7 +880,20 @@ pub struct ClientReplicationStats {
 ///
 /// Automatically inserted for each newly received entity.
 ///
-/// See also [`Replicated`].
+/// Unlike [`Replicated`], it doesn't affect the replication
+/// logic and exists purely as an informational marker.
+/// For example, you can event register [`Replicated`] as required
+/// component for it:
+///
+/// ```
+/// # use bevy::prelude::*;
+/// # use bevy_replicon::prelude::*;
+/// # let mut app = App::new();
+/// app.register_required_components::<Remote, Replicated>();
+/// ```
+///
+/// This way, after a client disconnects, it can start a new server
+/// with the same entities now being replicated.
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Remote;
