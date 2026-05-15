@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ServerMessages::retain_sent` is now public, allowing users to filter outbound messages before the backend drains them.
 - `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
 - `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
+- Rename `SendMode::Broadcast` into `SendTargets::All`
+- Rename `SendMode::BroadcastExcept` into `SendTargets::AllExcept`
+- Rename `SendMode::Direct` into `SendTargets::Single`
+- Rename `ToClients::mode` into `ToClients::targets`
 
 ## [0.39.5] - 2026-04-26
 

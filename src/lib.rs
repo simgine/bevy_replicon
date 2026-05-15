@@ -405,7 +405,7 @@ app.add_server_message::<Pong>(Channel::Ordered)
 
 fn send(mut pongs: MessageWriter<ToClients<Pong>>) {
     pongs.write(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Pong,
     });
 }
@@ -438,7 +438,7 @@ app.add_server_event::<Pong>(Channel::Ordered)
 
 fn send(mut commands: Commands) {
     commands.server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Pong,
     });
 }
@@ -736,7 +736,7 @@ pub mod prelude {
                 client_event::{ClientEventAppExt, ClientTriggerExt},
                 client_message::{ClientMessageAppExt, FromClient},
                 server_event::{ServerEventAppExt, ServerTriggerExt},
-                server_message::{SendMode, ServerMessageAppExt, ToClients},
+                server_message::{SendTargets, ServerMessageAppExt, ToClients},
             },
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{

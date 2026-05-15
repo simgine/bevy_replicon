@@ -26,7 +26,7 @@ fn message() {
 
     client_app.world_mut().write_message(Test);
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -72,7 +72,7 @@ fn event() {
 
     client_app.world_mut().client_trigger(Test);
     server_app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 

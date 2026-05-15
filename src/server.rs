@@ -255,7 +255,7 @@ fn check_protocol(
             **client_protocol, *protocol
         );
         commands.server_trigger(ToClients {
-            mode: SendMode::Direct(client_protocol.client_id),
+            targets: SendTargets::Single(client_protocol.client_id),
             message: ProtocolMismatch,
         });
         disconnects.write(DisconnectRequest { client });

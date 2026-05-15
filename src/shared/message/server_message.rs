@@ -335,15 +335,18 @@ impl ServerMessage {
         let to_messages: &Messages<ToClients<M>> = unsafe { to_messages.deref() };
         // For server messages we don't track read message because
         // all of them will always be drained in the local sending system.
-        for ToClients { message, mode } in to_messages.get_cursor().read(to_messages) {
-            debug!("sending message `{}` with `{mode:?}`", ShortName::of::<M>());
+        for ToClients { message, targets } in to_messages.get_cursor().read(to_messages) {
+            debug!(
+                "sending message `{}` for `{targets:?}`",
+                ShortName::of::<M>()
+            );
 
             if self.independent {
                 unsafe {
                     self.send_independent_message::<M, I>(
                         ctx,
                         message,
-                        mode,
+                        *targets,
                         server_messages,
                         clients,
                     )
@@ -351,14 +354,14 @@ impl ServerMessage {
                 }
             } else {
                 unsafe {
-                    self.buffer_message::<M, I>(ctx, message, *mode, message_buffer)
+                    self.buffer_message::<M, I>(ctx, message, *targets, message_buffer)
                         .expect("server message should be serializable");
                 }
             }
         }
     }
 
-    /// Sends independent remote message `M` based on a mode.
+    /// Sends independent remote message `M` to the given targets.
     ///
     /// # Safety
     ///
@@ -369,7 +372,7 @@ impl ServerMessage {
         &self,
         ctx: &mut ServerSendCtx,
         message: &M,
-        mode: &SendMode,
+        targets: SendTargets,
         server_messages: &mut ServerMessages,
         clients: &Query<Entity, With<ConnectedClient>>,
     ) -> Result<()> {
@@ -377,20 +380,20 @@ impl ServerMessage {
         unsafe { self.serialize::<M, I>(ctx, message, &mut message_bytes)? }
         let message_bytes: Bytes = message_bytes.into();
 
-        match *mode {
-            SendMode::Broadcast => {
+        match targets {
+            SendTargets::All => {
                 for client in clients {
                     server_messages.send(client, self.channel_id, message_bytes.clone());
                 }
             }
-            SendMode::BroadcastExcept(ignored_id) => {
+            SendTargets::AllExcept(ignored_id) => {
                 for client in clients {
                     if ignored_id != client.into() {
                         server_messages.send(client, self.channel_id, message_bytes.clone());
                     }
                 }
             }
-            SendMode::Direct(client_id) => {
+            SendTargets::Single(client_id) => {
                 if let ClientId::Client(client) = client_id {
                     server_messages.send(client, self.channel_id, message_bytes.clone());
                 }
@@ -400,7 +403,7 @@ impl ServerMessage {
         Ok(())
     }
 
-    /// Buffers message `M` based on mode.
+    /// Buffers message `M` for the given targets.
     ///
     /// # Safety
     ///
@@ -411,11 +414,11 @@ impl ServerMessage {
         &self,
         ctx: &mut ServerSendCtx,
         message: &M,
-        mode: SendMode,
+        targets: SendTargets,
         message_buffer: &mut MessageBuffer,
     ) -> Result<()> {
         let message_bytes = unsafe { self.serialize_with_padding::<M, I>(ctx, message)? };
-        message_buffer.insert(mode, self.channel_id, message_bytes);
+        message_buffer.insert(targets, self.channel_id, message_bytes);
         Ok(())
     }
 
@@ -545,18 +548,18 @@ impl ServerMessage {
     unsafe fn send_locally_typed<M: Message>(to_messages: PtrMut, messages: PtrMut) {
         let to_messages: &mut Messages<ToClients<M>> = unsafe { to_messages.deref_mut() };
         let messages: &mut Messages<M> = unsafe { messages.deref_mut() };
-        for ToClients { message, mode } in to_messages.drain() {
+        for ToClients { message, targets } in to_messages.drain() {
             debug!("writing message `{}` locally", ShortName::of::<M>());
-            match mode {
-                SendMode::Broadcast => {
+            match targets {
+                SendTargets::All => {
                     messages.write(message);
                 }
-                SendMode::BroadcastExcept(ignored_id) => {
+                SendTargets::AllExcept(ignored_id) => {
                     if ignored_id != ClientId::Server {
                         messages.write(message);
                     }
                 }
-                SendMode::Direct(client_id) => {
+                SendTargets::Single(client_id) => {
                     if client_id == ClientId::Server {
                         messages.write(message);
                     }
@@ -672,7 +675,7 @@ type ResetFn = unsafe fn(PtrMut);
 #[derive(Event, Message, Deref, DerefMut, Debug, Clone, Copy)]
 pub struct ToClients<T> {
     /// Recipients.
-    pub mode: SendMode,
+    pub targets: SendTargets,
 
     /// Transmitted message.
     #[deref]
@@ -685,27 +688,31 @@ impl<E: EntityEvent> EntityEvent for ToClients<E> {
     }
 }
 
-/// Type of server message sending.
+/// Recipients of a server message.
 #[derive(Clone, Copy, Debug)]
-pub enum SendMode {
+pub enum SendTargets {
     /// Send to every client.
     ///
     /// This will also send the message locally to support listen server configuration.
     /// Use [`Self::CLIENTS_ONLY`] if you want to send messages only to the clients.
-    Broadcast,
-    /// Send to every client except the specified connected client.
-    BroadcastExcept(ClientId),
+    All,
+    /// Send to everyone except this client.
+    AllExcept(ClientId),
     /// Send only to the specified client.
-    Direct(ClientId),
+    Single(ClientId),
 }
 
-impl SendMode {
+impl SendTargets {
     /// Send to every client except the listen server.
-    pub const CLIENTS_ONLY: SendMode = SendMode::BroadcastExcept(ClientId::Server);
+    pub const CLIENTS_ONLY: SendTargets = SendTargets::AllExcept(ClientId::Server);
 
     /// Send only to the server.
-    pub const SERVER_ONLY: SendMode = SendMode::Direct(ClientId::Server);
+    pub const SERVER_ONLY: SendTargets = SendTargets::Single(ClientId::Server);
 }
+
+/// A deprecated alias for [`SendTargets`].
+#[deprecated(note = "renamed to `SendTargets`")]
+pub type SendMode = SendTargets;
 
 /// Default message serialization function.
 pub fn default_serialize<M: Serialize>(

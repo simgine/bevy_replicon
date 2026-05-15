@@ -24,7 +24,7 @@ fn regular() {
     server_app.connect_client(&mut client_app);
 
     server_app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -56,7 +56,7 @@ fn mapped() {
     let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: WithEntity(server_entity),
     });
 
@@ -108,7 +108,7 @@ fn without_plugins() {
     server_app.connect_client(&mut client_app);
 
     server_app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -133,7 +133,7 @@ fn local_sending() {
     app.init_resource::<EventReader<Test>>();
 
     app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -181,11 +181,11 @@ fn independent() {
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = Default::default();
 
     server_app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
     server_app.world_mut().server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Independent,
     });
 
