@@ -5,11 +5,11 @@ use log::debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::{
-    broadcast_message::SharedMessage,
     client_message,
     ctx::{ClientSendCtx, ServerReceiveCtx},
     message_fns::{DeserializeFn, MessageFns, SerializeFn},
     registry::RemoteMessageRegistry,
+    shared_message::SharedMessage,
 };
 use crate::prelude::*;
 

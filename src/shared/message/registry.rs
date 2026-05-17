@@ -3,8 +3,8 @@ use core::any::TypeId;
 use bevy::prelude::*;
 
 use super::{
-    broadcast_event::SharedEvent, broadcast_message::SharedMessage, client_event::ClientEvent,
-    client_message::ClientMessage, server_event::ServerEvent, server_message::ServerMessage,
+    client_event::ClientEvent, client_message::ClientMessage, server_event::ServerEvent,
+    server_message::ServerMessage, shared_event::SharedEvent, shared_message::SharedMessage,
 };
 
 /// Registered server and client messages and events.
@@ -125,7 +125,7 @@ impl RemoteMessageRegistry {
 
     /// Returns registered channel ID for shared message `M`.
     ///
-    /// See also [`SharedMessageAppExt::add_shared_message`](super::broadcast_message::SharedMessageAppExt::add_shared_message).
+    /// See also [`SharedMessageAppExt::add_shared_message`](super::shared_message::SharedMessageAppExt::add_shared_message).
     pub fn shared_message_channel<M: Message>(&self) -> Option<usize> {
         self.shared_messages
             .iter()
@@ -135,7 +135,7 @@ impl RemoteMessageRegistry {
 
     /// Returns registered channel ID for shared event `E`.
     ///
-    /// See also [`SharedEventAppExt::add_shared_event`](super::broadcast_event::SharedEventAppExt::add_shared_event).
+    /// See also [`SharedEventAppExt::add_shared_event`](super::shared_event::SharedEventAppExt::add_shared_event).
     pub fn shared_event_channel<E: Event>(&self) -> Option<usize> {
         self.shared_events
             .iter()

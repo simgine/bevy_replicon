@@ -731,12 +731,12 @@ pub mod prelude {
             },
             client_id::ClientId,
             message::{
-                broadcast_event::{SharedEventAppExt, SharedTriggerExt},
-                broadcast_message::{LocalOrRemote, Sender, SharedMessageAppExt},
                 client_event::{ClientEventAppExt, ClientTriggerExt},
                 client_message::{ClientMessageAppExt, FromClient},
                 server_event::{ServerEventAppExt, ServerTriggerExt},
                 server_message::{SendTargets, ServerMessageAppExt, ToClients},
+                shared_event::{SharedEventAppExt, SharedTriggerExt},
+                shared_message::{LocalOrRemote, Sender, SharedMessageAppExt},
             },
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
