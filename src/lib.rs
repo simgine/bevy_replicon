@@ -734,7 +734,7 @@ pub mod prelude {
                 client_event::{ClientEventAppExt, ClientTriggerExt},
                 client_message::{ClientMessageAppExt, FromClient},
                 server_event::{ServerEventAppExt, ServerTriggerExt},
-                server_message::{SendTargets, ServerMessageAppExt, ToClients},
+                server_message::{SendMode, SendTargets, ServerMessageAppExt, ToClients},
                 shared_event::{SharedEventAppExt, SharedTriggerExt},
                 shared_message::{LocalOrRemote, Sender, SharedMessageAppExt},
             },
