@@ -8,7 +8,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
 use crate::prelude::*;
-use component::{BundleRules, ComponentRule, IntoComponentRules};
+use component::{BundleRules, ComponentRule, IntoComponentRules, IntoResourceRule};
 use filter::{FilterRule, FilterRules};
 
 /// Replication functions for [`App`].
@@ -144,6 +144,54 @@ pub trait AppRuleExt {
     {
         self.replicate_once_filtered_as::<C, T, ()>()
     }
+
+    /// Like [`Self::replicate`], but for [`Resource`].
+    ///
+    /// The only difference from the component version is that it makes [`Replicated`] a
+    /// required component for `R`, so you don't need to insert it manually to enable replication.
+    fn replicate_resource<R>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with(RuleFns::<R>::default())
+    }
+
+    /// Like [`Self::replicate_resource`], but uses [`ReplicationMode::Once`].
+    fn replicate_resource_once<R>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with((RuleFns::<R>::default(), ReplicationMode::Once))
+    }
+
+    /// Like [`Self::replicate_resource`], but converts the resource into `T` before serialization
+    /// and back into `C` after deserialization.
+    ///
+    /// For more details see [`Self::replicate_as`].
+    fn replicate_resource_as<R, T>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with(RuleFns::<R>::new_as::<T>())
+    }
+
+    /// Like [`Self::replicate_resource_as`], but uses [`ReplicationMode::Once`].
+    fn replicate_resource_once_as<R, T>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with((RuleFns::<R>::new_as::<T>(), ReplicationMode::Once))
+    }
+
+    /// Like [`Self::replicate_with`], but for a single [`Resource`].
+    ///
+    /// See also [`Self::replicate_resource`].
+    fn replicate_resource_with<R: Resource<Mutability: MutWrite<R>>>(
+        &mut self,
+        resource_rule: impl IntoResourceRule<R>,
+    ) -> &mut Self;
 
     /// Like [`Self::replicate`], but lets you specify archetype filters an entity must match to replicate.
     ///
@@ -805,6 +853,14 @@ pub trait AppRuleExt {
 }
 
 impl AppRuleExt for App {
+    fn replicate_resource_with<R: Resource<Mutability: MutWrite<R>>>(
+        &mut self,
+        resource_rule: impl IntoResourceRule<R>,
+    ) -> &mut Self {
+        let _ = self.try_register_required_components::<R, Replicated>();
+        self.replicate_with(resource_rule)
+    }
+
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(
         &mut self,
         priority: usize,
@@ -957,6 +1013,51 @@ mod tests {
 
         assert!(!rule_b_as_d.matches(a));
         assert!(rule_b_as_d.matches(b));
+    }
+
+    #[test]
+    fn resource() {
+        let mut app = App::new();
+        app.init_resource::<ProtocolHasher>()
+            .init_resource::<ReplicationRules>()
+            .init_resource::<ReplicationRegistry>()
+            .replicate_resource::<E>()
+            .replicate_resource_once::<F>()
+            .replicate_resource_as::<E, G>()
+            .replicate_resource_once_as::<F, H>();
+
+        let rules = app
+            .world_mut()
+            .remove_resource::<ReplicationRules>()
+            .unwrap();
+        let [rule_e, rule_f, rule_e_as_g, rule_f_as_h] = rules.0.try_into().unwrap();
+        assert_eq!(rule_e.priority, 1);
+        assert_eq!(rule_f.priority, 1);
+
+        app.world_mut().insert_resource(E);
+        app.world_mut().insert_resource(F);
+
+        let mut e = app.world_mut().query_filtered::<&Archetype, With<E>>();
+        let mut f = app.world_mut().query_filtered::<&Archetype, With<F>>();
+
+        let e = e.single(app.world()).unwrap();
+        let f = f.single(app.world()).unwrap();
+
+        let replicated_id = app.world().component_id::<Replicated>().unwrap();
+        assert!(e.contains(replicated_id));
+        assert!(f.contains(replicated_id));
+
+        assert!(rule_e.matches(e));
+        assert!(!rule_e.matches(f));
+
+        assert!(!rule_f.matches(e));
+        assert!(rule_f.matches(f));
+
+        assert!(rule_e_as_g.matches(e));
+        assert!(!rule_e_as_g.matches(f));
+
+        assert!(!rule_f_as_h.matches(e));
+        assert!(rule_f_as_h.matches(f));
     }
 
     #[test]
@@ -1207,6 +1308,42 @@ mod tests {
     impl From<B> for D {
         fn from(_value: B) -> Self {
             D
+        }
+    }
+
+    #[derive(Resource, Serialize, Deserialize, Clone, Copy)]
+    struct E;
+
+    #[derive(Resource, Serialize, Deserialize, Clone, Copy)]
+    struct F;
+
+    #[derive(Resource, Serialize, Deserialize)]
+    struct G;
+
+    impl From<G> for E {
+        fn from(_value: G) -> Self {
+            E
+        }
+    }
+
+    impl From<E> for G {
+        fn from(_value: E) -> Self {
+            G
+        }
+    }
+
+    #[derive(Resource, Serialize, Deserialize)]
+    struct H;
+
+    impl From<H> for F {
+        fn from(_value: H) -> Self {
+            F
+        }
+    }
+
+    impl From<F> for H {
+        fn from(_value: F) -> Self {
+            H
         }
     }
 }
