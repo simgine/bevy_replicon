@@ -15,6 +15,8 @@ use crate::prelude::*;
 
 /// An extension trait for [`App`] for creating shared events.
 ///
+/// They're like client events, but also triggered locally in the same way as on the server.
+///
 /// See also [`SharedMessageAppExt`] for messages, [`ClientEventAppExt`] for regular client events
 /// and [`ServerEventAppExt`] for server events.
 pub trait SharedEventAppExt {

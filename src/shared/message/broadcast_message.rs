@@ -19,6 +19,8 @@ use crate::prelude::*;
 
 /// An extension trait for [`App`] for creating shared messages.
 ///
+/// They're like client messages, but also emitted locally in the same way as on the server.
+///
 /// See also [`SharedEventAppExt`] for events, [`ClientMessageAppExt`] for regular client messages
 /// and [`ServerMessageAppExt`] for server messages.
 pub trait SharedMessageAppExt {
