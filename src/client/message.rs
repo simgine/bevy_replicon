@@ -356,7 +356,7 @@ fn send_locally(
     for message in registry.iter_all_client() {
         let from_messages = from_messages
             .get_mut_by_id(message.from_messages_id())
-            .expect("from messages resource should be accessible");
+            .expect("from clients messages resource should be accessible");
         let messages = messages
             .get_mut_by_id(message.messages_id())
             .expect("messages resource should be accessible");

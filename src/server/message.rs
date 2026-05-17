@@ -159,7 +159,7 @@ fn send_or_buffer(
     for message in message_registry.iter_all_server() {
         let to_messages = to_messages
             .get_by_id(message.to_messages_id())
-            .expect("to messages resource should be accessible");
+            .expect("to clients messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe {
@@ -197,7 +197,7 @@ fn receive(
     for message in message_registry.iter_all_client() {
         let from_messages = from_messages
             .get_mut_by_id(message.from_messages_id())
-            .expect("from messages resource should be accessible");
+            .expect("from clients messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { message.receive(&mut ctx, from_messages.into_inner(), &mut server_messages) };
@@ -232,7 +232,7 @@ fn trigger(
     for event in registry.iter_client_events() {
         let from_messages = from_messages
             .get_mut_by_id(event.message().from_messages_id())
-            .expect("client messages resource should be accessible");
+            .expect("from clients messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { event.trigger(&mut commands, from_messages.into_inner()) };
     }
