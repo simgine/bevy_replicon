@@ -71,6 +71,7 @@ Depending on your game, you may need additional features. We provide an API that
 
 | bevy   | bevy_replicon |
 | ------ | ------------- |
+| 0.19.0 | 0.41-rc.1     |
 | 0.18.0 | 0.38-0.40     |
 | 0.17.0 | 0.36-0.37     |
 | 0.16.0 | 0.33-0.35     |
