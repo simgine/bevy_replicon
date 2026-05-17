@@ -78,14 +78,14 @@ impl ProtocolHasher {
         self.hash::<E>(ProtocolPart::ClientEvent);
     }
 
-    pub(crate) fn add_broadcast_message<E>(&mut self) {
-        debug!("adding broadcast message `{}`", ShortName::of::<E>());
-        self.hash::<E>(ProtocolPart::BroadcastMessage);
+    pub(crate) fn add_shared_message<E>(&mut self) {
+        debug!("adding shared message `{}`", ShortName::of::<E>());
+        self.hash::<E>(ProtocolPart::SharedMessage);
     }
 
-    pub(crate) fn add_broadcast_event<E>(&mut self) {
-        debug!("adding broadcast event `{}`", ShortName::of::<E>());
-        self.hash::<E>(ProtocolPart::BroadcastEvent);
+    pub(crate) fn add_shared_event<E>(&mut self) {
+        debug!("adding shared event `{}`", ShortName::of::<E>());
+        self.hash::<E>(ProtocolPart::SharedEvent);
     }
 
     pub(crate) fn add_server_message<E>(&mut self) {
@@ -143,8 +143,8 @@ enum ProtocolPart {
     IndependentMessage,
     IndependentEvent,
     TrackMutateMessages,
-    BroadcastMessage,
-    BroadcastEvent,
+    SharedMessage,
+    SharedEvent,
 }
 
 /// Hash of all registered events and replication rules.

@@ -13,7 +13,7 @@ fn regular() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_broadcast_message::<Test>(Channel::Ordered)
+            .add_shared_message::<Test>(Channel::Ordered)
             .finish();
     }
 
@@ -24,26 +24,26 @@ fn regular() {
 
     client_app.update();
 
-    let local_broadcasts: Vec<_> = client_app
+    let local_messages: Vec<_> = client_app
         .world_mut()
-        .resource_mut::<Messages<Broadcast<Test>>>()
+        .resource_mut::<Messages<LocalOrRemote<Test>>>()
         .drain()
         .collect();
-    assert_eq!(local_broadcasts.len(), 1);
-    assert_eq!(local_broadcasts[0].broadcaster, Broadcaster::Local);
+    assert_eq!(local_messages.len(), 1);
+    assert_eq!(local_messages[0].sender, Sender::Local);
 
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let remote_broadcasts: Vec<_> = server_app
+    let remote_messages: Vec<_> = server_app
         .world_mut()
-        .resource_mut::<Messages<Broadcast<Test>>>()
+        .resource_mut::<Messages<LocalOrRemote<Test>>>()
         .drain()
         .collect();
-    assert_eq!(remote_broadcasts.len(), 1);
+    assert_eq!(remote_messages.len(), 1);
     assert_eq!(
-        remote_broadcasts[0].broadcaster,
-        Broadcaster::Remote(ClientId::Client(client_entity))
+        remote_messages[0].sender,
+        Sender::Remote(ClientId::Client(client_entity))
     );
 }
 
@@ -57,7 +57,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_broadcast_message::<WithEntity>(Channel::Ordered)
+        .add_mapped_shared_message::<WithEntity>(Channel::Ordered)
         .finish();
     }
 
@@ -84,7 +84,7 @@ fn mapped() {
 
     let local_entities: Vec<_> = client_app
         .world_mut()
-        .resource_mut::<Messages<Broadcast<WithEntity>>>()
+        .resource_mut::<Messages<LocalOrRemote<WithEntity>>>()
         .drain()
         .map(|m| m.0)
         .collect();
@@ -95,7 +95,7 @@ fn mapped() {
 
     let mapped_entities: Vec<_> = server_app
         .world_mut()
-        .resource_mut::<Messages<Broadcast<WithEntity>>>()
+        .resource_mut::<Messages<LocalOrRemote<WithEntity>>>()
         .drain()
         .map(|m| m.0)
         .collect();
@@ -115,7 +115,7 @@ fn without_plugins() {
                 .disable::<ClientPlugin>()
                 .disable::<ClientMessagePlugin>(),
         ))
-        .add_broadcast_message::<Test>(Channel::Ordered)
+        .add_shared_message::<Test>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -126,7 +126,7 @@ fn without_plugins() {
                 .disable::<ServerPlugin>()
                 .disable::<ServerMessagePlugin>(),
         ))
-        .add_broadcast_message::<Test>(Channel::Ordered)
+        .add_shared_message::<Test>(Channel::Ordered)
         .finish();
 
     server_app.connect_client(&mut client_app);
@@ -137,20 +137,20 @@ fn without_plugins() {
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
 
-    let broadcasts: Vec<_> = server_app
+    let messages: Vec<_> = server_app
         .world_mut()
-        .resource_mut::<Messages<Broadcast<Test>>>()
+        .resource_mut::<Messages<LocalOrRemote<Test>>>()
         .drain()
         .collect();
-    assert_eq!(broadcasts.len(), 1);
-    assert!(broadcasts[0].broadcaster.is_remote());
+    assert_eq!(messages.len(), 1);
+    assert!(messages[0].sender.is_remote());
 }
 
 #[test]
 fn local_sending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
-        .add_broadcast_message::<Test>(Channel::Ordered)
+        .add_shared_message::<Test>(Channel::Ordered)
         .finish();
 
     app.world_mut().write_message(Test);
@@ -160,13 +160,13 @@ fn local_sending() {
     let messages = app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 
-    let broadcasts: Vec<_> = app
+    let shared_messages: Vec<_> = app
         .world_mut()
-        .resource_mut::<Messages<Broadcast<Test>>>()
+        .resource_mut::<Messages<LocalOrRemote<Test>>>()
         .drain()
         .collect();
-    assert_eq!(broadcasts.len(), 1);
-    assert_eq!(broadcasts[0].broadcaster, Broadcaster::Local);
+    assert_eq!(shared_messages.len(), 1);
+    assert_eq!(shared_messages[0].sender, Sender::Local);
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn with_disconnect() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_broadcast_message::<Test>(Channel::Ordered)
+            .add_shared_message::<Test>(Channel::Ordered)
             .finish();
     }
 
@@ -188,10 +188,12 @@ fn with_disconnect() {
     let messages = client_app.world().resource::<Messages<Test>>();
     assert!(messages.is_empty());
 
-    let broadcasts = client_app.world().resource::<Messages<Broadcast<Test>>>();
+    let shared_messages = client_app
+        .world()
+        .resource::<Messages<LocalOrRemote<Test>>>();
     assert!(
-        broadcasts.is_empty(),
-        "client shouldn't resend broadcasts locally after disconnect"
+        shared_messages.is_empty(),
+        "client shouldn't resend shared messages locally after disconnect"
     );
 }
 

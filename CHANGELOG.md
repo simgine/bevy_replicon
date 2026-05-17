@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Broadcast messages and events via `BroadcastMessageAppExt` and `BroadcastEventAppExt`. Emitted as `Broadcast<M>` on both the sender and the receiver to allow shared logic for client-side prediction.
+- LocalOrRemote messages and events via `SharedMessageAppExt` and `SharedEventAppExt`. Emitted as `LocalOrRemote<M>` on both the sender and the receiver to allow shared logic for client-side prediction.
 - `iter_received` and `iter_sent` methods on `ClientMessages` and `ServerMessages` to inspect inbound and outbound messages on a channel without consuming them.
 
 ### Changed

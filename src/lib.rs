@@ -354,9 +354,9 @@ Similar to messages, serialization can also be customized with [`ClientEventAppE
 
 If you need to react to the same message on both the client and the server (for example,
 to share logic between client-side prediction and authoritative server processing), use
-[`BroadcastMessageAppExt::add_broadcast_message`] or
-[`BroadcastEventAppExt::add_broadcast_event`]. The message is emitted as [`Broadcast<M>`]
-on both sides, with the [`Broadcaster`] field indicating its origin.
+[`SharedMessageAppExt::add_shared_message`] or
+[`SharedEventAppExt::add_shared_event`]. The message is emitted as [`LocalOrRemote<M>`]
+on both sides, with the [`Sender`] field indicating its origin.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -364,19 +364,19 @@ on both sides, with the [`Broadcaster`] field indicating its origin.
 # use serde::{Deserialize, Serialize};
 # let mut app = App::new();
 # app.add_plugins((StatesPlugin, RepliconPlugins));
-app.add_broadcast_event::<Attack>(Channel::Ordered)
+app.add_shared_event::<Attack>(Channel::Ordered)
     .add_observer(on_attack);
 
-fn on_attack(on: On<Broadcast<Attack>>) {
-    info!("attack from `{:?}`", on.broadcaster);
+fn on_attack(attack: On<LocalOrRemote<Attack>>) {
+    info!("attack from `{:?}`", attack.sender);
 }
 
 #[derive(Event, Deserialize, Serialize)]
 struct Attack;
 ```
 
-Similar to regular client messages, we also provide [`BroadcastEventAppExt::add_mapped_broadcast_event`].
-and [`BroadcastEventAppExt::add_broadcast_event_with`].
+Similar to regular client messages, we also provide [`SharedEventAppExt::add_mapped_shared_event`].
+and [`SharedEventAppExt::add_shared_event_with`].
 
 ### From server to client
 
@@ -731,8 +731,8 @@ pub mod prelude {
             },
             client_id::ClientId,
             message::{
-                broadcast_event::{BroadcastEventAppExt, BroadcastTriggerExt},
-                broadcast_message::{Broadcast, BroadcastMessageAppExt, Broadcaster},
+                broadcast_event::{SharedEventAppExt, SharedTriggerExt},
+                broadcast_message::{LocalOrRemote, Sender, SharedMessageAppExt},
                 client_event::{ClientEventAppExt, ClientTriggerExt},
                 client_message::{ClientMessageAppExt, FromClient},
                 server_event::{ServerEventAppExt, ServerTriggerExt},

@@ -13,7 +13,7 @@ fn regular() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_broadcast_event::<Test>(Channel::Ordered)
+            .add_shared_event::<Test>(Channel::Ordered)
             .finish();
     }
     client_app.init_resource::<EventReader<Test>>();
@@ -22,13 +22,13 @@ fn regular() {
     server_app.connect_client(&mut client_app);
     let client_entity = **client_app.world().resource::<TestClientEntity>();
 
-    client_app.world_mut().broadcast_trigger(Test);
+    client_app.world_mut().shared_trigger(Test);
 
     client_app.update();
 
     let local_reader = client_app.world().resource::<EventReader<Test>>();
     assert_eq!(local_reader.events.len(), 1);
-    assert_eq!(local_reader.events[0].broadcaster, Broadcaster::Local);
+    assert_eq!(local_reader.events[0].sender, Sender::Local);
 
     server_app.exchange_with_client(&mut client_app);
     server_app.update();
@@ -36,8 +36,8 @@ fn regular() {
     let remote_reader = server_app.world().resource::<EventReader<Test>>();
     assert_eq!(remote_reader.events.len(), 1);
     assert_eq!(
-        remote_reader.events[0].broadcaster,
-        Broadcaster::Remote(ClientId::Client(client_entity))
+        remote_reader.events[0].sender,
+        Sender::Remote(ClientId::Client(client_entity))
     );
 }
 
@@ -51,7 +51,7 @@ fn mapped() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_mapped_broadcast_event::<WithEntity>(Channel::Ordered)
+        .add_mapped_shared_event::<WithEntity>(Channel::Ordered)
         .finish();
     }
     server_app.init_resource::<EventReader<WithEntity>>();
@@ -73,7 +73,7 @@ fn mapped() {
 
     client_app
         .world_mut()
-        .broadcast_trigger(WithEntity(client_entity));
+        .shared_trigger(WithEntity(client_entity));
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -97,7 +97,7 @@ fn without_plugins() {
                 .disable::<ClientPlugin>()
                 .disable::<ClientMessagePlugin>(),
         ))
-        .add_broadcast_event::<Test>(Channel::Ordered)
+        .add_shared_event::<Test>(Channel::Ordered)
         .finish();
     client_app
         .add_plugins((
@@ -108,13 +108,13 @@ fn without_plugins() {
                 .disable::<ServerPlugin>()
                 .disable::<ServerMessagePlugin>(),
         ))
-        .add_broadcast_event::<Test>(Channel::Ordered)
+        .add_shared_event::<Test>(Channel::Ordered)
         .finish();
     server_app.init_resource::<EventReader<Test>>();
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().broadcast_trigger(Test);
+    client_app.world_mut().shared_trigger(Test);
 
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -128,17 +128,17 @@ fn without_plugins() {
 fn local_sending() {
     let mut app = App::new();
     app.add_plugins((TimePlugin, StatesPlugin, RepliconPlugins))
-        .add_broadcast_event::<Test>(Channel::Ordered)
+        .add_shared_event::<Test>(Channel::Ordered)
         .finish();
     app.init_resource::<EventReader<Test>>();
 
-    app.world_mut().broadcast_trigger(Test);
+    app.world_mut().shared_trigger(Test);
 
     app.update();
 
     let reader = app.world().resource::<EventReader<Test>>();
     assert_eq!(reader.events.len(), 1);
-    assert_eq!(reader.events[0].broadcaster, Broadcaster::Local);
+    assert_eq!(reader.events[0].sender, Sender::Local);
 }
 
 #[test]
@@ -147,14 +147,14 @@ fn with_disconnect() {
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
         app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_broadcast_event::<Test>(Channel::Ordered)
+            .add_shared_event::<Test>(Channel::Ordered)
             .finish();
     }
     client_app.init_resource::<EventReader<Test>>();
 
     server_app.connect_client(&mut client_app);
 
-    client_app.world_mut().broadcast_trigger(Test);
+    client_app.world_mut().shared_trigger(Test);
 
     server_app.disconnect_client(&mut client_app);
 
@@ -173,12 +173,12 @@ struct WithEntity(#[entities] Entity);
 
 #[derive(Resource)]
 struct EventReader<E: Event> {
-    events: Vec<Broadcast<E>>,
+    events: Vec<LocalOrRemote<E>>,
 }
 
 impl<E: Event + Clone> FromWorld for EventReader<E> {
     fn from_world(world: &mut World) -> Self {
-        world.add_observer(|on: On<Broadcast<E>>, mut reader: ResMut<Self>| {
+        world.add_observer(|on: On<LocalOrRemote<E>>, mut reader: ResMut<Self>| {
             reader.events.push(on.event().clone());
         });
 

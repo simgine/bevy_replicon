@@ -141,7 +141,7 @@ impl ClientEvent {
     }
 }
 
-/// Signature of client trigger functions.
+/// Signature of client event trigger functions.
 type TriggerFn = unsafe fn(&mut Commands, PtrMut);
 
 /// Extension trait for triggering client events.

@@ -17,54 +17,54 @@ use super::{
 };
 use crate::prelude::*;
 
-/// An extension trait for [`App`] for creating broadcast messages.
+/// An extension trait for [`App`] for creating shared messages.
 ///
-/// See also [`BroadcastEventAppExt`] for events, [`ClientMessageAppExt`] for regular client messages
+/// See also [`SharedEventAppExt`] for events, [`ClientMessageAppExt`] for regular client messages
 /// and [`ServerMessageAppExt`] for server messages.
-pub trait BroadcastMessageAppExt {
-    /// Registers a remote broadcast message.
+pub trait SharedMessageAppExt {
+    /// Registers a remote shared message.
     ///
     /// Similar to [`ClientMessageAppExt::add_client_message`], but the message is emitted as
-    /// [`Broadcast<M>`] both on the sender (with [`Broadcaster::Local`]) and on the receiver
-    /// (with [`Broadcaster::Remote`]). Useful for sharing logic between client-side prediction
+    /// [`LocalOrRemote<M>`] both on the sender (with [`Sender::Local`]) and on the receiver
+    /// (with [`Sender::Remote`]). Useful for sharing logic between client-side prediction
     /// and authoritative server processing.
     ///
-    /// On a listen server, locally written messages are emitted as [`Broadcast<M>`] with
-    /// [`Broadcaster::Local`].
+    /// On a listen server, locally written messages are emitted as [`LocalOrRemote<M>`] with
+    /// [`Sender::Local`].
     ///
     /// Calling [`App::add_message`] is not necessary. Can be used for regular messages that were
     /// previously registered. But be careful, since all messages `M` are drained,
     /// which could break Bevy or third-party plugin systems that read `M`.
-    fn add_broadcast_message<M: Message + Serialize + DeserializeOwned>(
+    fn add_shared_message<M: Message + Serialize + DeserializeOwned>(
         &mut self,
         channel: Channel,
     ) -> &mut Self {
-        self.add_broadcast_message_with(
+        self.add_shared_message_with(
             channel,
             client_message::default_serialize::<M>,
             client_message::default_deserialize::<M>,
         )
     }
 
-    /// Same as [`Self::add_broadcast_message`], but additionally maps client entities to server inside the message before sending.
+    /// Same as [`Self::add_shared_message`], but additionally maps client entities to server inside the message before sending.
     ///
     /// Always use it for messages that contain entities. Entities must be annotated with `#[entities]`.
     /// For details, see [`Component::map_entities`].
-    fn add_mapped_broadcast_message<M>(&mut self, channel: Channel) -> &mut Self
+    fn add_mapped_shared_message<M>(&mut self, channel: Channel) -> &mut Self
     where
         M: Message + Serialize + DeserializeOwned + MapEntities + Clone,
     {
-        self.add_broadcast_message_with(
+        self.add_shared_message_with(
             channel,
             client_message::default_serialize_mapped::<M>,
             client_message::default_deserialize::<M>,
         )
     }
 
-    /// Same as [`Self::add_broadcast_message`], but uses the specified functions for serialization and deserialization.
+    /// Same as [`Self::add_shared_message`], but uses the specified functions for serialization and deserialization.
     ///
     /// See also [`ClientMessageAppExt::add_client_message_with`].
-    fn add_broadcast_message_with<M: Message>(
+    fn add_shared_message_with<M: Message>(
         &mut self,
         channel: Channel,
         serialize: SerializeFn<ClientSendCtx, M>,
@@ -72,8 +72,8 @@ pub trait BroadcastMessageAppExt {
     ) -> &mut Self;
 }
 
-impl BroadcastMessageAppExt for App {
-    fn add_broadcast_message_with<M: Message>(
+impl SharedMessageAppExt for App {
+    fn add_shared_message_with<M: Message>(
         &mut self,
         channel: Channel,
         serialize: SerializeFn<ClientSendCtx, M>,
@@ -81,26 +81,26 @@ impl BroadcastMessageAppExt for App {
     ) -> &mut Self {
         self.world_mut()
             .resource_mut::<ProtocolHasher>()
-            .add_broadcast_message::<M>();
+            .add_shared_message::<M>();
 
         let fns = MessageFns::new(serialize, deserialize);
-        let message = BroadcastMessage::new(self, channel, fns);
+        let message = SharedMessage::new(self, channel, fns);
         let mut registry = self.world_mut().resource_mut::<RemoteMessageRegistry>();
-        registry.register_broadcast_message(message);
+        registry.register_shared_message(message);
 
         self
     }
 }
 
-/// Type-erased functions and metadata for a registered broadcast message.
+/// Type-erased functions and metadata for a registered shared message.
 ///
 /// Needed to erase message types to process them in a single system.
-pub(crate) struct BroadcastMessage {
+pub(crate) struct SharedMessage {
     /// ID of [`Messages<M>`] resource.
     messages_id: ComponentId,
 
-    /// ID of [`Messages<Broadcast<M>>`] resource.
-    broadcast_id: ComponentId,
+    /// ID of [`Messages<LocalOrRemote<M>>`] resource.
+    shared_messages_id: ComponentId,
 
     /// Used channel.
     channel_id: usize,
@@ -115,7 +115,7 @@ pub(crate) struct BroadcastMessage {
     fns: UntypedMessageFns,
 }
 
-impl BroadcastMessage {
+impl SharedMessage {
     pub(super) fn new<M: Message, I: 'static>(
         app: &mut App,
         channel: Channel,
@@ -126,14 +126,17 @@ impl BroadcastMessage {
             .resource_mut::<RepliconChannels>()
             .create_client_channel(channel);
 
-        app.add_message::<M>().add_message::<Broadcast<M>>();
+        app.add_message::<M>().add_message::<LocalOrRemote<M>>();
 
         let messages_id = app.world().resource_id::<Messages<M>>().unwrap();
-        let broadcast_id = app.world().resource_id::<Messages<Broadcast<M>>>().unwrap();
+        let shared_messages_id = app
+            .world()
+            .resource_id::<Messages<LocalOrRemote<M>>>()
+            .unwrap();
 
         Self {
             messages_id,
-            broadcast_id,
+            shared_messages_id,
             channel_id,
             type_id: TypeId::of::<M>(),
             send: Self::send_typed::<M, I>,
@@ -148,8 +151,8 @@ impl BroadcastMessage {
         self.messages_id
     }
 
-    pub(crate) fn broadcast_id(&self) -> ComponentId {
-        self.broadcast_id
+    pub(crate) fn shared_messages_id(&self) -> ComponentId {
+        self.shared_messages_id
     }
 
     pub(super) fn channel_id(&self) -> usize {
@@ -160,37 +163,38 @@ impl BroadcastMessage {
         self.type_id
     }
 
-    /// Sends a broadcast message to the server and writes it locally as [`Broadcast<M>`].
+    /// Sends a shared message to the server and writes it locally as [`LocalOrRemote<M>`].
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<M>`], `broadcasts` is [`Messages<Broadcast<M>>`]
+    /// The caller must ensure that `messages` is [`Messages<M>`], `shared_messages` is [`Messages<LocalOrRemote<M>>`]
     /// and this instance was created for `M`.
     pub(crate) unsafe fn send(
         &self,
         ctx: &mut ClientSendCtx,
         messages: PtrMut,
-        broadcasts: PtrMut,
+        shared_messages: PtrMut,
         client_messages: &mut ClientMessages,
     ) {
-        unsafe { (self.send)(self, ctx, messages, broadcasts, client_messages) };
+        unsafe { (self.send)(self, ctx, messages, shared_messages, client_messages) };
     }
 
     /// Typed version of [`Self::send`].
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<M>`], `broadcasts` is [`Messages<Broadcast<M>>`],
+    /// The caller must ensure that `messages` is [`Messages<M>`], `shared_messages` is [`Messages<LocalOrRemote<M>>`],
     /// and this instance was created for `M` and `I`.
     unsafe fn send_typed<M: Message, I: 'static>(
         &self,
         ctx: &mut ClientSendCtx,
         messages: PtrMut,
-        broadcasts: PtrMut,
+        shared_messages: PtrMut,
         client_messages: &mut ClientMessages,
     ) {
         let messages: &mut Messages<M> = unsafe { messages.deref_mut() };
-        let broadcasts: &mut Messages<Broadcast<M>> = unsafe { broadcasts.deref_mut() };
+        let shared_messages: &mut Messages<LocalOrRemote<M>> =
+            unsafe { shared_messages.deref_mut() };
         for message in messages.drain() {
             let mut message_bytes = Vec::new();
             if let Err(e) = unsafe { self.serialize::<M, I>(ctx, &message, &mut message_bytes) } {
@@ -201,52 +205,53 @@ impl BroadcastMessage {
                 continue;
             }
 
-            debug!("sending broadcast message `{}`", ShortName::of::<M>());
+            debug!("sending shared message `{}`", ShortName::of::<M>());
             client_messages.send(self.channel_id, message_bytes);
-            broadcasts.write(Broadcast {
-                broadcaster: Broadcaster::Local,
+            shared_messages.write(LocalOrRemote {
+                sender: Sender::Local,
                 message,
             });
         }
     }
 
-    /// Receives broadcast messages from clients.
+    /// Receives shared messages from clients.
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `broadcasts` is [`Messages<Broadcast<M>>`]
+    /// The caller must ensure that `shared_messages` is [`Messages<LocalOrRemote<M>>`]
     /// and this instance was created for `M`.
     pub(crate) unsafe fn receive(
         &self,
         ctx: &mut ServerReceiveCtx,
-        broadcasts: PtrMut,
+        shared_messages: PtrMut,
         server_messages: &mut ServerMessages,
     ) {
-        unsafe { (self.receive)(self, ctx, broadcasts, server_messages) }
+        unsafe { (self.receive)(self, ctx, shared_messages, server_messages) }
     }
 
     /// Typed version of [`Self::receive`].
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `broadcasts` is [`Messages<Broadcast<M>>`]
+    /// The caller must ensure that `shared_messages` is [`Messages<LocalOrRemote<M>>`]
     /// and this instance was created for `M` and `I`.
     unsafe fn receive_typed<M: Message, I: 'static>(
         &self,
         ctx: &mut ServerReceiveCtx,
-        broadcasts: PtrMut,
+        shared_messages: PtrMut,
         server_messages: &mut ServerMessages,
     ) {
-        let broadcasts: &mut Messages<Broadcast<M>> = unsafe { broadcasts.deref_mut() };
+        let shared_messages: &mut Messages<LocalOrRemote<M>> =
+            unsafe { shared_messages.deref_mut() };
         for (client, mut message) in server_messages.receive(self.channel_id) {
             match unsafe { self.deserialize::<M, I>(ctx, &mut message) } {
                 Ok(message) => {
                     debug!(
-                        "writing broadcast message `{}` from client `{client}`",
+                        "writing shared message `{}` from client `{client}`",
                         ShortName::of::<M>()
                     );
-                    broadcasts.write(Broadcast {
-                        broadcaster: Broadcaster::Remote(client.into()),
+                    shared_messages.write(LocalOrRemote {
+                        sender: Sender::Remote(client.into()),
                         message,
                     });
                 }
@@ -258,32 +263,33 @@ impl BroadcastMessage {
         }
     }
 
-    /// Drains messages `M` and writes them as [`Broadcast<M>`] with [`Broadcaster::Local`].
+    /// Drains messages `M` and writes them as [`LocalOrRemote<M>`] with [`Sender::Local`].
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<M>`], `broadcasts` is [`Messages<Broadcast<M>>`]
+    /// The caller must ensure that `messages` is [`Messages<M>`], `shared_messages` is [`Messages<LocalOrRemote<M>>`]
     /// and this instance was created for `M`.
-    pub(crate) unsafe fn send_locally(&self, broadcasts: PtrMut, messages: PtrMut) {
-        unsafe { (self.send_locally)(broadcasts, messages) }
+    pub(crate) unsafe fn send_locally(&self, shared_messages: PtrMut, messages: PtrMut) {
+        unsafe { (self.send_locally)(shared_messages, messages) }
     }
 
     /// Typed version of [`Self::send_locally`].
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<M>`] and `broadcasts` is [`Messages<Broadcast<M>>`].
-    unsafe fn send_locally_typed<M: Message>(broadcasts: PtrMut, messages: PtrMut) {
-        let broadcasts: &mut Messages<Broadcast<M>> = unsafe { broadcasts.deref_mut() };
+    /// The caller must ensure that `messages` is [`Messages<M>`] and `shared_messages` is [`Messages<LocalOrRemote<M>>`].
+    unsafe fn send_locally_typed<M: Message>(shared_messages: PtrMut, messages: PtrMut) {
+        let shared_messages: &mut Messages<LocalOrRemote<M>> =
+            unsafe { shared_messages.deref_mut() };
         let messages: &mut Messages<M> = unsafe { messages.deref_mut() };
         if !messages.is_empty() {
             debug!(
-                "writing {} broadcast message(s) `{}` locally",
+                "writing {} shared message(s) `{}` locally",
                 messages.len(),
                 ShortName::of::<M>()
             );
-            broadcasts.write_batch(messages.drain().map(|message| Broadcast {
-                broadcaster: Broadcaster::Local,
+            shared_messages.write_batch(messages.drain().map(|message| LocalOrRemote {
+                sender: Sender::Local,
                 message,
             }));
         }
@@ -309,7 +315,7 @@ impl BroadcastMessage {
         let drained_count = messages.drain().count();
         if drained_count > 0 {
             warn!(
-                "discarded {drained_count} broadcast messages of type `{}` due to a disconnect",
+                "discarded {drained_count} shared messages of type `{}` due to a disconnect",
                 ShortName::of::<M>()
             );
         }
@@ -363,41 +369,41 @@ impl BroadcastMessage {
     }
 }
 
-/// Signature of broadcast message sending functions.
-type SendFn = unsafe fn(&BroadcastMessage, &mut ClientSendCtx, PtrMut, PtrMut, &mut ClientMessages);
+/// Signature of shared message sending functions.
+type SendFn = unsafe fn(&SharedMessage, &mut ClientSendCtx, PtrMut, PtrMut, &mut ClientMessages);
 
-/// Signature of broadcast message receiving functions.
-type ReceiveFn = unsafe fn(&BroadcastMessage, &mut ServerReceiveCtx, PtrMut, &mut ServerMessages);
+/// Signature of shared message receiving functions.
+type ReceiveFn = unsafe fn(&SharedMessage, &mut ServerReceiveCtx, PtrMut, &mut ServerMessages);
 
-/// Signature of broadcast message local-sending functions.
+/// Signature of shared message local-sending functions.
 type SendLocallyFn = unsafe fn(PtrMut, PtrMut);
 
-/// Signature of broadcast message reset functions.
+/// Signature of shared message reset functions.
 type ResetFn = unsafe fn(PtrMut);
 
-/// A remote message that originates from a client.
+/// A remote message from a client.
 ///
-/// Emitted both on the sender (with [`Broadcaster::Local`]) and on the receiver
-/// (with [`Broadcaster::Remote`]).
+/// Emitted both on the sender (with [`Sender::Local`]) and on the receiver
+/// (with [`Sender::Remote`]).
 #[derive(Message, Event, Deref, DerefMut, Debug, Clone, Copy)]
-pub struct Broadcast<T> {
-    /// Origin of the message.
-    pub broadcaster: Broadcaster,
+pub struct LocalOrRemote<T> {
+    /// Sender of the message.
+    pub sender: Sender,
 
     /// Transmitted message.
     #[deref]
     pub message: T,
 }
 
-impl<E: EntityEvent> EntityEvent for Broadcast<E> {
+impl<E: EntityEvent> EntityEvent for LocalOrRemote<E> {
     fn event_target(&self) -> Entity {
         self.message.event_target()
     }
 }
 
-/// Origin of a [`Broadcast`] message.
+/// Sender of a [`LocalOrRemote`] message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Broadcaster {
+pub enum Sender {
     /// Written locally by this app.
     Local,
 
@@ -405,7 +411,7 @@ pub enum Broadcaster {
     Remote(ClientId),
 }
 
-impl Broadcaster {
+impl Sender {
     /// Returns `true` if the message was received from a remote client.
     pub fn is_remote(self) -> bool {
         matches!(self, Self::Remote(_))

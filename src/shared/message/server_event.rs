@@ -176,7 +176,7 @@ impl ServerEvent {
     }
 }
 
-/// Signature of server trigger functions.
+/// Signature of server event trigger functions.
 type TriggerFn = unsafe fn(&mut Commands, PtrMut);
 
 /// Extension trait for triggering server events.

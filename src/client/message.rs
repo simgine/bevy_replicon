@@ -51,15 +51,15 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(send);
 
-        let broadcast_send_fn = (
+        let send_shared_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_broadcast() {
+                for message in registry.iter_all_shared() {
                     builder.add_write_by_id(message.messages_id());
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_broadcast() {
-                    builder.add_write_by_id(message.broadcast_id());
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.shared_messages_id());
                 }
             }),
             ParamBuilder,
@@ -68,19 +68,19 @@ impl Plugin for ClientMessagePlugin {
             ParamBuilder,
         )
             .build_state(app.world_mut())
-            .build_system(broadcast_send);
+            .build_system(send_shared);
 
-        let broadcast_trigger_fn = (
+        let trigger_shared_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in registry.iter_broadcast_events() {
-                    builder.add_write_by_id(event.message().broadcast_id());
+                for event in registry.iter_shared_events() {
+                    builder.add_write_by_id(event.message().shared_messages_id());
                 }
             }),
             ParamBuilder,
             ParamBuilder,
         )
             .build_state(app.world_mut())
-            .build_system(broadcast_trigger);
+            .build_system(trigger_shared);
 
         let receive_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
@@ -144,21 +144,21 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(send_locally);
 
-        let broadcast_send_locally_fn = (
+        let send_shared_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_broadcast() {
-                    builder.add_write_by_id(message.broadcast_id());
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.shared_messages_id());
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_broadcast() {
+                for message in registry.iter_all_shared() {
                     builder.add_write_by_id(message.messages_id());
                 }
             }),
             ParamBuilder,
         )
             .build_state(app.world_mut())
-            .build_system(broadcast_send_locally);
+            .build_system(send_shared_locally);
 
         let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
@@ -172,7 +172,7 @@ impl Plugin for ClientMessagePlugin {
                 }
             }),
             FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_broadcast() {
+                for message in registry.iter_all_shared() {
                     builder.add_write_by_id(message.messages_id());
                 }
             }),
@@ -206,10 +206,10 @@ impl Plugin for ClientMessagePlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    (send_fn, broadcast_send_fn).run_if(in_state(ClientState::Connected)),
-                    (send_locally_fn, broadcast_send_locally_fn)
+                    (send_fn, send_shared_fn).run_if(in_state(ClientState::Connected)),
+                    (send_locally_fn, send_shared_locally_fn)
                         .run_if(in_state(ClientState::Disconnected)),
-                    broadcast_trigger_fn,
+                    trigger_shared_fn,
                 )
                     .chain()
                     .in_set(ClientSystems::Send),
@@ -251,9 +251,9 @@ fn send(
     }
 }
 
-fn broadcast_send(
+fn send_shared(
     mut messages: FilteredResourcesMut,
-    mut broadcasts: FilteredResourcesMut,
+    mut shared_messages: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
@@ -265,20 +265,20 @@ fn broadcast_send(
         invalid_entities: Vec::new(),
     };
 
-    for message in registry.iter_all_broadcast() {
+    for message in registry.iter_all_shared() {
         let messages = messages
             .get_mut_by_id(message.messages_id())
             .expect("messages resource should be accessible");
-        let broadcasts = broadcasts
-            .get_mut_by_id(message.broadcast_id())
-            .expect("broadcast messages resource should be accessible");
+        let shared_messages = shared_messages
+            .get_mut_by_id(message.shared_messages_id())
+            .expect("shared messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
         unsafe {
             message.send(
                 &mut ctx,
                 messages.into_inner(),
-                broadcasts.into_inner(),
+                shared_messages.into_inner(),
                 &mut client_messages,
             );
         }
@@ -334,17 +334,17 @@ fn trigger(
     }
 }
 
-fn broadcast_trigger(
-    mut broadcasts: FilteredResourcesMut,
+fn trigger_shared(
+    mut shared_messages: FilteredResourcesMut,
     mut commands: Commands,
     registry: Res<RemoteMessageRegistry>,
 ) {
-    for event in registry.iter_broadcast_events() {
-        let broadcasts = broadcasts
-            .get_mut_by_id(event.message().broadcast_id())
-            .expect("broadcast messages resource should be accessible");
+    for event in registry.iter_shared_events() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(event.message().shared_messages_id())
+            .expect("shared messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this event data.
-        unsafe { event.trigger(&mut commands, broadcasts.into_inner()) };
+        unsafe { event.trigger(&mut commands, shared_messages.into_inner()) };
     }
 }
 
@@ -366,28 +366,28 @@ fn send_locally(
     }
 }
 
-fn broadcast_send_locally(
-    mut broadcasts: FilteredResourcesMut,
+fn send_shared_locally(
+    mut shared_messages: FilteredResourcesMut,
     mut messages: FilteredResourcesMut,
     registry: Res<RemoteMessageRegistry>,
 ) {
-    for message in registry.iter_all_broadcast() {
-        let broadcasts = broadcasts
-            .get_mut_by_id(message.broadcast_id())
-            .expect("broadcast messages resource should be accessible");
+    for message in registry.iter_all_shared() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(message.shared_messages_id())
+            .expect("shared messages resource should be accessible");
         let messages = messages
             .get_mut_by_id(message.messages_id())
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
-        unsafe { message.send_locally(broadcasts.into_inner(), messages.into_inner()) };
+        unsafe { message.send_locally(shared_messages.into_inner(), messages.into_inner()) };
     }
 }
 
 fn reset(
     mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
-    mut broadcast_messages: FilteredResourcesMut,
+    mut shared_messages: FilteredResourcesMut,
     registry: Res<RemoteMessageRegistry>,
 ) {
     for message in registry.iter_all_client() {
@@ -408,12 +408,12 @@ fn reset(
         unsafe { messages.reset(queue.into_inner()) };
     }
 
-    for message in registry.iter_all_broadcast() {
-        let messages = broadcast_messages
+    for message in registry.iter_all_shared() {
+        let shared_messages = shared_messages
             .get_mut_by_id(message.messages_id())
-            .expect("broadcast messages resource should be accessible");
+            .expect("shared messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
-        unsafe { message.reset(messages.into_inner()) };
+        unsafe { message.reset(shared_messages.into_inner()) };
     }
 }
