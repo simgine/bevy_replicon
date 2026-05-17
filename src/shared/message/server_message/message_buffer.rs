@@ -71,8 +71,8 @@ impl MessageBuffer {
                                 message.send(messages, client, ticks)?;
                             } else {
                                 debug!(
-                                    "ignoring broadcast for channel {} for non-authorized client `{client}`",
-                                    message.channel_id
+                                    "ignoring `{:?}` for channel {} for non-authorized client `{client}`",
+                                    message.targets, message.channel_id
                                 );
                             }
                         }
@@ -89,8 +89,8 @@ impl MessageBuffer {
                                 message.send(messages, client, ticks)?;
                             } else {
                                 debug!(
-                                    "ignoring broadcast except `{ignored_id}` for channel {} for non-authorized client `{client}`",
-                                    message.channel_id
+                                    "ignoring `{:?}` for channel {} for non-authorized client `{client}`",
+                                    message.targets, message.channel_id
                                 );
                             }
                         }
@@ -104,8 +104,9 @@ impl MessageBuffer {
                                 message.send(messages, client, ticks)?;
                             } else {
                                 error!(
-                                    "ignoring direct message for non-authorized client `{client}`, \
-                                         mark it as independent to allow this"
+                                    "ignoring `{:?}` for non-authorized client `{client}`, \
+                                         mark it as independent to allow this",
+                                    message.targets
                                 );
                             }
                         }
