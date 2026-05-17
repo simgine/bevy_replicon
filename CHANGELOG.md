@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.41.0-rc.1] - 2026-05-17
 
+### Changed
+
 - Update to Bevy 0.19.0-rc.1.
 - `DeferredEntity::flush` now consumes the entity.
 - Rename `scene` module and feature into `world_serialization`.
