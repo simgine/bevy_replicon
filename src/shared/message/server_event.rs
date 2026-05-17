@@ -176,7 +176,7 @@ impl ServerEvent {
     }
 }
 
-/// Signature of server trigger functions.
+/// Signature of server event trigger functions.
 type TriggerFn = unsafe fn(&mut Commands, PtrMut);
 
 /// Extension trait for triggering server events.
@@ -191,7 +191,7 @@ pub trait ServerTriggerExt {
 impl ServerTriggerExt for Commands<'_, '_> {
     fn server_trigger(&mut self, event: ToClients<impl Event>) {
         self.write_message(ToClients {
-            mode: event.mode,
+            targets: event.targets,
             message: ServerTriggerEvent {
                 event: event.message,
             },
@@ -202,7 +202,7 @@ impl ServerTriggerExt for Commands<'_, '_> {
 impl ServerTriggerExt for World {
     fn server_trigger(&mut self, event: ToClients<impl Event>) {
         self.write_message(ToClients {
-            mode: event.mode,
+            targets: event.targets,
             message: ServerTriggerEvent {
                 event: event.message,
             },

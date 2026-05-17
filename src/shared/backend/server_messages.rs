@@ -37,6 +37,23 @@ impl ServerMessages {
         self.sent_messages.retain(|&(entity, ..)| entity != client);
     }
 
+    /// Returns an iterator over received messages from clients on a channel without consuming them.
+    ///
+    /// The messages stay in the resource. Intended for tools that need to
+    /// observe inbound traffic (such as replay recording) before Replicon
+    /// consumes them.
+    pub fn iter_received<I: Into<usize>>(
+        &self,
+        channel_id: I,
+    ) -> impl ExactSizeIterator<Item = (Entity, &Bytes)> + '_ {
+        let channel_id = channel_id.into();
+        self.received_messages
+            .get(channel_id)
+            .unwrap_or_else(|| panic!("server should have a receive channel with id {channel_id}"))
+            .iter()
+            .map(|(entity, bytes)| (*entity, bytes))
+    }
+
     /// Receives all available messages from clients over a channel.
     ///
     /// All messages will be drained.
@@ -86,13 +103,22 @@ impl ServerMessages {
     }
 
     /// Retains only the messages specified by the predicate.
-    ///
-    /// Used for testing.
-    pub(crate) fn retain_sent<F>(&mut self, f: F)
+    pub fn retain_sent<F>(&mut self, f: F)
     where
         F: FnMut(&(Entity, usize, Bytes)) -> bool,
     {
         self.sent_messages.retain(f)
+    }
+
+    /// Returns an iterator over sent messages without consuming them.
+    ///
+    /// Unlike [`Self::drain_sent`], the messages stay in the resource. Intended for
+    /// tools that need to observe outbound traffic (e.g. server-side replay recording)
+    /// before the messaging backend drains them.
+    pub fn iter_sent(&self) -> impl ExactSizeIterator<Item = (Entity, usize, &Bytes)> + '_ {
+        self.sent_messages
+            .iter()
+            .map(|(entity, channel_id, bytes)| (*entity, *channel_id, bytes))
     }
 
     /// Removes all sent messages, returning them as an iterator with client entity and channel.

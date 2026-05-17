@@ -255,7 +255,7 @@ fn check_protocol(
             **client_protocol, *protocol
         );
         commands.server_trigger(ToClients {
-            mode: SendMode::Direct(client_protocol.client_id),
+            targets: SendTargets::Single(client_protocol.client_id),
             message: ProtocolMismatch,
         });
         disconnects.write(DisconnectRequest { client });
@@ -351,14 +351,13 @@ fn receive_acks(
     mut clients: Query<&mut ClientTicks>,
 ) {
     for (client, mut message) in messages.receive(ClientChannel::MutationAcks) {
+        let Ok(mut ticks) = clients.get_mut(client) else {
+            debug!("ignoring acks for disconnected client `{client}`");
+            continue;
+        };
         while message.has_remaining() {
             match postcard_utils::from_buf(&mut message) {
                 Ok(mutate_index) => {
-                    let mut ticks = clients.get_mut(client).unwrap_or_else(|_| {
-                        panic!(
-                            "messages from client `{client}` should have been removed on disconnect"
-                        )
-                    });
                     if let Some(entities) = ticks.ack_mutate_message(client, mutate_index) {
                         pools.recycle_entities(entities);
                     }

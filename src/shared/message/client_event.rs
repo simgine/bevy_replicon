@@ -106,7 +106,7 @@ impl ClientEvent {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that `messages` is [`Messages<FromClient<ClientMessageEvent<E>>>`]
+    /// The caller must ensure that `from_messages` is [`Messages<FromClient<ClientMessageEvent<E>>>`]
     /// and this instance was created for `E`.
     pub(crate) unsafe fn trigger(&self, commands: &mut Commands, from_messages: PtrMut) {
         unsafe { (self.trigger)(commands, from_messages) }
@@ -141,7 +141,7 @@ impl ClientEvent {
     }
 }
 
-/// Signature of client trigger functions.
+/// Signature of client event trigger functions.
 type TriggerFn = unsafe fn(&mut Commands, PtrMut);
 
 /// Extension trait for triggering client events.

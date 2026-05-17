@@ -5,3 +5,5 @@ pub mod message_fns;
 pub mod registry;
 pub mod server_event;
 pub mod server_message;
+pub mod shared_event;
+pub mod shared_message;

@@ -75,7 +75,7 @@ pub struct RepliconSharedPlugin {
             // Notify the client about the problem. No delivery
             // guarantee, since we disconnect after sending.
             commands.server_trigger(ToClients {
-                mode: SendMode::Direct(client_info.client_id),
+                targets: SendTargets::Single(client_info.client_id),
                 message: ProtocolMismatch,
             });
             disconnects.write(DisconnectRequest { client });

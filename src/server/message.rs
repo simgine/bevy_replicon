@@ -61,6 +61,19 @@ impl Plugin for ServerMessagePlugin {
             .build_state(app.world_mut())
             .build_system(receive);
 
+        let receive_shared_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.shared_messages_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(receive_shared);
+
         let trigger_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for event in registry.iter_client_events() {
@@ -72,6 +85,18 @@ impl Plugin for ServerMessagePlugin {
         )
             .build_state(app.world_mut())
             .build_system(trigger);
+
+        let trigger_shared_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for event in registry.iter_shared_events() {
+                    builder.add_write_by_id(event.message().shared_messages_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(trigger_shared);
 
         let send_locally_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
@@ -93,8 +118,11 @@ impl Plugin for ServerMessagePlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    receive_fn.run_if(in_state(ServerState::Running)),
-                    trigger_fn.run_if(in_state(ClientState::Disconnected)),
+                    (receive_fn, receive_shared_fn).run_if(in_state(ServerState::Running)),
+                    (
+                        trigger_fn.run_if(in_state(ClientState::Disconnected)),
+                        trigger_shared_fn,
+                    ),
                 )
                     .chain()
                     .in_set(ServerSystems::Receive),
@@ -131,7 +159,7 @@ fn send_or_buffer(
     for message in message_registry.iter_all_server() {
         let to_messages = to_messages
             .get_by_id(message.to_messages_id())
-            .expect("to messages resource should be accessible");
+            .expect("to clients messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe {
@@ -169,10 +197,30 @@ fn receive(
     for message in message_registry.iter_all_client() {
         let from_messages = from_messages
             .get_mut_by_id(message.from_messages_id())
-            .expect("from messages resource should be accessible");
+            .expect("from clients messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { message.receive(&mut ctx, from_messages.into_inner(), &mut server_messages) };
+    }
+}
+
+fn receive_shared(
+    mut shared_messages: FilteredResourcesMut,
+    mut server_messages: ResMut<ServerMessages>,
+    type_registry: Res<AppTypeRegistry>,
+    message_registry: Res<RemoteMessageRegistry>,
+) {
+    let mut ctx = ServerReceiveCtx {
+        type_registry: &type_registry,
+    };
+
+    for message in message_registry.iter_all_shared() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(message.shared_messages_id())
+            .expect("shared messages resource should be accessible");
+
+        // SAFETY: passed pointer was obtained using this message data.
+        unsafe { message.receive(&mut ctx, shared_messages.into_inner(), &mut server_messages) };
     }
 }
 
@@ -184,9 +232,23 @@ fn trigger(
     for event in registry.iter_client_events() {
         let from_messages = from_messages
             .get_mut_by_id(event.message().from_messages_id())
-            .expect("client messages resource should be accessible");
+            .expect("from clients messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { event.trigger(&mut commands, from_messages.into_inner()) };
+    }
+}
+
+fn trigger_shared(
+    mut shared_messages: FilteredResourcesMut,
+    mut commands: Commands,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    for event in registry.iter_shared_events() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(event.message().shared_messages_id())
+            .expect("shared messages resource should be accessible");
+        // SAFETY: passed pointer was obtained using this event data.
+        unsafe { event.trigger(&mut commands, shared_messages.into_inner()) };
     }
 }
 

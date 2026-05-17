@@ -26,15 +26,15 @@ fn regular() {
     server_app.connect_client(&mut client_app);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    for (mode, messages_count) in [
-        (SendMode::Broadcast, 1),
-        (SendMode::Direct(ClientId::Server), 0),
-        (SendMode::Direct(client.into()), 1),
-        (SendMode::BroadcastExcept(ClientId::Server), 1),
-        (SendMode::BroadcastExcept(client.into()), 0),
+    for (targets, messages_count) in [
+        (SendTargets::All, 1),
+        (SendTargets::Single(ClientId::Server), 0),
+        (SendTargets::Single(client.into()), 1),
+        (SendTargets::AllExcept(ClientId::Server), 1),
+        (SendTargets::AllExcept(client.into()), 0),
     ] {
         server_app.world_mut().write_message(ToClients {
-            mode,
+            targets,
             message: Test,
         });
 
@@ -47,7 +47,7 @@ fn regular() {
         assert_eq!(
             messages.drain().count(),
             messages_count,
-            "message should be received {messages_count} times for {mode:?}"
+            "message should be received {messages_count} times for {targets:?}"
         );
     }
 }
@@ -71,7 +71,7 @@ fn mapped() {
     let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: WithEntity(server_entity),
     });
 
@@ -126,15 +126,15 @@ fn without_plugins() {
     server_app.connect_client(&mut client_app);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    for (mode, messages_count) in [
-        (SendMode::Broadcast, 1),
-        (SendMode::Direct(ClientId::Server), 0),
-        (SendMode::Direct(client.into()), 1),
-        (SendMode::BroadcastExcept(ClientId::Server), 1),
-        (SendMode::BroadcastExcept(client.into()), 0),
+    for (targets, messages_count) in [
+        (SendTargets::All, 1),
+        (SendTargets::Single(ClientId::Server), 0),
+        (SendTargets::Single(client.into()), 1),
+        (SendTargets::AllExcept(ClientId::Server), 1),
+        (SendTargets::AllExcept(client.into()), 0),
     ] {
         server_app.world_mut().write_message(ToClients {
-            mode,
+            targets,
             message: Test,
         });
 
@@ -147,7 +147,7 @@ fn without_plugins() {
         assert_eq!(
             messages.drain().count(),
             messages_count,
-            "message should be received {messages_count} times for {mode:?}"
+            "message should be received {messages_count} times for {targets:?}"
         );
     }
 }
@@ -165,15 +165,15 @@ fn local_sending() {
 
     const CLIENT_ENTITY: Entity = Entity::from_raw_u32(1).unwrap();
     const PLACEHOLDER_CLIENT_ID: ClientId = ClientId::Client(CLIENT_ENTITY);
-    for (mode, messages_count) in [
-        (SendMode::Broadcast, 1),
-        (SendMode::Direct(ClientId::Server), 1),
-        (SendMode::Direct(PLACEHOLDER_CLIENT_ID), 0),
-        (SendMode::BroadcastExcept(ClientId::Server), 0),
-        (SendMode::BroadcastExcept(PLACEHOLDER_CLIENT_ID), 1),
+    for (targets, messages_count) in [
+        (SendTargets::All, 1),
+        (SendTargets::Single(ClientId::Server), 1),
+        (SendTargets::Single(PLACEHOLDER_CLIENT_ID), 0),
+        (SendTargets::AllExcept(ClientId::Server), 0),
+        (SendTargets::AllExcept(PLACEHOLDER_CLIENT_ID), 1),
     ] {
         app.world_mut().write_message(ToClients {
-            mode,
+            targets,
             message: Test,
         });
 
@@ -186,7 +186,7 @@ fn local_sending() {
         assert_eq!(
             messages.drain().count(),
             messages_count,
-            "message should be received {messages_count} times for {mode:?}"
+            "message should be received {messages_count} times for {targets:?}"
         );
     }
 }
@@ -204,7 +204,7 @@ fn server_buffering() {
     server_app.connect_client(&mut client_app);
 
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -260,7 +260,7 @@ fn client_queue() {
     let previous_tick = *update_tick;
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -309,7 +309,7 @@ fn client_queue_and_mapping() {
     let previous_tick = *update_tick;
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: WithEntity(server_entity),
     });
 
@@ -371,11 +371,11 @@ fn multiple_client_queues() {
     let previous_tick = *update_tick;
     *update_tick = Default::default();
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: WithEntity(Entity::PLACEHOLDER),
     });
 
@@ -433,19 +433,19 @@ fn independent() {
     *client_app.world_mut().resource_mut::<ServerUpdateTick>() = Default::default();
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    for (mode, messages_count) in [
-        (SendMode::Broadcast, 1),
-        (SendMode::Direct(ClientId::Server), 0),
-        (SendMode::Direct(client.into()), 1),
-        (SendMode::BroadcastExcept(ClientId::Server), 1),
-        (SendMode::BroadcastExcept(client.into()), 0),
+    for (targets, messages_count) in [
+        (SendTargets::All, 1),
+        (SendTargets::Single(ClientId::Server), 0),
+        (SendTargets::Single(client.into()), 1),
+        (SendTargets::AllExcept(ClientId::Server), 1),
+        (SendTargets::AllExcept(client.into()), 0),
     ] {
         server_app.world_mut().write_message(ToClients {
-            mode,
+            targets,
             message: Test,
         });
         server_app.world_mut().write_message(ToClients {
-            mode,
+            targets,
             message: Independent,
         });
 
@@ -465,7 +465,7 @@ fn independent() {
         assert_eq!(
             independent_messages.drain().count(),
             messages_count,
-            "message should be received {messages_count} times for {mode:?}"
+            "message should be received {messages_count} times for {targets:?}"
         );
     }
 }
@@ -491,13 +491,13 @@ fn before_started_replication() {
     server_app.connect_client(&mut client_app);
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    for mode in [
-        SendMode::Broadcast,
-        SendMode::BroadcastExcept(ClientId::Server),
-        SendMode::Direct(client.into()),
+    for targets in [
+        SendTargets::All,
+        SendTargets::AllExcept(ClientId::Server),
+        SendTargets::Single(client.into()),
     ] {
         server_app.world_mut().write_message(ToClients {
-            mode,
+            targets,
             message: Test,
         });
     }
@@ -537,11 +537,11 @@ fn independent_before_started_replication() {
     server_app.world_mut().spawn(Replicated);
 
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Independent,
     });
 
@@ -589,7 +589,7 @@ fn different_ticks() {
     server_app.connect_client(&mut client_app2);
 
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 

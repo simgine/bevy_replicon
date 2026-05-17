@@ -51,6 +51,37 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(send);
 
+        let send_shared_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.messages_id());
+                }
+            }),
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.shared_messages_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(send_shared);
+
+        let trigger_shared_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for event in registry.iter_shared_events() {
+                    builder.add_write_by_id(event.message().shared_messages_id());
+                }
+            }),
+            ParamBuilder,
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(trigger_shared);
+
         let receive_builder = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_server() {
@@ -113,6 +144,22 @@ impl Plugin for ClientMessagePlugin {
             .build_state(app.world_mut())
             .build_system(send_locally);
 
+        let send_shared_locally_fn = (
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.shared_messages_id());
+                }
+            }),
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.messages_id());
+                }
+            }),
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(send_shared_locally);
+
         let reset_fn = (
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_client() {
@@ -122,6 +169,11 @@ impl Plugin for ClientMessagePlugin {
             FilteredResourcesMutParamBuilder::new(|builder| {
                 for message in registry.iter_all_server() {
                     builder.add_write_by_id(message.queue_id());
+                }
+            }),
+            FilteredResourcesMutParamBuilder::new(|builder| {
+                for message in registry.iter_all_shared() {
+                    builder.add_write_by_id(message.messages_id());
                 }
             }),
             ParamBuilder,
@@ -154,8 +206,10 @@ impl Plugin for ClientMessagePlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    send_fn.run_if(in_state(ClientState::Connected)),
-                    send_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                    (send_fn, send_shared_fn).run_if(in_state(ClientState::Connected)),
+                    (send_locally_fn, send_shared_locally_fn)
+                        .run_if(in_state(ClientState::Disconnected)),
+                    trigger_shared_fn,
                 )
                     .chain()
                     .in_set(ClientSystems::Send),
@@ -191,6 +245,40 @@ fn send(
                 &mut ctx,
                 &messages,
                 reader.into_inner(),
+                &mut client_messages,
+            );
+        }
+    }
+}
+
+fn send_shared(
+    mut messages: FilteredResourcesMut,
+    mut shared_messages: FilteredResourcesMut,
+    mut client_messages: ResMut<ClientMessages>,
+    type_registry: Res<AppTypeRegistry>,
+    entity_map: Res<ServerEntityMap>,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    let mut ctx = ClientSendCtx {
+        entity_map: &entity_map,
+        type_registry: &type_registry,
+        invalid_entities: Vec::new(),
+    };
+
+    for message in registry.iter_all_shared() {
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
+        let shared_messages = shared_messages
+            .get_mut_by_id(message.shared_messages_id())
+            .expect("shared messages resource should be accessible");
+
+        // SAFETY: passed pointers were obtained using this message data.
+        unsafe {
+            message.send(
+                &mut ctx,
+                messages.into_inner(),
+                shared_messages.into_inner(),
                 &mut client_messages,
             );
         }
@@ -246,6 +334,20 @@ fn trigger(
     }
 }
 
+fn trigger_shared(
+    mut shared_messages: FilteredResourcesMut,
+    mut commands: Commands,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    for event in registry.iter_shared_events() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(event.message().shared_messages_id())
+            .expect("shared messages resource should be accessible");
+        // SAFETY: passed pointer was obtained using this event data.
+        unsafe { event.trigger(&mut commands, shared_messages.into_inner()) };
+    }
+}
+
 fn send_locally(
     mut from_messages: FilteredResourcesMut,
     mut messages: FilteredResourcesMut,
@@ -254,7 +356,7 @@ fn send_locally(
     for message in registry.iter_all_client() {
         let from_messages = from_messages
             .get_mut_by_id(message.from_messages_id())
-            .expect("from messages resource should be accessible");
+            .expect("from clients messages resource should be accessible");
         let messages = messages
             .get_mut_by_id(message.messages_id())
             .expect("messages resource should be accessible");
@@ -264,9 +366,28 @@ fn send_locally(
     }
 }
 
+fn send_shared_locally(
+    mut shared_messages: FilteredResourcesMut,
+    mut messages: FilteredResourcesMut,
+    registry: Res<RemoteMessageRegistry>,
+) {
+    for message in registry.iter_all_shared() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(message.shared_messages_id())
+            .expect("shared messages resource should be accessible");
+        let messages = messages
+            .get_mut_by_id(message.messages_id())
+            .expect("messages resource should be accessible");
+
+        // SAFETY: passed pointers were obtained using this message data.
+        unsafe { message.send_locally(shared_messages.into_inner(), messages.into_inner()) };
+    }
+}
+
 fn reset(
     mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
+    mut shared_messages: FilteredResourcesMut,
     registry: Res<RemoteMessageRegistry>,
 ) {
     for message in registry.iter_all_client() {
@@ -285,5 +406,14 @@ fn reset(
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { messages.reset(queue.into_inner()) };
+    }
+
+    for message in registry.iter_all_shared() {
+        let shared_messages = shared_messages
+            .get_mut_by_id(message.messages_id())
+            .expect("shared messages resource should be accessible");
+
+        // SAFETY: passed pointer was obtained using this message data.
+        unsafe { message.reset(shared_messages.into_inner()) };
     }
 }

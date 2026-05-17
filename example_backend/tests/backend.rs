@@ -66,7 +66,7 @@ fn disconnect_request() {
 
     server_app.world_mut().spawn(Replicated);
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -117,7 +117,7 @@ fn server_stop() {
     server_app.world_mut().remove_resource::<ExampleServer>();
     server_app.world_mut().spawn(Replicated);
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 
@@ -190,7 +190,7 @@ fn server_message() {
     setup(&mut server_app, &mut client_app).unwrap();
 
     server_app.world_mut().write_message(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Test,
     });
 

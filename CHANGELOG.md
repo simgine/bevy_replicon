@@ -7,14 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
-
-### Changed
-
-- `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
 - `DeferredEntity::flush` now consumes the entity.
 - Rename `scene` module and feature into `world_serialization`.
 - Rename `DeferredChanges` into `EntityScratch`.
+
+## [0.40.1] - 2026-05-17
+
+### Changed
+
+- `SendMode` now available from `prelude` to simplify the migration.
+
+## [0.40.0] - 2026-05-17
+
+### Added
+
+- Shared messages and events via `SharedMessageAppExt` and `SharedEventAppExt`. Emitted as `LocalOrRemote<M>` on both the sender and the receiver to allow shared logic for client-side prediction.
+- `iter_received` and `iter_sent` methods on `ClientMessages` and `ServerMessages` to inspect inbound and outbound messages on a channel without consuming them.
+
+### Changed
+
+- `ServerMessages::retain_sent` is now public, allowing users to filter outbound messages before the backend drains them.
+- `VisibilityFilter` trait and related types moved to the `shared::replication::visibility` module and no longer feature gated by the `server` feature.
+- `Replicated` is no longer automatically inserted on clients, only `Remote`. `scene::replicate_into` will serialize all entities that have either `Remote` or `Replicated`.
+- Rename `SendMode::Broadcast` into `SendTargets::All`
+- Rename `SendMode::BroadcastExcept` into `SendTargets::AllExcept`
+- Rename `SendMode::Direct` into `SendTargets::Single`
+- Rename `ToClients::mode` into `ToClients::targets`
+
+## [0.40.0] - 2026-04-26
+
+### Fixed
+
+- Don't panic when receiving acks from disconnected clients (backends might not discard messages immediately, allowing to react to them).
 
 ## [0.39.4] - 2026-04-08
 
@@ -1060,7 +1084,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.39.4...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...HEAD
+[0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1
+[0.40.0]: https://github.com/simgine/bevy_replicon/compare/v0.39.5...v0.40.0
+[0.39.5]: https://github.com/simgine/bevy_replicon/compare/v0.39.4...v0.39.5
 [0.39.4]: https://github.com/simgine/bevy_replicon/compare/v0.39.3...v0.39.4
 [0.39.3]: https://github.com/simgine/bevy_replicon/compare/v0.39.2...v0.39.3
 [0.39.2]: https://github.com/simgine/bevy_replicon/compare/v0.39.1...v0.39.2

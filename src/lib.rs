@@ -349,6 +349,32 @@ fn receive(ping: On<FromClient<Ping>>) {
 For events with entities inside use [`ClientEventAppExt::add_mapped_client_event`].
 Similar to messages, serialization can also be customized with [`ClientEventAppExt::add_client_event_with`].
 
+If you need to react to the same message on both the client and the server (for example,
+to share logic between client-side prediction and authoritative server processing), use
+[`SharedMessageAppExt::add_shared_message`] or
+[`SharedEventAppExt::add_shared_event`]. The message is emitted as [`LocalOrRemote<M>`]
+on both sides, with the [`Sender`] field indicating its origin.
+
+```
+# use bevy::{prelude::*, state::app::StatesPlugin};
+# use bevy_replicon::prelude::*;
+# use serde::{Deserialize, Serialize};
+# let mut app = App::new();
+# app.add_plugins((StatesPlugin, RepliconPlugins));
+app.add_shared_event::<Attack>(Channel::Ordered)
+    .add_observer(on_attack);
+
+fn on_attack(attack: On<LocalOrRemote<Attack>>) {
+    info!("attack from `{:?}`", attack.sender);
+}
+
+#[derive(Event, Deserialize, Serialize)]
+struct Attack;
+```
+
+Similar to regular client messages, we also provide [`SharedEventAppExt::add_mapped_shared_event`].
+and [`SharedEventAppExt::add_shared_event_with`].
+
 ### From server to client
 
 A similar technique is used to send messages from server to clients. To do this,
@@ -376,7 +402,7 @@ app.add_server_message::<Pong>(Channel::Ordered)
 
 fn send(mut pongs: MessageWriter<ToClients<Pong>>) {
     pongs.write(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Pong,
     });
 }
@@ -409,7 +435,7 @@ app.add_server_event::<Pong>(Channel::Ordered)
 
 fn send(mut commands: Commands) {
     commands.server_trigger(ToClients {
-        mode: SendMode::Broadcast,
+        targets: SendTargets::All,
         message: Pong,
     });
 }
@@ -707,7 +733,9 @@ pub mod prelude {
                 client_event::{ClientEventAppExt, ClientTriggerExt},
                 client_message::{ClientMessageAppExt, FromClient},
                 server_event::{ServerEventAppExt, ServerTriggerExt},
-                server_message::{SendMode, ServerMessageAppExt, ToClients},
+                server_message::{SendMode, SendTargets, ServerMessageAppExt, ToClients},
+                shared_event::{SharedEventAppExt, SharedTriggerExt},
+                shared_message::{LocalOrRemote, Sender, SharedMessageAppExt},
             },
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
