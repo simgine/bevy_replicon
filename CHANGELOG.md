@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.1] - 2026-05-17
+
+### Changed
+
+- `SendMode` now available from `prelude` to simplify the migration.
+
 ## [0.40.0] - 2026-05-17
 
 ### Added
@@ -1074,7 +1080,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...HEAD
+[0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/simgine/bevy_replicon/compare/v0.39.5...v0.40.0
 [0.39.5]: https://github.com/simgine/bevy_replicon/compare/v0.39.4...v0.39.5
 [0.39.4]: https://github.com/simgine/bevy_replicon/compare/v0.39.3...v0.39.4
