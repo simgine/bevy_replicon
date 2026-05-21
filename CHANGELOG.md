@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Don't schedule systems when no messages/events for them have been registered.
+
 ## [0.40.1] - 2026-05-17
 
 ### Changed
