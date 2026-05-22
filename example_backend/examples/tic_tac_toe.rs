@@ -150,7 +150,7 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
     }
 
     const TEXT_COLOR: Color = Color::srgb(0.5, 0.5, 1.0);
-    const FONT_SIZE: f32 = 32.0;
+    const FONT_SIZE: FontSize = FontSize::Px(32.0);
 
     commands.spawn((
         Node {
@@ -197,7 +197,7 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
                         children![(
                             TextSpan::default(),
                             TextFont {
-                                font: symbol_font.0.clone(),
+                                font: symbol_font.0.clone().into(),
                                 font_size: FONT_SIZE,
                                 ..Default::default()
                             },
@@ -288,8 +288,8 @@ fn init_symbols(
         .with_child((
             Text::new(symbol.glyph()),
             TextFont {
-                font: symbol_font.0.clone(),
-                font_size: 65.0,
+                font: symbol_font.0.clone().into(),
+                font_size: FontSize::Px(65.0),
                 ..Default::default()
             },
             TextColor(symbol.color()),

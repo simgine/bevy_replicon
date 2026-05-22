@@ -17,7 +17,7 @@ If you are new to networking, see [glossary](https://gist.github.com/maniwani/f9
 - Authorization support.
 - Control over client visibility of entities and components.
 - Specify which entities should be replicated in sync using ECS relationships.
-- Replication into scene to save server state.
+- State serialization based on replication rules.
 - Customizable serialization and deserialization even for types that don't implement `serde` traits (like `Box<dyn Reflect>`).
 - Abstracts game logic to support singleplayer, client, dedicated server, and listen server configurations simultaneously.
 - No builtin I/O, can be used with any messaging library. See [messaging backends](#messaging-backends) for already available integrations.
@@ -71,6 +71,7 @@ Depending on your game, you may need additional features. We provide an API that
 
 | bevy   | bevy_replicon |
 | ------ | ------------- |
+| 0.19.0 | 0.41-rc.1     |
 | 0.18.0 | 0.38-0.40     |
 | 0.17.0 | 0.36-0.37     |
 | 0.16.0 | 0.33-0.35     |

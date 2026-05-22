@@ -69,7 +69,7 @@ fn init_toggle_button(add: On<Add, ToggleButton>, mut commands: Commands) {
         Text::default(),
         TextShadow::default(),
         TextFont {
-            font_size: 30.0,
+            font_size: FontSize::Px(30.0),
             ..Default::default()
         },
     ));

@@ -15,7 +15,7 @@ use crate::{
     shared::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
-            deferred_entity::{DeferredChanges, DeferredEntity},
+            deferred_entity::{DeferredEntity, EntityScratch},
             mutate_index::MutateIndex,
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
@@ -127,7 +127,7 @@ impl Plugin for ClientPlugin {
 /// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
 pub(super) fn receive_replication(
     world: &mut World,
-    mut changes: Local<DeferredChanges>,
+    mut scratch: Local<EntityScratch>,
     mut entity_markers: Local<EntityMarkers>,
 ) {
     world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
@@ -144,7 +144,7 @@ pub(super) fn receive_replication(
                                     let mut mutate_ticks =
                                         world.remove_resource::<ServerMutateTicks>();
                                     let mut params = ReceiveParams {
-                                        changes: &mut changes,
+                                        scratch: &mut scratch,
                                         entity_markers: &mut entity_markers,
                                         entity_map: &mut entity_map,
                                         signature_map: &mut signature_map,
@@ -224,6 +224,9 @@ fn apply_replication(
     for mut message in messages.receive(ServerChannel::Updates) {
         if let Err(e) = apply_update_message(world, params, &mut message) {
             error!("unable to apply update message: {e}");
+
+            // SAFETY: components in the scratch were pushed using this world.
+            unsafe { params.scratch.manual_drop(world.components()) };
         }
     }
 
@@ -384,10 +387,15 @@ fn apply_mutate_messages(
                     stats.entities_changed += len;
                 }
             }
-            Err(e) => error!(
-                "unable to apply mutate message for tick `{:?}`: {e}",
-                mutate.message_tick
-            ),
+            Err(e) => {
+                error!(
+                    "unable to apply mutate message for tick `{:?}`: {e}",
+                    mutate.message_tick
+                );
+
+                // SAFETY: components in the scratch were pushed using this world.
+                unsafe { params.scratch.manual_drop(world.components()) };
+            }
         }
 
         if let Some(mutate_ticks) = &mut params.mutate_ticks
@@ -471,7 +479,7 @@ fn apply_removals(
 
     let Ok(mut client_entity) = world
         .get_entity_mut(client_entity)
-        .map(|entity| DeferredEntity::new(entity, params.changes))
+        .map(|entity| DeferredEntity::new(entity, params.scratch))
     else {
         // Client could predict despawn.
         debug!("ignoring removals for despawned `{client_entity}`");
@@ -537,7 +545,7 @@ fn apply_changes(
                 return Ok(());
             };
 
-            let mut client_entity = DeferredEntity::new(client_entity, params.changes);
+            let mut client_entity = DeferredEntity::new(client_entity, params.scratch);
             if !client_entity.contains::<Remote>() {
                 // Even though the entity already exists, it could have been spawned during
                 // deserialization of another component and doesn't have the marker yet.
@@ -546,7 +554,7 @@ fn apply_changes(
             client_entity
         }
         EntityEntry::Vacant(entry) => {
-            let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
+            let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.scratch);
             client_entity.insert(Remote);
             entry.insert(client_entity.id());
             client_entity
@@ -666,7 +674,7 @@ fn apply_mutations(
 
     let Ok(mut client_entity) = world
         .get_entity_mut(client_entity)
-        .map(|entity| DeferredEntity::new(entity, params.changes))
+        .map(|entity| DeferredEntity::new(entity, params.scratch))
     else {
         // Client could predict despawn.
         debug!("ignoring mutations for despawned `{client_entity}`");
@@ -758,7 +766,7 @@ fn apply_mutations(
 ///
 /// To avoid passing a lot of arguments into all receive functions.
 struct ReceiveParams<'a> {
-    changes: &'a mut DeferredChanges,
+    scratch: &'a mut EntityScratch,
     entity_markers: &'a mut EntityMarkers,
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,

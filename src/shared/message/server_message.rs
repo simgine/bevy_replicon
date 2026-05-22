@@ -180,7 +180,7 @@ impl ServerMessageAppExt for App {
         let messages_id = self
             .world()
             .components()
-            .resource_id::<Messages<M>>()
+            .component_id::<Messages<M>>()
             .unwrap_or_else(|| {
                 panic!(
                     "message `{}` should be previously registered",
@@ -253,9 +253,12 @@ impl ServerMessage {
             .add_message::<ToClients<M>>()
             .init_resource::<MessageQueue<M>>();
 
-        let messages_id = app.world().resource_id::<Messages<M>>().unwrap();
-        let to_messages_id = app.world().resource_id::<Messages<ToClients<M>>>().unwrap();
-        let queue_id = app.world().resource_id::<MessageQueue<M>>().unwrap();
+        let messages_id = app.world().component_id::<Messages<M>>().unwrap();
+        let to_messages_id = app
+            .world()
+            .component_id::<Messages<ToClients<M>>>()
+            .unwrap();
+        let queue_id = app.world().component_id::<MessageQueue<M>>().unwrap();
 
         Self {
             independent: false,
