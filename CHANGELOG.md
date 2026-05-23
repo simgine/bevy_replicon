@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.2] - 2026-05-23
+
 ### Changed
 
 - Don't schedule systems when no messages/events for them have been registered.
@@ -1084,7 +1086,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...HEAD
+[0.40.2]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/simgine/bevy_replicon/compare/v0.39.5...v0.40.0
 [0.39.5]: https://github.com/simgine/bevy_replicon/compare/v0.39.4...v0.39.5
