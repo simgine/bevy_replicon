@@ -708,8 +708,8 @@ struct PickCell {
 #[derive(Event, Deserialize, Serialize, Clone, Copy)]
 struct ResetGame;
 
-/// A restart game event
+/// Resets the state to [`GameState::InGame`].
 ///
-/// Used to reset game state to [`GameState::InGame`]
+/// Used as a confirmation after a successful [`ResetGame`].
 #[derive(Event, Deserialize, Serialize, Clone, Copy)]
 struct RestartGame;
