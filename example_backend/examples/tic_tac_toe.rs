@@ -333,7 +333,7 @@ fn init_symbol(
         ));
 }
 
-/// Removes symbol's underlying ui elements and adds interaction back for empty cell
+/// Removes symbol's underlying ui elements and adds interaction back to reset to an empty cell.
 fn deinit_symbol(remove: On<Remove, Symbol>, mut commands: Commands) {
     commands
         .entity(remove.entity)
@@ -368,7 +368,7 @@ fn init_client(
 
 /// Listens for click on a reset button and requests [`ResetGame`] event on match.
 ///
-/// Runs on singleplayer, server, client
+/// Runs on singleplayer, server, client.
 fn request_reset_game(
     click: On<Pointer<Click>>,
     reset_button: Single<Entity, With<ResetButton>>,
@@ -383,7 +383,7 @@ fn request_reset_game(
 /// Resets the game on event by deleting all placed symbols from the game
 /// and replicating the deletion back to clients.
 ///
-/// Runs on singleplayer, server
+/// Runs on singleplayer, server.
 fn reset_game(
     reset: On<FromClient<ResetGame>>,
     game_state: Res<State<GameState>>,
@@ -409,9 +409,9 @@ fn reset_game(
     });
 }
 
-/// Sets the state of the game back to [`GameState::InGame`]
+/// Sets the state of the game back to [`GameState::InGame`].
 ///
-/// Runs on singleplayer, server, client
+/// Runs on singleplayer, server, client.
 fn restart_game(_on: On<RestartGame>, mut commands: Commands) {
     info!("restarting game");
     commands.set_state(GameState::InGame);
