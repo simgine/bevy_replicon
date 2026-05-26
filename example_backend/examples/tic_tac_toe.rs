@@ -41,8 +41,8 @@ fn main() {
         .add_observer(disconnect_by_client)
         .add_observer(init_client)
         .add_observer(apply_pick)
-        .add_observer(init_symbols)
-        .add_observer(removed_symbols)
+        .add_observer(init_symbol)
+        .add_observer(deinit_symbol)
         .add_observer(advance_turn)
         .add_observer(request_reset_game)
         .add_observer(reset_game)
@@ -308,7 +308,7 @@ fn apply_pick(
 }
 
 /// Initializes spawned symbol on client after replication and on server / single-player right after the spawn.
-fn init_symbols(
+fn init_symbol(
     add: On<Add, Symbol>,
     mut commands: Commands,
     symbol_font: Res<SymbolFont>,
@@ -333,8 +333,8 @@ fn init_symbols(
         ));
 }
 
-/// Removes symbol's underlying ui elements
-fn removed_symbols(remove: On<Remove, Symbol>, mut commands: Commands) {
+/// Removes symbol's underlying ui elements and adds interaction back for empty cell
+fn deinit_symbol(remove: On<Remove, Symbol>, mut commands: Commands) {
     commands
         .entity(remove.entity)
         .insert(Interaction::None)
@@ -366,7 +366,7 @@ fn init_client(
     commands.set_state(GameState::InGame);
 }
 
-/// Listens for user input and requests game reset when anyone presses R.
+/// Listens for click on a reset button and requests [`ResetGame`] event on match.
 ///
 /// Runs on singleplayer, server, client
 fn request_reset_game(
@@ -380,14 +380,12 @@ fn request_reset_game(
     }
 }
 
-/// Resets the game based on event by deleting all symbols from the game
+/// Resets the game on event by deleting all placed symbols from the game
 /// and replicating the deletion back to clients.
-///
-/// Does additional check to prevent players from resetting game in wrong game state
 ///
 /// Runs on singleplayer, server
 fn reset_game(
-    on: On<FromClient<ResetGame>>,
+    reset: On<FromClient<ResetGame>>,
     game_state: Res<State<GameState>>,
     cells_entities: Query<Entity, (With<Symbol>, With<Button>)>,
     mut commands: Commands,
@@ -395,7 +393,7 @@ fn reset_game(
     if *game_state != GameState::Winner && *game_state != GameState::Tie {
         error!(
             "client {} requested game reset in wrong game state",
-            on.client_id
+            reset.client_id
         );
         return;
     }
@@ -706,9 +704,7 @@ struct PickCell {
     index: usize,
 }
 
-/// A reset game event
-///
-/// Used to send reset event to the authority and clear up the board
+/// A request to reset the game and clear up the board.
 #[derive(Event, Deserialize, Serialize, Clone, Copy)]
 struct ResetGame;
 
