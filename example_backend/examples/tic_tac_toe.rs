@@ -66,11 +66,11 @@ fn main() {
         .add_systems(OnEnter(ServerState::Running), show_waiting_client_text)
         .add_systems(
             Update,
-            ((
+            (
                 update_buttons_background.run_if(local_player_turn),
                 show_turn_symbol.run_if(resource_changed::<TurnSymbol>),
             )
-                .run_if(in_state(GameState::InGame)),),
+                .run_if(in_state(GameState::InGame)),
         )
         .add_systems(
             Update,
