@@ -249,7 +249,7 @@ Some components depend on each other. For example, [`ChildOf`] and [`Children`].
 replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
 Related entities replicate like any others, so children should also have [`Replicated`].
 
-In other words, replicaing [`ChildOf`] allows you to replicate entities relationships.
+In other words, replicating [`ChildOf`] allows you to replicate entities relationships.
 You can also pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] to replicate only
 part of hierarchy.
 
