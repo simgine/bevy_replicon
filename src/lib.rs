@@ -180,8 +180,9 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 #### Required components
 
 You don't want to replicate all components because not all of them are
-necessary to send over the network. 
-Components that can be calculated on the client can be inserted using Bevy's required components feature. 
+necessary to send over the network. Components that can be calculated on the client can
+be inserted using Bevy's required components feature. You can also mark [`Replicated`]
+as required to automatically replicate all entities with this component.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
