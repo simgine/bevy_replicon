@@ -152,7 +152,6 @@ Use [`AppRuleExt::replicate`] to create a replication rule for a single componen
 app.replicate::<ExampleComponent>();
 
 #[derive(Component, Deserialize, Serialize)]
-#[require(Replicated)]
 struct ExampleComponent;
 ```
 
