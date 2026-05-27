@@ -138,7 +138,7 @@ resource.
 
 ### Components
 
-Components will be replicated only on entities marked for replication.
+Components will be replicated only on entities marked for replication with [`Replicated`] component.
 By default no components are replicated, you need to define rules for it.
 
 Use [`AppRuleExt::replicate`] to create a replication rule for a single component:
@@ -247,6 +247,10 @@ the desired components. See [receive markers](#receive-markers) for more details
 Some components depend on each other. For example, [`ChildOf`] and [`Children`]. You can enable
 replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
 Related entities replicate like any others, so children should also have [`Replicated`].
+
+In other words, replicating [`ChildOf`] allows you to replicate entities relationships.
+You can also pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] to replicate only
+part of hierarchy.
 
 Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
 See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
