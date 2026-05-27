@@ -152,6 +152,7 @@ Use [`AppRuleExt::replicate`] to create a replication rule for a single componen
 app.replicate::<ExampleComponent>();
 
 #[derive(Component, Deserialize, Serialize)]
+#[require(Replicated)]
 struct ExampleComponent;
 ```
 
@@ -179,11 +180,8 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 #### Required components
 
 You don't want to replicate all components because not all of them are
-necessary to send over the network. Components that can be calculated on the client can
-be inserted using Bevy's required components feature.
-
-You can also mark component with [`Replicated`] as required to automatically replicate
-all entities components with replication rules defined through [`AppRuleExt::replicate`].
+necessary to send over the network. 
+Components that can be calculated on the client can be inserted using Bevy's required components feature. 
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -251,9 +249,8 @@ replication only for [`ChildOf`] so that [`Children`] will be updated automatica
 Related entities replicate like any others, so children should also have [`Replicated`].
 
 In other words, replicaing [`ChildOf`] allows you to replicate entities relationships.
-You can pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] and [`With<T>`] to filter
-relationship replication only for entities with your marker component
-(see [example](https://github.com/simgine/bevy_replicon/tree/master/example_backend/examples/simple_button.rs)).
+You can also pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] to replicate only
+part of hierarchy.
 
 Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
 See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
