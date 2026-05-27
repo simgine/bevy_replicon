@@ -138,7 +138,7 @@ resource.
 
 ### Components
 
-Components will be replicated only on entities marked for replication.
+Components will be replicated only on entities marked for replication with [`Replicated`] component.
 By default no components are replicated, you need to define rules for it.
 
 Use [`AppRuleExt::replicate`] to create a replication rule for a single component:
@@ -180,8 +180,10 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 
 You don't want to replicate all components because not all of them are
 necessary to send over the network. Components that can be calculated on the client can
-be inserted using Bevy's required components feature. You can also mark [`Replicated`]
-as required to automatically replicate all entities with this component.
+be inserted using Bevy's required components feature.
+
+You can also mark component with [`Replicated`] as required to automatically replicate
+all entities components with replication rules defined through [`AppRuleExt::replicate`].
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -247,6 +249,11 @@ the desired components. See [receive markers](#receive-markers) for more details
 Some components depend on each other. For example, [`ChildOf`] and [`Children`]. You can enable
 replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
 Related entities replicate like any others, so children should also have [`Replicated`].
+
+In other words, replicaing [`ChildOf`] allows you to replicate entities relationships.
+You can pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] and [`With<T>`] to filter
+relationship replication only for entities with your marker
+(see [example](https://github.com/simgine/bevy_replicon/tree/master/example_backend/examples/simple_button.rs)).
 
 Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
 See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
