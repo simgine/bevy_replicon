@@ -252,7 +252,7 @@ Related entities replicate like any others, so children should also have [`Repli
 
 In other words, replicaing [`ChildOf`] allows you to replicate entities relationships.
 You can pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] and [`With<T>`] to filter
-relationship replication only for entities with your marker
+relationship replication only for entities with your marker component
 (see [example](https://github.com/simgine/bevy_replicon/tree/master/example_backend/examples/simple_button.rs)).
 
 Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
