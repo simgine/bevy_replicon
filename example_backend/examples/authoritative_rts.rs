@@ -93,7 +93,6 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
     match *cli {
         Cli::Singleplayer { team } => {
             info!("starting singleplayer as `{team:?}`");
-            commands.client_trigger(TeamRequest { team });
             commands.insert_resource(LocalTeam(team));
         }
         Cli::Server { port, team } => {
