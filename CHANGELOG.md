@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ServerMutateTicks::last_confirmed_tick` to check the most recently reported fully received mutation tick.
+
 ## [0.40.2] - 2026-05-23
 
 ### Changed
