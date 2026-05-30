@@ -393,6 +393,7 @@ fn apply_mutate_messages(
         if let Some(mutate_ticks) = &mut params.mutate_ticks
             && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
         {
+            mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
             world.write_message(MutateTickReceived {
                 tick: mutate.message_tick,
             });

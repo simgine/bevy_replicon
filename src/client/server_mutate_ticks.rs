@@ -23,12 +23,23 @@ pub struct ServerMutateTicks {
 
     /// The last received server tick with mutation.
     last_tick: RepliconTick,
+
+    /// The last server tick reported as fully received.
+    last_confirmed_tick: Option<RepliconTick>,
 }
 
 impl ServerMutateTicks {
     /// Returns the last received tick.
     pub fn last_tick(&self) -> RepliconTick {
         self.last_tick
+    }
+
+    /// Returns the last tick reported as fully received.
+    ///
+    /// Returns `None` until a [`MutateTickReceived`] message is emitted, or after
+    /// the resource is reset on disconnect.
+    pub fn last_confirmed_tick(&self) -> Option<RepliconTick> {
+        self.last_confirmed_tick
     }
 
     /// Returns a mask that represents the received ticks.
@@ -137,6 +148,11 @@ impl ServerMutateTicks {
             *tick = Default::default();
         }
         self.last_tick = Default::default();
+        self.last_confirmed_tick = None;
+    }
+
+    pub(super) fn set_last_confirmed_tick(&mut self, tick: RepliconTick) {
+        self.last_confirmed_tick = Some(tick);
     }
 }
 
@@ -145,6 +161,7 @@ impl Default for ServerMutateTicks {
         Self {
             ticks: VecDeque::from([Default::default(); u64::BITS as usize]),
             last_tick: Default::default(),
+            last_confirmed_tick: None,
         }
     }
 }
@@ -328,6 +345,22 @@ mod tests {
         assert!(!ticks.contains(RepliconTick::new(0)));
         assert!(ticks.contains(RepliconTick::new(1)));
         assert!(!ticks.contains(RepliconTick::new(2)));
+    }
+
+    #[test]
+    fn last_confirmed_tick() {
+        let mut ticks = ServerMutateTicks::default();
+        assert_eq!(ticks.last_confirmed_tick(), None);
+
+        assert!(!ticks.confirm(RepliconTick::new(1), 2));
+        assert_eq!(ticks.last_confirmed_tick(), None);
+
+        assert!(ticks.confirm(RepliconTick::new(1), 2));
+        ticks.set_last_confirmed_tick(RepliconTick::new(1));
+        assert_eq!(ticks.last_confirmed_tick(), Some(RepliconTick::new(1)));
+
+        ticks.clear();
+        assert_eq!(ticks.last_confirmed_tick(), None);
     }
 
     #[test]
