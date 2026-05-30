@@ -109,6 +109,7 @@ fn one_message() {
 
     let mutate_ticks = client_app.world().resource::<ServerMutateTicks>();
     assert!(mutate_ticks.contains(tick));
+    assert_eq!(mutate_ticks.last_confirmed_tick(), Some(tick));
 }
 
 #[test]
@@ -177,6 +178,7 @@ fn multiple_messages() {
 
     let mutate_ticks = client_app.world().resource::<ServerMutateTicks>();
     assert!(mutate_ticks.contains(tick));
+    assert_eq!(mutate_ticks.last_confirmed_tick(), Some(tick));
 }
 
 #[derive(Clone, Component, Copy, Deserialize, Serialize)]
