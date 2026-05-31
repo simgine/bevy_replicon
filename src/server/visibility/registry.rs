@@ -163,12 +163,6 @@ mod tests {
         mask.insert(bit);
 
         assert!(!mask.is_hidden(&filter_registry));
-        assert_eq!(
-            mask.hidden_components(&filter_registry)
-                .flat_map(|m| m.iter())
-                .count(),
-            1
-        );
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
         assert!(mask.is_component_hidden(&filter_registry, a_index));
@@ -189,12 +183,6 @@ mod tests {
         mask.insert(bit);
 
         assert!(!mask.is_hidden(&filter_registry));
-        assert_eq!(
-            mask.hidden_components(&filter_registry)
-                .flat_map(|m| m.iter())
-                .count(),
-            2
-        );
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
         assert!(mask.is_component_hidden(&filter_registry, a_index));
@@ -204,6 +192,26 @@ mod tests {
 
         let (c_index, _) = registry.init_component_fns::<C>(&mut world);
         assert!(!mask.is_component_hidden(&filter_registry, c_index));
+    }
+
+    #[test]
+    fn all_except_visibility() {
+        let mut world = World::new();
+        let mut registry = ReplicationRegistry::default();
+        let mut filter_registry = FilterRegistry::default();
+        filter_registry.register_filter::<AllExceptVisibility>(&mut world, &mut registry);
+
+        let bit = filter_registry.bit::<AllExceptVisibility>();
+        let mut mask = FiltersMask::default();
+        mask.insert(bit);
+
+        assert!(!mask.is_hidden(&filter_registry));
+
+        let (a_index, _) = registry.init_component_fns::<A>(&mut world);
+        assert!(!mask.is_component_hidden(&filter_registry, a_index));
+
+        let (b_index, _) = registry.init_component_fns::<B>(&mut world);
+        assert!(mask.is_component_hidden(&filter_registry, b_index));
     }
 
     #[derive(Component)]
@@ -239,6 +247,19 @@ mod tests {
     impl VisibilityFilter for MultiComponentVisibility {
         type ClientComponent = Self;
         type Scope = (A, B);
+
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some()
+        }
+    }
+
+    #[derive(Component)]
+    #[component(immutable)]
+    struct AllExceptVisibility;
+
+    impl VisibilityFilter for AllExceptVisibility {
+        type ClientComponent = Self;
+        type Scope = AllExcept<SingleComponent<A>>;
 
         fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
             component.is_some()

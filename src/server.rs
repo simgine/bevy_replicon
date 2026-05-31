@@ -42,9 +42,10 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{ReplicationRegistry, component_mask::ComponentMask},
+            registry::{ComponentIndex, ReplicationRegistry, component_mask::ComponentMask},
             rules::ReplicationRules,
             track_mutate_messages::TrackMutateMessages,
+            visibility::VisibilityScope,
         },
     },
 };
@@ -510,6 +511,7 @@ fn collect_removals(
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
+    mut lost_buffer: Local<Vec<ComponentIndex>>,
     mut clients: Query<(
         Entity,
         &mut Updates,
@@ -578,34 +580,54 @@ fn collect_removals(
             let mut entity_range = None;
             message.start_entity_removals();
 
-            for components in filter_mask.hidden_components(&filter_registry) {
-                for component_index in components.iter() {
-                    if !entity_ticks.components.contains(component_index) {
-                        // The client didn't see this component.
-                        continue;
-                    }
+            // Writes a removal for a lost component and drops it from the client's ticks.
+            let mut write_lost = |component_index, entity_ticks: &mut EntityTicks| -> Result<()> {
+                let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
+                    panic!("`{component_index:?}` should've been registered to be marked as lost")
+                });
+                let rule = archetype.find_rule(id).unwrap_or_else(|| {
+                    panic!("`{id:?}` should match a rule since the client knows about it")
+                });
 
-                    let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
-                        panic!(
-                            "`{component_index:?}` should've been registered to be marked as lost"
-                        )
-                    });
-                    let rule = archetype.find_rule(id).unwrap_or_else(|| {
-                        panic!("`{id:?}` should match a rule since the client knows about it")
-                    });
+                trace!(
+                    "writing `{:?}` lost for `{entity}` for client `{client}`",
+                    rule.fns_id
+                );
+                if !message.removals_entity_added() {
+                    let entity_range = entity.write_cached(&mut serialized, &mut entity_range)?;
+                    message.add_removals_entity(&mut pools, entity_range);
+                }
+                let fns_id_range = rule.fns_id.write(&mut serialized)?;
+                message.add_removal(fns_id_range);
+                entity_ticks.components.remove(component_index);
 
-                    trace!(
-                        "writing `{:?}` lost for `{entity}` for client `{client}`",
-                        rule.fns_id
-                    );
-                    if !message.removals_entity_added() {
-                        let entity_range =
-                            entity.write_cached(&mut serialized, &mut entity_range)?;
-                        message.add_removals_entity(&mut pools, entity_range);
+                Ok(())
+            };
+
+            for scope in filter_mask.scopes(&filter_registry) {
+                match scope {
+                    VisibilityScope::Entity => {
+                        unreachable!("entity filters are processed during despawn collection")
                     }
-                    let fns_id_range = rule.fns_id.write(&mut serialized)?;
-                    message.add_removal(fns_id_range);
-                    entity_ticks.components.remove(component_index);
+                    VisibilityScope::Components(mask) => {
+                        for component_index in mask.iter() {
+                            if entity_ticks.components.contains(component_index) {
+                                write_lost(component_index, entity_ticks)?;
+                            }
+                        }
+                    }
+                    VisibilityScope::AllExcept(mask) => {
+                        // Buffered to release the borrow before removing.
+                        lost_buffer.extend(
+                            entity_ticks
+                                .components
+                                .iter()
+                                .filter(|&component_index| !mask.contains(component_index)),
+                        );
+                        for component_index in lost_buffer.drain(..) {
+                            write_lost(component_index, entity_ticks)?;
+                        }
+                    }
                 }
             }
         }

@@ -568,6 +568,209 @@ fn hidden_component() {
 }
 
 #[test]
+fn hidden_all_except() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .add_visibility_filter::<AllExceptVisibilityA>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // Client has the filter component, so the whole entity is visible.
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(AllExceptVisibilityA);
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, B, AllExceptVisibilityA));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(
+        b.iter(client_app.world()).len(),
+        1,
+        "allowed by all except should replicate while visible"
+    );
+
+    // Drop the filter component, so the allow-list applies and `B` is removed on the client.
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<AllExceptVisibilityA>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(a.iter(client_app.world()).len(), 1, "allowed by all except");
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(b.iter(client_app.world()).len(), 0, "hidden by all except");
+}
+
+// Two `AllExcept` filters on the same entity, `C` is hidden by both.
+#[test]
+fn multiple_hidden_all_except() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .replicate::<C>()
+        .add_visibility_filter::<AllExceptVisibilityA>()
+        .add_visibility_filter::<AllExceptVisibilityB>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert((AllExceptVisibilityA, AllExceptVisibilityB));
+    server_app.world_mut().spawn((
+        Replicated,
+        A,
+        B,
+        C,
+        AllExceptVisibilityA,
+        AllExceptVisibilityB,
+    ));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut c = client_app.world_mut().query::<&C>();
+    assert_eq!(
+        c.iter(client_app.world()).len(),
+        1,
+        "fully visible at first"
+    );
+
+    // Both filters deny: one allows only `A`, the other only `B`. Their allow-lists
+    // intersect, so everything is hidden and `C` is hidden by both.
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<(AllExceptVisibilityA, AllExceptVisibilityB)>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(
+        a.iter(client_app.world()).len(),
+        0,
+        "hidden by the all except B filter"
+    );
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(
+        b.iter(client_app.world()).len(),
+        0,
+        "hidden by the all except A filter"
+    );
+    let mut c = client_app.world_mut().query::<&C>();
+    assert_eq!(
+        c.iter(client_app.world()).len(),
+        0,
+        "hidden by both filters"
+    );
+}
+
+// `Components` and `AllExcept` filters on the same entity, `A` is hidden by both.
+#[test]
+fn hidden_component_and_all_expect() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .replicate::<C>()
+        .add_visibility_filter::<ComponentVisibility>()
+        .add_visibility_filter::<AllExceptVisibilityB>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert((ComponentVisibility, AllExceptVisibilityB));
+    server_app.world_mut().spawn((
+        Replicated,
+        A,
+        B,
+        C,
+        ComponentVisibility,
+        AllExceptVisibilityB,
+    ));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(
+        a.iter(client_app.world()).len(),
+        1,
+        "fully visible at first"
+    );
+
+    // Hide-list hides `A`; allow-list keeps only `B`, so it also hides `A` and `C`.
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<(ComponentVisibility, AllExceptVisibilityB)>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(
+        a.iter(client_app.world()).len(),
+        0,
+        "hidden by both filters"
+    );
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(b.iter(client_app.world()).len(), 1, "allowed by all except");
+    let mut c = client_app.world_mut().query::<&C>();
+    assert_eq!(c.iter(client_app.world()).len(), 0, "hidden by all except");
+}
+
+#[test]
 fn visibility_lose() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -621,6 +824,9 @@ struct A;
 struct B;
 
 #[derive(Component, Deserialize, Serialize)]
+struct C;
+
+#[derive(Component, Deserialize, Serialize)]
 struct NotReplicated;
 
 #[derive(Component)]
@@ -652,6 +858,32 @@ struct ComponentVisibility;
 impl VisibilityFilter for ComponentVisibility {
     type ClientComponent = Self;
     type Scope = SingleComponent<A>;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct AllExceptVisibilityA;
+
+impl VisibilityFilter for AllExceptVisibilityA {
+    type ClientComponent = Self;
+    type Scope = AllExcept<SingleComponent<A>>;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct AllExceptVisibilityB;
+
+impl VisibilityFilter for AllExceptVisibilityB {
+    type ClientComponent = Self;
+    type Scope = AllExcept<SingleComponent<B>>;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()

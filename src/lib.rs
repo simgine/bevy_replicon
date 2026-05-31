@@ -749,7 +749,10 @@ pub mod prelude {
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
-                visibility::{ComponentScope, FilterScope, SingleComponent, VisibilityFilter},
+                visibility::{
+                    AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
+                    VisibilityFilter,
+                },
             },
             replicon_tick::RepliconTick,
         },

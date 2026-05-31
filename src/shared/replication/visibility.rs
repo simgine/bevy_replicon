@@ -267,6 +267,8 @@ pub enum VisibilityScope {
     Entity,
     /// Specific components on the entity.
     Components(ComponentMask),
+    /// All components on the entity, except these.
+    AllExcept(ComponentMask),
 }
 
 /// Associates the type with a visibility scope.
@@ -274,6 +276,13 @@ pub trait FilterScope {
     /// Returns data that should be hidden when [`VisibilityFilter::is_visible`] returns `false`.
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope;
 }
+
+/// A [`FilterScope`] with components.
+///
+/// Implemented for [`SingleComponent`] and tuples of [`Component`]s.
+///
+/// Used for [`AllExcept`] in order to limit it to components.
+pub trait ComponentsScope: FilterScope {}
 
 #[deprecated(since = "0.39.0", note = "Renamed into `SingleComponent`")]
 pub type ComponentScope<A> = SingleComponent<A>;
@@ -295,12 +304,51 @@ impl<C: Component<Mutability: MutWrite<C>>> FilterScope for SingleComponent<C> {
     }
 }
 
+impl<C: Component<Mutability: MutWrite<C>>> ComponentsScope for SingleComponent<C> {}
+
 impl FilterScope for Entity {
     fn visibility_scope(
         _world: &mut World,
         _registry: &mut ReplicationRegistry,
     ) -> VisibilityScope {
         VisibilityScope::Entity
+    }
+}
+
+/// Hides every component on the entity except those in `S` when the filter denies visibility.
+///
+/// `S` must be a [`ComponentsScope`]: [`SingleComponent`] or a tuple of [`Component`]s.
+/// Useful for keeping a stripped-down view of an entity replicated past its full
+/// visibility range, e.g. only its transform and light.
+///
+/// # Examples
+///
+/// ```
+/// # use bevy::prelude::*;
+/// # use bevy_replicon::prelude::*;
+/// #[derive(Component, PartialEq)]
+/// #[component(immutable)]
+/// struct InRange(bool);
+///
+/// impl VisibilityFilter for InRange {
+///     type ClientComponent = Self;
+///     // Out-of-range clients keep only `Transform` and `PointLight`.
+///     type Scope = AllExcept<(Transform, PointLight)>;
+///
+///     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+///         component.is_some_and(|c| c.0)
+///     }
+/// }
+/// # #[derive(Component)] struct PointLight;
+/// ```
+pub struct AllExcept<S>(PhantomData<S>);
+
+impl<S: ComponentsScope> FilterScope for AllExcept<S> {
+    fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope {
+        let VisibilityScope::Components(mask) = S::visibility_scope(world, registry) else {
+            unreachable!("`ComponentsScope` always yields `VisibilityScope::Components`");
+        };
+        VisibilityScope::AllExcept(mask)
     }
 }
 
@@ -316,6 +364,8 @@ macro_rules! impl_filter_scope {
                 VisibilityScope::Components(mask)
             }
         }
+
+        impl<$($C: Component<Mutability: MutWrite<$C>>),*> ComponentsScope for ($($C,)*) {}
     };
 }
 
