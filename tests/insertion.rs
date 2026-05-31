@@ -783,7 +783,9 @@ fn allow_list_component() {
     server_app.connect_client(&mut client_app);
 
     // The client lacks `OnlyComponentVisibility`, so the allow-list applies and only `A` reaches it.
-    server_app.world_mut().spawn((Replicated, A, B, OnlyComponentVisibility));
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, B, OnlyComponentVisibility));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -828,7 +830,9 @@ fn allow_list_loss() {
         .world_mut()
         .entity_mut(client)
         .insert(OnlyComponentVisibility);
-    server_app.world_mut().spawn((Replicated, A, B, OnlyComponentVisibility));
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, B, OnlyComponentVisibility));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
