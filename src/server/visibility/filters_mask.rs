@@ -48,6 +48,14 @@ impl FiltersMask {
             .any(|bit| matches!(registry.scope(bit), VisibilityScope::Entity))
     }
 
+    /// Returns an iterator over the scope of each set filter.
+    pub(crate) fn scopes(
+        self,
+        registry: &FilterRegistry,
+    ) -> impl Iterator<Item = &VisibilityScope> {
+        self.iter().map(|bit| registry.scope(bit))
+    }
+
     /// Returns `true` if the given component is hidden by any of the filters.
     ///
     /// Entity filters are treated as hiding all components.
@@ -59,7 +67,7 @@ impl FiltersMask {
         self.iter().any(|bit| match registry.scope(bit) {
             VisibilityScope::Entity => true,
             VisibilityScope::Components(component_mask) => component_mask.contains(index),
-            VisibilityScope::OnlyComponents(component_mask) => !component_mask.contains(index),
+            VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
         })
     }
 }

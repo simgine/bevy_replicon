@@ -776,16 +776,16 @@ fn allow_list_component() {
         ))
         .replicate::<A>()
         .replicate::<B>()
-        .add_visibility_filter::<OnlyComponentVisibility>()
+        .add_visibility_filter::<AllExceptVisibility>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    // The client lacks `OnlyComponentVisibility`, so the allow-list applies and only `A` reaches it.
+    // The client lacks `AllExceptVisibility`, so the allow-list applies and only `A` reaches it.
     server_app
         .world_mut()
-        .spawn((Replicated, A, B, OnlyComponentVisibility));
+        .spawn((Replicated, A, B, AllExceptVisibility));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -818,7 +818,7 @@ fn allow_list_loss() {
         ))
         .replicate::<A>()
         .replicate::<B>()
-        .add_visibility_filter::<OnlyComponentVisibility>()
+        .add_visibility_filter::<AllExceptVisibility>()
         .finish();
     }
 
@@ -829,10 +829,10 @@ fn allow_list_loss() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(OnlyComponentVisibility);
+        .insert(AllExceptVisibility);
     server_app
         .world_mut()
-        .spawn((Replicated, A, B, OnlyComponentVisibility));
+        .spawn((Replicated, A, B, AllExceptVisibility));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -850,7 +850,7 @@ fn allow_list_loss() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .remove::<OnlyComponentVisibility>();
+        .remove::<AllExceptVisibility>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -928,11 +928,11 @@ impl VisibilityFilter for ComponentVisibility {
 
 #[derive(Component)]
 #[component(immutable)]
-struct OnlyComponentVisibility;
+struct AllExceptVisibility;
 
-impl VisibilityFilter for OnlyComponentVisibility {
+impl VisibilityFilter for AllExceptVisibility {
     type ClientComponent = Self;
-    type Scope = Only<SingleComponent<A>>;
+    type Scope = AllExcept<SingleComponent<A>>;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()

@@ -195,13 +195,13 @@ mod tests {
     }
 
     #[test]
-    fn only_component_visibility() {
+    fn all_except_visibility() {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry::default();
-        filter_registry.register_filter::<OnlyComponentVisibility>(&mut world, &mut registry);
+        filter_registry.register_filter::<AllExceptVisibility>(&mut world, &mut registry);
 
-        let bit = filter_registry.bit::<OnlyComponentVisibility>();
+        let bit = filter_registry.bit::<AllExceptVisibility>();
         let mut mask = FiltersMask::default();
         mask.insert(bit);
 
@@ -255,11 +255,11 @@ mod tests {
 
     #[derive(Component)]
     #[component(immutable)]
-    struct OnlyComponentVisibility;
+    struct AllExceptVisibility;
 
-    impl VisibilityFilter for OnlyComponentVisibility {
+    impl VisibilityFilter for AllExceptVisibility {
         type ClientComponent = Self;
-        type Scope = Only<SingleComponent<A>>;
+        type Scope = AllExcept<SingleComponent<A>>;
 
         fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
             component.is_some()

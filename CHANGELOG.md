@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Only` filter scope and `VisibilityScope::OnlyComponents` as an allow-list counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
+- `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
 - `ServerMutateTicks::last_confirmed_tick` to check the most recently reported fully received mutation tick.
 
 ## [0.40.2] - 2026-05-23

@@ -750,7 +750,8 @@ pub mod prelude {
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
                 visibility::{
-                    ComponentScope, FilterScope, Only, SingleComponent, VisibilityFilter,
+                    AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
+                    VisibilityFilter,
                 },
             },
             replicon_tick::RepliconTick,

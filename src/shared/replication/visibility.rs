@@ -265,14 +265,10 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
 pub enum VisibilityScope {
     /// Whole entity.
     Entity,
-    /// Specific components on the entity (hide-list): when the filter denies
-    /// visibility, these components are hidden.
+    /// Specific components on the entity.
     Components(ComponentMask),
-    /// Specific components on the entity (allow-list): when the filter denies
-    /// visibility, every component *except* these hidden. Useful for sending
-    /// a stripped-down "proxy" of an entity (e.g. only its position + light) to
-    /// clients outside its full visibility range.
-    OnlyComponents(ComponentMask),
+    /// All components on the entity, except these.
+    AllExcept(ComponentMask),
 }
 
 /// Associates the type with a visibility scope.
@@ -280,6 +276,12 @@ pub trait FilterScope {
     /// Returns data that should be hidden when [`VisibilityFilter::is_visible`] returns `false`.
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope;
 }
+
+/// A [`FilterScope`] that resolves to specific components rather than the whole entity.
+///
+/// Implemented for [`SingleComponent`] and tuples of [`Component`]s. Bounds
+/// [`AllExcept`] so it can't wrap [`Entity`].
+pub trait ComponentsScope: FilterScope {}
 
 #[deprecated(since = "0.39.0", note = "Renamed into `SingleComponent`")]
 pub type ComponentScope<A> = SingleComponent<A>;
@@ -301,6 +303,8 @@ impl<C: Component<Mutability: MutWrite<C>>> FilterScope for SingleComponent<C> {
     }
 }
 
+impl<C: Component<Mutability: MutWrite<C>>> ComponentsScope for SingleComponent<C> {}
+
 impl FilterScope for Entity {
     fn visibility_scope(
         _world: &mut World,
@@ -310,13 +314,11 @@ impl FilterScope for Entity {
     }
 }
 
-/// Inverts a component [`FilterScope`] into an allow-list.
+/// Hides every component on the entity except those in `S` when the filter denies visibility.
 ///
-/// When the filter denies visibility, only the components in the wrapped scope
-/// `S` are replicated; every other component on the entity is hidden. `S` must
-/// be a component scope ([`SingleComponent`] or a tuple of [`Component`]s), which
-/// produces [`VisibilityScope::OnlyComponents`]. Wrapping [`Entity`] is
-/// meaningless and passes through unchanged.
+/// `S` must be a [`ComponentsScope`]: [`SingleComponent`] or a tuple of [`Component`]s.
+/// Useful for keeping a stripped-down view of an entity replicated past its full
+/// visibility range, e.g. only its transform and light.
 ///
 /// # Examples
 ///
@@ -329,8 +331,8 @@ impl FilterScope for Entity {
 ///
 /// impl VisibilityFilter for InRange {
 ///     type ClientComponent = Self;
-///     // Out-of-range clients receive only `Transform` + `PointLight`, not the rest.
-///     type Scope = Only<(Transform, PointLight)>;
+///     // Out-of-range clients keep only `Transform` and `PointLight`.
+///     type Scope = AllExcept<(Transform, PointLight)>;
 ///
 ///     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
 ///         component.is_some_and(|c| c.0)
@@ -338,15 +340,14 @@ impl FilterScope for Entity {
 /// }
 /// # #[derive(Component)] struct PointLight;
 /// ```
-pub struct Only<S>(PhantomData<S>);
+pub struct AllExcept<S>(PhantomData<S>);
 
-impl<S: FilterScope> FilterScope for Only<S> {
+impl<S: ComponentsScope> FilterScope for AllExcept<S> {
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope {
-        match S::visibility_scope(world, registry) {
-            VisibilityScope::Components(mask) => VisibilityScope::OnlyComponents(mask),
-            // `Only<Entity>` is meaningless; pass other scopes through unchanged.
-            other => other,
-        }
+        let VisibilityScope::Components(mask) = S::visibility_scope(world, registry) else {
+            unreachable!("`ComponentsScope` always yields `VisibilityScope::Components`");
+        };
+        VisibilityScope::AllExcept(mask)
     }
 }
 
@@ -362,6 +363,8 @@ macro_rules! impl_filter_scope {
                 VisibilityScope::Components(mask)
             }
         }
+
+        impl<$($C: Component<Mutability: MutWrite<$C>>),*> ComponentsScope for ($($C,)*) {}
     };
 }
 
