@@ -609,7 +609,6 @@ fn collect_removals(
                     VisibilityScope::Entity => {
                         unreachable!("entity filters are processed during despawn collection")
                     }
-                    // Hide-list: iterate the filter's small mask directly.
                     VisibilityScope::Components(mask) => {
                         for component_index in mask.iter() {
                             if entity_ticks.components.contains(component_index) {
@@ -617,9 +616,8 @@ fn collect_removals(
                             }
                         }
                     }
-                    // Allow-list: the hidden set is the complement, so scan the
-                    // client's components. Buffered to release the borrow before removing.
                     VisibilityScope::AllExcept(mask) => {
+                        // Buffered to release the borrow before removing.
                         lost_buffer.extend(
                             entity_ticks
                                 .components
