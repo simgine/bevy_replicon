@@ -277,10 +277,11 @@ pub trait FilterScope {
     fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope;
 }
 
-/// A [`FilterScope`] that resolves to specific components rather than the whole entity.
+/// A [`FilterScope`] with components.
 ///
-/// Implemented for [`SingleComponent`] and tuples of [`Component`]s. Bounds
-/// [`AllExcept`] so it can't wrap [`Entity`].
+/// Implemented for [`SingleComponent`] and tuples of [`Component`]s.
+///
+/// Used for [`AllExcept`] in order to limit it to components.
 pub trait ComponentsScope: FilterScope {}
 
 #[deprecated(since = "0.39.0", note = "Renamed into `SingleComponent`")]
