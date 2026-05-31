@@ -620,14 +620,13 @@ fn collect_removals(
                     // Allow-list: the hidden set is the complement, so scan the
                     // client's components. Buffered to release the borrow before removing.
                     VisibilityScope::AllExcept(mask) => {
-                        lost_buffer.clear();
                         lost_buffer.extend(
                             entity_ticks
                                 .components
                                 .iter()
                                 .filter(|&component_index| !mask.contains(component_index)),
                         );
-                        for &component_index in &*lost_buffer {
+                        for component_index in lost_buffer.drain(..) {
                             write_lost(component_index, entity_ticks)?;
                         }
                     }
