@@ -581,9 +581,7 @@ fn collect_removals(
             message.start_entity_removals();
 
             // Writes a removal for a lost component and drops it from the client's ticks.
-            let mut write_lost = |component_index: ComponentIndex,
-                                  entity_ticks: &mut EntityTicks|
-             -> Result<()> {
+            let mut write_lost = |component_index, entity_ticks: &mut EntityTicks| -> Result<()> {
                 let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
                     panic!("`{component_index:?}` should've been registered to be marked as lost")
                 });
