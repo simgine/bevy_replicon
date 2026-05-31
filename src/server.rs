@@ -8,7 +8,7 @@ mod replication_query;
 pub mod server_tick;
 pub mod visibility;
 
-use core::{mem, ops::Range, time::Duration};
+use core::{mem, time::Duration};
 
 use bevy::{
     ecs::{
@@ -30,7 +30,7 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replicated_archetypes::{ReplicatedArchetype, ReplicatedArchetypes},
+        replicated_archetypes::ReplicatedArchetypes,
         replication_messages::{
             mutations::MutationsSplit,
             serialized_data::{EntityMapping, MessageWrite, WritableComponent},
@@ -580,6 +580,32 @@ fn collect_removals(
             let mut entity_range = None;
             message.start_entity_removals();
 
+            // Writes a removal for a lost component and drops it from the client's ticks.
+            let mut write_lost = |component_index: ComponentIndex,
+                                  entity_ticks: &mut EntityTicks|
+             -> Result<()> {
+                let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
+                    panic!("`{component_index:?}` should've been registered to be marked as lost")
+                });
+                let rule = archetype.find_rule(id).unwrap_or_else(|| {
+                    panic!("`{id:?}` should match a rule since the client knows about it")
+                });
+
+                trace!(
+                    "writing `{:?}` lost for `{entity}` for client `{client}`",
+                    rule.fns_id
+                );
+                if !message.removals_entity_added() {
+                    let entity_range = entity.write_cached(&mut serialized, &mut entity_range)?;
+                    message.add_removals_entity(&mut pools, entity_range);
+                }
+                let fns_id_range = rule.fns_id.write(&mut serialized)?;
+                message.add_removal(fns_id_range);
+                entity_ticks.components.remove(component_index);
+
+                Ok(())
+            };
+
             for scope in filter_mask.scopes(&filter_registry) {
                 match scope {
                     VisibilityScope::Entity => {
@@ -589,18 +615,7 @@ fn collect_removals(
                     VisibilityScope::Components(mask) => {
                         for component_index in mask.iter() {
                             if entity_ticks.components.contains(component_index) {
-                                write_lost_component(
-                                    component_index,
-                                    entity,
-                                    client,
-                                    &registry,
-                                    archetype,
-                                    entity_ticks,
-                                    &mut serialized,
-                                    &mut pools,
-                                    &mut message,
-                                    &mut entity_range,
-                                )?;
+                                write_lost(component_index, entity_ticks)?;
                             }
                         }
                     }
@@ -615,63 +630,13 @@ fn collect_removals(
                                 .filter(|&component_index| !mask.contains(component_index)),
                         );
                         for &component_index in &*lost_buffer {
-                            write_lost_component(
-                                component_index,
-                                entity,
-                                client,
-                                &registry,
-                                archetype,
-                                entity_ticks,
-                                &mut serialized,
-                                &mut pools,
-                                &mut message,
-                                &mut entity_range,
-                            )?;
+                            write_lost(component_index, entity_ticks)?;
                         }
                     }
                 }
             }
         }
     }
-
-    Ok(())
-}
-
-/// Writes a removal for a component the client can no longer see and drops it from its ticks.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "follows the replication send path"
-)]
-fn write_lost_component(
-    component_index: ComponentIndex,
-    entity: Entity,
-    client: Entity,
-    registry: &ReplicationRegistry,
-    archetype: &ReplicatedArchetype,
-    entity_ticks: &mut EntityTicks,
-    serialized: &mut SerializedData,
-    pools: &mut ClientPools,
-    message: &mut Updates,
-    entity_range: &mut Option<Range<usize>>,
-) -> Result<()> {
-    let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
-        panic!("`{component_index:?}` should've been registered to be marked as lost")
-    });
-    let rule = archetype
-        .find_rule(id)
-        .unwrap_or_else(|| panic!("`{id:?}` should match a rule since the client knows about it"));
-
-    trace!(
-        "writing `{:?}` lost for `{entity}` for client `{client}`",
-        rule.fns_id
-    );
-    if !message.removals_entity_added() {
-        let entity_range = entity.write_cached(serialized, entity_range)?;
-        message.add_removals_entity(pools, entity_range);
-    }
-    let fns_id_range = rule.fns_id.write(serialized)?;
-    message.add_removal(fns_id_range);
-    entity_ticks.components.remove(component_index);
 
     Ok(())
 }
