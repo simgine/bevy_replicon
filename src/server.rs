@@ -42,7 +42,7 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{ReplicationRegistry, component_mask::ComponentMask},
+            registry::{ComponentIndex, ReplicationRegistry, component_mask::ComponentMask},
             rules::ReplicationRules,
             track_mutate_messages::TrackMutateMessages,
         },
@@ -510,6 +510,7 @@ fn collect_removals(
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
+    mut lost_buffer: Local<Vec<ComponentIndex>>,
     mut clients: Query<(
         Entity,
         &mut Updates,
@@ -578,35 +579,31 @@ fn collect_removals(
             let mut entity_range = None;
             message.start_entity_removals();
 
-            for components in filter_mask.hidden_components(&filter_registry) {
-                for component_index in components.iter() {
-                    if !entity_ticks.components.contains(component_index) {
-                        // The client didn't see this component.
-                        continue;
-                    }
+            // Iterate the client's components instead of a filter's hide-mask so
+            // allow-list (`OnlyComponents`) scopes, whose hidden set is the complement, work too.
+            lost_buffer.clear();
+            lost_buffer.extend(entity_ticks.components.iter().filter(|&component_index| {
+                filter_mask.is_component_hidden(&filter_registry, component_index)
+            }));
+            for &component_index in &*lost_buffer {
+                let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
+                    panic!("`{component_index:?}` should've been registered to be marked as lost")
+                });
+                let rule = archetype.find_rule(id).unwrap_or_else(|| {
+                    panic!("`{id:?}` should match a rule since the client knows about it")
+                });
 
-                    let &(id, _) = registry.get_by_index(component_index).unwrap_or_else(|| {
-                        panic!(
-                            "`{component_index:?}` should've been registered to be marked as lost"
-                        )
-                    });
-                    let rule = archetype.find_rule(id).unwrap_or_else(|| {
-                        panic!("`{id:?}` should match a rule since the client knows about it")
-                    });
-
-                    trace!(
-                        "writing `{:?}` lost for `{entity}` for client `{client}`",
-                        rule.fns_id
-                    );
-                    if !message.removals_entity_added() {
-                        let entity_range =
-                            entity.write_cached(&mut serialized, &mut entity_range)?;
-                        message.add_removals_entity(&mut pools, entity_range);
-                    }
-                    let fns_id_range = rule.fns_id.write(&mut serialized)?;
-                    message.add_removal(fns_id_range);
-                    entity_ticks.components.remove(component_index);
+                trace!(
+                    "writing `{:?}` lost for `{entity}` for client `{client}`",
+                    rule.fns_id
+                );
+                if !message.removals_entity_added() {
+                    let entity_range = entity.write_cached(&mut serialized, &mut entity_range)?;
+                    message.add_removals_entity(&mut pools, entity_range);
                 }
+                let fns_id_range = rule.fns_id.write(&mut serialized)?;
+                message.add_removal(fns_id_range);
+                entity_ticks.components.remove(component_index);
             }
         }
     }

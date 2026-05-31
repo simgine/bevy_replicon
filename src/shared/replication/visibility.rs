@@ -265,8 +265,14 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
 pub enum VisibilityScope {
     /// Whole entity.
     Entity,
-    /// Specific components on the entity.
+    /// Specific components on the entity (hide-list): when the filter denies
+    /// visibility, these components are hidden.
     Components(ComponentMask),
+    /// Specific components on the entity (allow-list): when the filter denies
+    /// visibility, every component *except* these hidden. Useful for sending
+    /// a stripped-down "proxy" of an entity (e.g. only its position + light) to
+    /// clients outside its full visibility range.
+    OnlyComponents(ComponentMask),
 }
 
 /// Associates the type with a visibility scope.
@@ -301,6 +307,46 @@ impl FilterScope for Entity {
         _registry: &mut ReplicationRegistry,
     ) -> VisibilityScope {
         VisibilityScope::Entity
+    }
+}
+
+/// Inverts a component [`FilterScope`] into an allow-list.
+///
+/// When the filter denies visibility, only the components in the wrapped scope
+/// `S` are replicated; every other component on the entity is hidden. `S` must
+/// be a component scope ([`SingleComponent`] or a tuple of [`Component`]s), which
+/// produces [`VisibilityScope::OnlyComponents`]. Wrapping [`Entity`] is
+/// meaningless and passes through unchanged.
+///
+/// # Examples
+///
+/// ```
+/// # use bevy::prelude::*;
+/// # use bevy_replicon::prelude::*;
+/// #[derive(Component, PartialEq)]
+/// #[component(immutable)]
+/// struct InRange(bool);
+///
+/// impl VisibilityFilter for InRange {
+///     type ClientComponent = Self;
+///     // Out-of-range clients receive only `Transform` + `PointLight`, not the rest.
+///     type Scope = Only<(Transform, PointLight)>;
+///
+///     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+///         component.is_some_and(|c| c.0)
+///     }
+/// }
+/// # #[derive(Component)] struct PointLight;
+/// ```
+pub struct Only<S>(PhantomData<S>);
+
+impl<S: FilterScope> FilterScope for Only<S> {
+    fn visibility_scope(world: &mut World, registry: &mut ReplicationRegistry) -> VisibilityScope {
+        match S::visibility_scope(world, registry) {
+            VisibilityScope::Components(mask) => VisibilityScope::OnlyComponents(mask),
+            // `Only<Entity>` is meaningless; pass other scopes through unchanged.
+            other => other,
+        }
     }
 }
 

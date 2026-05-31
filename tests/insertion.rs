@@ -764,6 +764,108 @@ fn visibility_gain() {
     assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
+#[test]
+fn allow_list_component() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .add_visibility_filter::<OnlyComponentVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // The client lacks `OnlyComponentVisibility`, so the allow-list applies and only `A` reaches it.
+    server_app.world_mut().spawn((Replicated, A, B, OnlyComponentVisibility));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(
+        a.iter(client_app.world()).len(),
+        1,
+        "allow-listed component should replicate"
+    );
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(
+        b.iter(client_app.world()).len(),
+        0,
+        "non-allow-listed component should be hidden"
+    );
+}
+
+#[test]
+fn allow_list_loss() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .add_visibility_filter::<OnlyComponentVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // Client has the filter component, so the whole entity is visible.
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(OnlyComponentVisibility);
+    server_app.world_mut().spawn((Replicated, A, B, OnlyComponentVisibility));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(
+        b.iter(client_app.world()).len(),
+        1,
+        "non-allow-listed component should replicate while visible"
+    );
+
+    // Drop the filter component, so the allow-list applies and `B` is removed on the client.
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<OnlyComponentVisibility>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(
+        a.iter(client_app.world()).len(),
+        1,
+        "allow-listed component should stay"
+    );
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(
+        b.iter(client_app.world()).len(),
+        0,
+        "non-allow-listed component should be removed on visibility loss"
+    );
+}
+
 #[derive(Component, Deserialize, Serialize)]
 #[component(storage = "Table")]
 struct Table;
@@ -814,6 +916,19 @@ struct ComponentVisibility;
 impl VisibilityFilter for ComponentVisibility {
     type ClientComponent = Self;
     type Scope = SingleComponent<A>;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct OnlyComponentVisibility;
+
+impl VisibilityFilter for OnlyComponentVisibility {
+    type ClientComponent = Self;
+    type Scope = Only<SingleComponent<A>>;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()
