@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
+
+## [0.40.3] - 2026-06-02
+
+### Added
+
 - `ServerMutateTicks::last_confirmed_tick` to check the most recently reported fully received mutation tick.
 
 ## [0.40.2] - 2026-05-23
@@ -1091,7 +1096,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...HEAD
+[0.40.3]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...v0.40.3
 [0.40.2]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/simgine/bevy_replicon/compare/v0.39.5...v0.40.0
