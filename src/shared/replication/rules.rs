@@ -7,8 +7,8 @@ use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
-use crate::prelude::*;
-use component::{BundleRules, ComponentRule, IntoComponentRules};
+use crate::{prelude::*, shared::replication::op_delta::OpDeltaComponent};
+use component::{BundleRules, ComponentRule, IntoComponentRules, OpDeltaRuleFns};
 use filter::{FilterRule, FilterRules};
 
 /// Replication functions for [`App`].
@@ -33,6 +33,30 @@ pub trait AppRuleExt {
         C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
     {
         self.replicate_once_filtered::<C, ()>()
+    }
+
+    /// Defines a replication rule that sends the initial component state as a snapshot
+    /// and later mutations as logged operations.
+    ///
+    /// The component itself remains the authoritative state. Mutations should be
+    /// performed through [`OpDeltaEntityExt::apply_op_delta`](crate::shared::replication::op_delta::OpDeltaEntityExt)
+    /// so Replicon can record operations for efficient per-client resending.
+    fn replicate_op_delta<C>(&mut self) -> &mut Self
+    where
+        C: OpDeltaComponent,
+    {
+        self.replicate_op_delta_filtered::<C, ()>()
+    }
+
+    /// Like [`Self::replicate_op_delta`], but also adds filters like [`Self::replicate_filtered`].
+    fn replicate_op_delta_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: OpDeltaComponent,
+    {
+        self.replicate_with_priority_filtered::<_, F>(
+            1 + F::DEFAULT_PRIORITY,
+            OpDeltaRuleFns::<C>::default(),
+        )
     }
 
     /// Like [`Self::replicate`], but converts the component into `T` before serialization

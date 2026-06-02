@@ -85,6 +85,9 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         for rule in rules.iter() {
             for component in &rule.components {
                 component_access.add_component_read(component.id);
+                if let Some(op_delta) = component.op_delta {
+                    component_access.add_component_read(op_delta.log_component_id);
+                }
             }
         }
 

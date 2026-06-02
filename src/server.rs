@@ -42,7 +42,7 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{ComponentIndex, ReplicationRegistry, component_mask::ComponentMask},
+            registry::{ComponentIndex,ReplicationRegistry, component_mask::ComponentMask, ctx::SerializeCtx},
             rules::ReplicationRules,
             track_mutate_messages::TrackMutateMessages,
             visibility::VisibilityScope,
@@ -547,7 +547,7 @@ fn collect_removals(
                 }
                 let fns_id_range = fns_id.write_cached(&mut serialized, &mut fns_id_range)?;
                 message.add_removal(fns_id_range);
-                entity_ticks.components.remove(component_index);
+                entity_ticks.remove_component(component_index);
             }
         }
     }
@@ -599,7 +599,7 @@ fn collect_removals(
                 }
                 let fns_id_range = rule.fns_id.write(&mut serialized)?;
                 message.add_removal(fns_id_range);
-                entity_ticks.components.remove(component_index);
+                entity_ticks.remove_component(component_index);
 
                 Ok(())
             };
@@ -686,6 +686,32 @@ fn collect_changes(
                     )
                 };
 
+                let serialize_ctx = SerializeCtx {
+                    component_id,
+                    server_tick: **server_tick,
+                    type_registry: &type_registry,
+                };
+
+                let op_delta_log = if let Some(op_delta) = rule.op_delta {
+                    let storage = archetype
+                        .get_storage_type(op_delta.log_component_id)
+                        .unwrap_or_else(|| {
+                            panic!("op-delta log should be present for `{component_id:?}`")
+                        });
+                    Some(unsafe {
+                        query
+                            .get_component_unchecked(
+                                entity,
+                                archetype.table_id(),
+                                storage,
+                                op_delta.log_component_id,
+                            )
+                            .0
+                    })
+                } else {
+                    None
+                };
+
                 // SAFETY: `fns` and `ptr` were created for the same component type.
                 let component = unsafe {
                     WritableComponent::new(
@@ -737,8 +763,27 @@ fn collect_changes(
                                     entity_range,
                                 );
                             }
-                            let component_range =
-                                component.write_cached(&mut serialized, &mut component_range)?;
+                            let component_range = if let Some(op_delta) = rule.op_delta {
+                                let log = op_delta_log.expect("op-delta log should be present");
+                                let start = serialized.len();
+                                postcard_utils::to_extend_mut(
+                                    &rule.fns_id,
+                                    serialized.as_vec_mut(),
+                                )?;
+                                let cursor = unsafe {
+                                    op_delta.serialize_mutation(
+                                        &serialize_ctx,
+                                        ptr,
+                                        log,
+                                        entity_ticks.op_delta_cursor(component_index),
+                                        serialized.as_vec_mut(),
+                                    )?
+                                };
+                                mutations.add_op_delta_cursor(component_index, cursor);
+                                start..serialized.len()
+                            } else {
+                                component.write_cached(&mut serialized, &mut component_range)?
+                            };
                             mutations.add_component(component_range);
                         }
                     } else {
@@ -754,8 +799,24 @@ fn collect_changes(
                                 .write_cached(&mut serialized, &mut entity_range)?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
-                        let component_range =
-                            component.write_cached(&mut serialized, &mut component_range)?;
+                        let component_range = if let Some(op_delta) = rule.op_delta {
+                            let log = op_delta_log.expect("op-delta log should be present");
+                            let start = serialized.len();
+                            postcard_utils::to_extend_mut(&rule.fns_id, serialized.as_vec_mut())?;
+                            unsafe {
+                                op_delta.serialize_snapshot(
+                                    &serialize_ctx,
+                                    ptr,
+                                    log,
+                                    serialized.as_vec_mut(),
+                                )?;
+                            }
+                            component_range
+                                .get_or_insert(start..serialized.len())
+                                .clone()
+                        } else {
+                            component.write_cached(&mut serialized, &mut component_range)?
+                        };
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }
@@ -825,11 +886,7 @@ fn update_ticks(
             pools.recycle_components(components);
         }
         Entry::Vacant(entry) => {
-            entry.insert(EntityTicks {
-                server_tick,
-                system_tick,
-                components,
-            });
+            entry.insert(EntityTicks::new(server_tick, system_tick, components));
         }
     }
 }

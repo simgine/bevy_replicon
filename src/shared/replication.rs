@@ -1,6 +1,7 @@
 pub mod client_ticks;
 pub mod deferred_entity;
 pub(crate) mod mutate_index;
+pub mod op_delta;
 pub mod receive_markers;
 pub mod registry;
 pub mod rules;

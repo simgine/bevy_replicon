@@ -15,6 +15,12 @@ use crate::{
 #[derive(Resource, Deref, DerefMut, Default)]
 pub(crate) struct SerializedData(Vec<u8>);
 
+impl SerializedData {
+    pub(crate) fn as_vec_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.0
+    }
+}
+
 /// Custom serialization for replication messages.
 pub(crate) trait MessageWrite {
     /// Writes data for replication messages and returns a range that points to it.
