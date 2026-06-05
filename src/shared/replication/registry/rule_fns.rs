@@ -58,6 +58,25 @@ impl UntypedRuleFns {
     }
 }
 
+impl<C: Component> From<RuleFns<C>> for UntypedRuleFns {
+    fn from(value: RuleFns<C>) -> Self {
+        // SAFETY: these functions won't be called until the type is restored.
+        Self {
+            type_id: TypeId::of::<C>(),
+            type_name: ShortName::of::<C>(),
+            serialize: unsafe { mem::transmute::<SerializeFn<C>, unsafe fn()>(value.serialize) },
+            deserialize: unsafe {
+                mem::transmute::<DeserializeFn<C>, unsafe fn()>(value.deserialize)
+            },
+            deserialize_in_place: unsafe {
+                mem::transmute::<DeserializeInPlaceFn<C>, unsafe fn()>(value.deserialize_in_place)
+            },
+            consume: unsafe { mem::transmute::<ConsumeFn<C>, unsafe fn()>(value.consume) },
+            diff: value.diff,
+        }
+    }
+}
+
 /// Serialization and deserialization functions for a component.
 ///
 /// See also [`AppRuleExt`](crate::shared::replication::rules::AppRuleExt)

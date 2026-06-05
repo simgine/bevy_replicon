@@ -12,7 +12,7 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
-            client_ticks::{ClientTicks, MutateInfo, MutatedEntityInfo},
+            client_ticks::{ClientTicks, MutateInfo, MutatedEntityInfo, PatchCursors},
             diff::PatchIndex,
             mutate_index::MutateIndex,
             registry::{ComponentIndex, component_mask::ComponentMask},
@@ -321,10 +321,10 @@ pub(crate) struct EntityMutations {
     /// Like [`Self::entity`], used for later component acknowledgement.
     pub(super) components: ComponentMask,
 
-    /// Op-delta cursors represented by the serialized component ranges.
+    /// Diff patch cursors represented by the serialized component ranges.
     ///
     /// These are ACK bookkeeping metadata, paired with [`Self::components`].
-    pub(super) patch_cursors: Vec<(ComponentIndex, PatchIndex)>,
+    pub(super) patch_cursors: PatchCursors,
 }
 
 #[derive(Clone, Copy)]

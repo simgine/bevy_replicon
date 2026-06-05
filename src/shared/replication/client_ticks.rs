@@ -6,6 +6,7 @@ use bevy::{
     prelude::*,
 };
 use log::{debug, trace};
+use smallvec::SmallVec;
 
 use super::mutate_index::MutateIndex;
 use crate::{
@@ -15,6 +16,8 @@ use crate::{
         registry::{ComponentIndex, component_mask::ComponentMask},
     },
 };
+
+pub(crate) type PatchCursors = SmallVec<[(ComponentIndex, PatchIndex); 3]>;
 
 /// Tracks replication ticks for a client.
 #[derive(Component, Default)]
@@ -150,7 +153,10 @@ pub(crate) struct EntityTicks {
     ///
     /// This stores cursors, not patches. It contains at most one entry per
     /// tracked diff component and is pruned when that component is removed.
-    patch_cursors: Vec<(ComponentIndex, PatchIndex)>,
+    ///
+    /// We use a smallvec because we don't expect to have more than a few components
+    /// with diff replication on an entity.
+    patch_cursors: PatchCursors,
 }
 
 impl EntityTicks {
@@ -211,5 +217,5 @@ pub(crate) struct MutateInfo {
 pub(crate) struct MutatedEntityInfo {
     pub(crate) entity: Entity,
     pub(crate) components: ComponentMask,
-    pub(crate) patch_cursors: Vec<(ComponentIndex, PatchIndex)>,
+    pub(crate) patch_cursors: PatchCursors,
 }

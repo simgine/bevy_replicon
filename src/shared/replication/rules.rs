@@ -41,6 +41,8 @@ pub trait AppRuleExt {
     /// The component itself remains the authoritative state. Mutations should be
     /// performed through [`DiffEntityExt::apply_patch`](crate::shared::replication::diff::DiffEntityExt)
     /// so Replicon can record patches for efficient per-client resending.
+    ///
+    /// For more details and an example, see [`Diffable`].
     fn replicate_diff<C>(&mut self) -> &mut Self
     where
         C: Diffable,

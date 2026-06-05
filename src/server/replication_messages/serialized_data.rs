@@ -5,7 +5,10 @@ use bevy::{ecs::component::ComponentId, prelude::*, ptr::Ptr};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
+    shared::replication::{
+        diff::{DiffFns, PatchIndex},
+        registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
+    },
 };
 
 /// Single continuous buffer that stores serialized data for messages.
@@ -14,12 +17,6 @@ use crate::{
 /// [`MutateMessage`](super::mutations::MutateMessage).
 #[derive(Resource, Deref, DerefMut, Default)]
 pub(crate) struct SerializedData(Vec<u8>);
-
-impl SerializedData {
-    pub(crate) fn as_vec_mut(&mut self) -> &mut Vec<u8> {
-        &mut self.0
-    }
-}
 
 /// Custom serialization for replication messages.
 pub(crate) trait MessageWrite {
@@ -48,6 +45,17 @@ pub(crate) struct WritableComponent<'a> {
     pub(crate) ptr: Ptr<'a>,
     pub(crate) fns_id: FnsId,
     pub(crate) ctx: SerializeCtx<'a>,
+    diff: Option<WritableDiffComponent<'a>>,
+}
+
+struct WritableDiffComponent<'a> {
+    fns: DiffFns,
+    log: Ptr<'a>,
+}
+
+pub(crate) struct WrittenComponent {
+    pub(crate) range: Range<usize>,
+    pub(crate) patch_cursor: Option<PatchIndex>,
 }
 
 impl<'a> WritableComponent<'a> {
@@ -56,9 +64,12 @@ impl<'a> WritableComponent<'a> {
     /// # Safety
     ///
     /// The caller must ensure that `fns` and `ptr` was created for the same type.
+    /// If `diff` is set, its log pointer must point to the matching `DiffLog` for
+    /// that same component type.
     pub(crate) unsafe fn new(
         fns: SerdeFns<'a>,
         ptr: Ptr<'a>,
+        diff: Option<(DiffFns, Ptr<'a>)>,
         fns_id: FnsId,
         component_id: ComponentId,
         server_tick: RepliconTick,
@@ -73,21 +84,69 @@ impl<'a> WritableComponent<'a> {
                 server_tick,
                 type_registry,
             },
+            diff: diff.map(|(fns, log)| WritableDiffComponent { fns, log }),
         }
+    }
+
+    /// Writes component data for a mutation message.
+    ///
+    /// Non-diff components can reuse the same serialized range for all clients.
+    /// Diff components depend on each client's last ACKed patch cursor, so they
+    /// are serialized per client and return the patch cursor that should advance
+    /// when the mutation message is ACKed.
+    pub(crate) fn write_mutation(
+        &self,
+        serialized: &mut SerializedData,
+        cached_range: &mut Option<Range<usize>>,
+        acked_patch_cursor: PatchIndex,
+    ) -> Result<WrittenComponent> {
+        if self.diff.is_some() {
+            self.write_uncached(serialized, Some(acked_patch_cursor))
+        } else {
+            Ok(WrittenComponent {
+                range: self.write_cached(serialized, cached_range)?,
+                patch_cursor: None,
+            })
+        }
+    }
+
+    fn write_uncached(
+        &self,
+        serialized: &mut SerializedData,
+        acked_patch_cursor: Option<PatchIndex>,
+    ) -> Result<WrittenComponent> {
+        let start = serialized.len();
+
+        postcard_utils::to_extend_mut(&self.fns_id, &mut serialized.0)?;
+        let patch_cursor = if let Some(diff) = &self.diff {
+            // SAFETY: `diff`, `ptr` and `log` were created for the same component type.
+            Some(unsafe {
+                diff.fns.serialize_mutation(
+                    &self.ctx,
+                    self.ptr,
+                    diff.log,
+                    acked_patch_cursor,
+                    &mut serialized.0,
+                )?
+            })
+        } else {
+            // SAFETY: `fns` and `ptr` were created for the same component type.
+            unsafe { self.fns.serialize(&self.ctx, self.ptr, &mut serialized.0)? };
+            None
+        };
+
+        let end = serialized.len();
+
+        Ok(WrittenComponent {
+            range: start..end,
+            patch_cursor,
+        })
     }
 }
 
 impl MessageWrite for WritableComponent<'_> {
     fn write(&self, serialized: &mut SerializedData) -> Result<Range<usize>> {
-        let start = serialized.len();
-
-        postcard_utils::to_extend_mut(&self.fns_id, &mut serialized.0)?;
-        // SAFETY: `fns` and `ptr` were created for the same component type.
-        unsafe { self.fns.serialize(&self.ctx, self.ptr, &mut serialized.0)? };
-
-        let end = serialized.len();
-
-        Ok(start..end)
+        Ok(self.write_uncached(serialized, None)?.range)
     }
 }
 

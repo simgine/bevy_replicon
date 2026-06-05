@@ -48,6 +48,54 @@ impl Diffable for Points {
     }
 }
 
+#[derive(Resource)]
+struct TargetEntity(Entity);
+
+#[test]
+fn entity_mut_apply_patch_records_patch() {
+    let mut app = setup_app();
+    let entity = app
+        .world_mut()
+        .spawn((Replicated, points([(1.0, 1.0)])))
+        .id();
+
+    app.add_systems(Update, apply_patch_with_entity_mut);
+    app.update();
+
+    assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
+    assert_diff_cursor(&app, entity, 1);
+}
+
+#[test]
+fn entity_commands_apply_patch_records_patch() {
+    let mut app = setup_app();
+    let entity = app
+        .world_mut()
+        .spawn((Replicated, points([(1.0, 1.0)])))
+        .id();
+
+    app.insert_resource(TargetEntity(entity));
+    app.add_systems(Update, apply_patch_with_entity_commands);
+    app.update();
+
+    assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
+    assert_diff_cursor(&app, entity, 1);
+}
+
+fn apply_patch_with_entity_mut(mut query: Query<EntityMut, With<Points>>) {
+    let mut entity = query.single_mut().unwrap();
+    entity
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
+        .unwrap();
+}
+
+fn apply_patch_with_entity_commands(mut commands: Commands, target: Res<TargetEntity>) {
+    commands
+        .entity(target.0)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
+        .unwrap();
+}
+
 #[test]
 fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
     let (mut server_app, mut client_app) = setup_apps();
@@ -207,12 +255,12 @@ fn duplicate_patches_are_ignored_by_receiver() {
         RepliconTick::default(),
     );
     entity.apply_write(
-        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(2.0, 2.0)))]),
+        patches(1, [PointPatch::PushBack(Vec2::new(2.0, 2.0))]),
         fns_id,
         RepliconTick::default(),
     );
     entity.apply_write(
-        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(2.0, 2.0)))]),
+        patches(1, [PointPatch::PushBack(Vec2::new(2.0, 2.0))]),
         fns_id,
         RepliconTick::default(),
     );
@@ -232,14 +280,14 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
         RepliconTick::default(),
     );
     entity.apply_write(
-        patches(1, 2, [(2, PointPatch::PushBack(Vec2::new(3.0, 3.0)))]),
+        patches(2, [PointPatch::PushBack(Vec2::new(3.0, 3.0))]),
         fns_id,
         RepliconTick::default(),
     );
     assert_entity_points(&entity, [(1.0, 1.0)]);
 
     entity.apply_write(
-        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(2.0, 2.0)))]),
+        patches(1, [PointPatch::PushBack(Vec2::new(2.0, 2.0))]),
         fns_id,
         RepliconTick::default(),
     );
@@ -254,7 +302,7 @@ fn patches_before_snapshot_are_rejected() {
     let mut entity = app.world_mut().spawn_empty();
 
     entity.apply_write(
-        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(1.0, 1.0)))]),
+        patches(1, [PointPatch::PushBack(Vec2::new(1.0, 1.0))]),
         fns_id,
         RepliconTick::default(),
     );
@@ -364,6 +412,19 @@ fn assert_entity_points<const N: usize>(entity: &EntityWorldMut, expected: [(f32
     assert_eq!(points, expected);
 }
 
+fn assert_world_points<const N: usize>(app: &App, entity: Entity, expected: [(f32, f32); N]) {
+    let entity = app.world().entity(entity);
+    let points = entity.get::<Points>().unwrap();
+    let points: Vec<_> = points.0.iter().map(|point| (point.x, point.y)).collect();
+    assert_eq!(points, expected);
+}
+
+fn assert_diff_cursor(app: &App, entity: Entity, cursor: PatchIndex) {
+    let entity = app.world().entity(entity);
+    let log = entity.get::<DiffLog<Points>>().unwrap();
+    assert_eq!(log.current_cursor(), cursor);
+}
+
 fn points<const N: usize>(points: [(f32, f32); N]) -> Points {
     Points(points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect())
 }
@@ -372,18 +433,10 @@ fn snapshot(cursor: PatchIndex, value: Points) -> Vec<u8> {
     wire(DiffWire::Snapshot { cursor, value })
 }
 
-fn patches<const N: usize>(
-    base_cursor: PatchIndex,
-    cursor: PatchIndex,
-    patches: [(PatchIndex, PointPatch); N],
-) -> Vec<u8> {
+fn patches<const N: usize>(first_patch_index: PatchIndex, patches: [PointPatch; N]) -> Vec<u8> {
     wire(DiffWire::Patches {
-        base_cursor,
-        cursor,
-        patches: patches
-            .into_iter()
-            .map(|(index, patch)| SequencedPatch { index, patch })
-            .collect(),
+        first_patch_index,
+        patches: patches.into(),
     })
 }
 

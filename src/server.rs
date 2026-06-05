@@ -42,7 +42,7 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{ComponentIndex,ReplicationRegistry, component_mask::ComponentMask, ctx::SerializeCtx},
+            registry::{ComponentIndex, ReplicationRegistry, component_mask::ComponentMask},
             rules::ReplicationRules,
             track_mutate_messages::TrackMutateMessages,
             visibility::VisibilityScope,
@@ -675,7 +675,6 @@ fn collect_changes(
 
             for &(rule, storage) in &replicated_archetype.components {
                 let (component_index, component_id, fns) = registry.get(rule.fns_id);
-                let diff = fns.diff();
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (ptr, ticks) = unsafe {
@@ -687,19 +686,13 @@ fn collect_changes(
                     )
                 };
 
-                let serialize_ctx = SerializeCtx {
-                    component_id,
-                    server_tick: **server_tick,
-                    type_registry: &type_registry,
-                };
-
-                let diff_log = if let Some(diff) = diff {
+                let diff = if let Some(diff) = fns.diff() {
                     let storage = archetype
                         .get_storage_type(diff.log_component_id)
                         .unwrap_or_else(|| {
                             panic!("diff log should be present for `{component_id:?}`")
                         });
-                    Some(unsafe {
+                    let log = unsafe {
                         query
                             .get_component_unchecked(
                                 entity,
@@ -708,7 +701,8 @@ fn collect_changes(
                                 diff.log_component_id,
                             )
                             .0
-                    })
+                    };
+                    Some((diff, log))
                 } else {
                     None
                 };
@@ -718,6 +712,7 @@ fn collect_changes(
                     WritableComponent::new(
                         fns,
                         ptr,
+                        diff,
                         rule.fns_id,
                         component_id,
                         **server_tick,
@@ -764,28 +759,16 @@ fn collect_changes(
                                     entity_range,
                                 );
                             }
-                            let component_range = if let Some(diff) = diff {
-                                let log = diff_log.expect("diff log should be present");
-                                let start = serialized.len();
-                                postcard_utils::to_extend_mut(
-                                    &rule.fns_id,
-                                    serialized.as_vec_mut(),
-                                )?;
-                                let cursor = unsafe {
-                                    diff.serialize_mutation(
-                                        &serialize_ctx,
-                                        ptr,
-                                        log,
-                                        Some(entity_ticks.patch_cursor(component_index)),
-                                        serialized.as_vec_mut(),
-                                    )?
-                                };
+
+                            let component = component.write_mutation(
+                                &mut serialized,
+                                &mut component_range,
+                                entity_ticks.patch_cursor(component_index),
+                            )?;
+                            if let Some(cursor) = component.patch_cursor {
                                 mutations.add_patch_cursor(component_index, cursor);
-                                start..serialized.len()
-                            } else {
-                                component.write_cached(&mut serialized, &mut component_range)?
-                            };
-                            mutations.add_component(component_range);
+                            }
+                            mutations.add_component(component.range);
                         }
                     } else {
                         trace!(
@@ -800,25 +783,8 @@ fn collect_changes(
                                 .write_cached(&mut serialized, &mut entity_range)?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
-                        let component_range = if let Some(diff) = diff {
-                            let log = diff_log.expect("diff log should be present");
-                            let start = serialized.len();
-                            postcard_utils::to_extend_mut(&rule.fns_id, serialized.as_vec_mut())?;
-                            unsafe {
-                                diff.serialize_mutation(
-                                    &serialize_ctx,
-                                    ptr,
-                                    log,
-                                    None,
-                                    serialized.as_vec_mut(),
-                                )?;
-                            }
-                            component_range
-                                .get_or_insert(start..serialized.len())
-                                .clone()
-                        } else {
-                            component.write_cached(&mut serialized, &mut component_range)?
-                        };
+                        let component_range =
+                            component.write_cached(&mut serialized, &mut component_range)?;
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }

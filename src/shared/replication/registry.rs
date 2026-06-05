@@ -117,7 +117,7 @@ impl ReplicationRegistry {
         rule_fns: RuleFns<C>,
     ) -> (ComponentId, FnsId) {
         let (index, component_id) = self.init_component_fns::<C>(world);
-        self.rules.push((index, rule_fns.into_untyped()));
+        self.rules.push((index, rule_fns.into()));
         let fns_id = FnsId(self.rules.len() - 1);
 
         trace!("registering `{fns_id:?}` for `{}`", ShortName::of::<C>());
