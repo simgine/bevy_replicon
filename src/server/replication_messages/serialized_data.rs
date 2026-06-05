@@ -45,12 +45,14 @@ pub(crate) struct WritableComponent<'a> {
     pub(crate) ptr: Ptr<'a>,
     pub(crate) fns_id: FnsId,
     pub(crate) ctx: SerializeCtx<'a>,
-    diff: Option<WritableDiffComponent<'a>>,
 }
 
-struct WritableDiffComponent<'a> {
-    fns: DiffFns,
-    log: Ptr<'a>,
+#[derive(Clone, Copy)]
+pub(crate) struct WritableDiff<'a> {
+    /// Diff functions for the same component type as [`WritableComponent`].
+    pub(crate) fns: DiffFns,
+    /// Pointer to `DiffLog<C>` for the same component type as [`WritableComponent`].
+    pub(crate) log: Ptr<'a>,
 }
 
 pub(crate) struct WrittenComponent {
@@ -64,12 +66,9 @@ impl<'a> WritableComponent<'a> {
     /// # Safety
     ///
     /// The caller must ensure that `fns` and `ptr` was created for the same type.
-    /// If `diff` is set, its log pointer must point to the matching `DiffLog` for
-    /// that same component type.
     pub(crate) unsafe fn new(
         fns: SerdeFns<'a>,
         ptr: Ptr<'a>,
-        diff: Option<(DiffFns, Ptr<'a>)>,
         fns_id: FnsId,
         component_id: ComponentId,
         server_tick: RepliconTick,
@@ -84,69 +83,77 @@ impl<'a> WritableComponent<'a> {
                 server_tick,
                 type_registry,
             },
-            diff: diff.map(|(fns, log)| WritableDiffComponent { fns, log }),
         }
     }
 
-    /// Writes component data for a mutation message.
+    /// Writes component data for an update or mutation message.
     ///
-    /// Non-diff components can reuse the same serialized range for all clients.
-    /// Diff components depend on each client's last ACKed patch cursor, so they
-    /// are serialized per client and return the patch cursor that should advance
-    /// when the mutation message is ACKed.
+    /// Without `diff`, this uses the normal cached component serialization.
+    /// With `diff`, `acked_patch_cursor` controls the payload: [`None`] writes a
+    /// cacheable snapshot, and [`Some`] writes patches after that cursor or falls
+    /// back to a snapshot. The returned patch cursor should be tracked only for
+    /// mutation messages that passed [`Some`].
     pub(crate) fn write_mutation(
         &self,
         serialized: &mut SerializedData,
         cached_range: &mut Option<Range<usize>>,
-        acked_patch_cursor: PatchIndex,
-    ) -> Result<WrittenComponent> {
-        if self.diff.is_some() {
-            self.write_uncached(serialized, Some(acked_patch_cursor))
-        } else {
-            Ok(WrittenComponent {
-                range: self.write_cached(serialized, cached_range)?,
-                patch_cursor: None,
-            })
-        }
-    }
-
-    fn write_uncached(
-        &self,
-        serialized: &mut SerializedData,
+        diff: Option<WritableDiff<'a>>,
         acked_patch_cursor: Option<PatchIndex>,
     ) -> Result<WrittenComponent> {
+        let Some(diff) = diff else {
+            return Ok(WrittenComponent {
+                range: self.write_cached(serialized, cached_range)?,
+                patch_cursor: None,
+            });
+        };
+
+        if acked_patch_cursor.is_none()
+            && let Some(range) = cached_range.clone()
+        {
+            return Ok(WrittenComponent {
+                range,
+                patch_cursor: None,
+            });
+        }
+
         let start = serialized.len();
 
         postcard_utils::to_extend_mut(&self.fns_id, &mut serialized.0)?;
-        let patch_cursor = if let Some(diff) = &self.diff {
-            // SAFETY: `diff`, `ptr` and `log` were created for the same component type.
-            Some(unsafe {
-                diff.fns.serialize_mutation(
-                    &self.ctx,
-                    self.ptr,
-                    diff.log,
-                    acked_patch_cursor,
-                    &mut serialized.0,
-                )?
-            })
-        } else {
-            // SAFETY: `fns` and `ptr` were created for the same component type.
-            unsafe { self.fns.serialize(&self.ctx, self.ptr, &mut serialized.0)? };
-            None
+        // SAFETY: `diff`, `ptr` and `log` were created for the same component type.
+        let cursor = unsafe {
+            diff.fns.serialize_mutation(
+                &self.ctx,
+                self.ptr,
+                diff.log,
+                acked_patch_cursor,
+                &mut serialized.0,
+            )?
         };
 
         let end = serialized.len();
+        let range = start..end;
+        if acked_patch_cursor.is_none() {
+            *cached_range = Some(range.clone());
+        }
 
         Ok(WrittenComponent {
-            range: start..end,
-            patch_cursor,
+            range,
+            patch_cursor: acked_patch_cursor.map(|_| cursor),
         })
     }
 }
 
 impl MessageWrite for WritableComponent<'_> {
     fn write(&self, serialized: &mut SerializedData) -> Result<Range<usize>> {
-        Ok(self.write_uncached(serialized, None)?.range)
+        let start = serialized.len();
+
+        postcard_utils::to_extend_mut(&self.fns_id, &mut serialized.0)?;
+        // SAFETY: `fns` and `ptr` were created for the same component type.
+        unsafe { self.fns.serialize(&self.ctx, self.ptr, &mut serialized.0)? };
+
+        let end = serialized.len();
+
+        Ok(start..end)
     }
 }
 

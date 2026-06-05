@@ -33,7 +33,7 @@ use crate::{
         replicated_archetypes::ReplicatedArchetypes,
         replication_messages::{
             mutations::MutationsSplit,
-            serialized_data::{EntityMapping, MessageWrite, WritableComponent},
+            serialized_data::{EntityMapping, MessageWrite, WritableComponent, WritableDiff},
         },
         visibility::registry::FilterRegistry,
     },
@@ -702,7 +702,7 @@ fn collect_changes(
                             )
                             .0
                     };
-                    Some((diff, log))
+                    Some(WritableDiff { fns: diff, log })
                 } else {
                     None
                 };
@@ -712,7 +712,6 @@ fn collect_changes(
                     WritableComponent::new(
                         fns,
                         ptr,
-                        diff,
                         rule.fns_id,
                         component_id,
                         **server_tick,
@@ -763,7 +762,8 @@ fn collect_changes(
                             let component = component.write_mutation(
                                 &mut serialized,
                                 &mut component_range,
-                                entity_ticks.patch_cursor(component_index),
+                                diff,
+                                Some(entity_ticks.patch_cursor(component_index)),
                             )?;
                             if let Some(cursor) = component.patch_cursor {
                                 mutations.add_patch_cursor(component_index, cursor);
@@ -783,8 +783,9 @@ fn collect_changes(
                                 .write_cached(&mut serialized, &mut entity_range)?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
-                        let component_range =
-                            component.write_cached(&mut serialized, &mut component_range)?;
+                        let component_range = component
+                            .write_mutation(&mut serialized, &mut component_range, diff, None)?
+                            .range;
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }
