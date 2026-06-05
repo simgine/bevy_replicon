@@ -30,7 +30,7 @@ impl ClientPools {
     pub(super) fn recycle_entities(&mut self, mut entities: Vec<MutatedEntityInfo>) {
         for mut entity in entities.drain(..) {
             self.recycle_components(entity.components);
-            entity.op_delta_cursors.clear();
+            entity.patch_cursors.clear();
         }
         self.entities.push(entities);
     }

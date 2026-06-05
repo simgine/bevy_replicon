@@ -97,7 +97,7 @@ name = "mutations"
 required-features = ["client", "server"]
 
 [[test]]
-name = "op_delta"
+name = "diff"
 required-features = ["client", "server"]
 
 [[test]]

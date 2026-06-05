@@ -12,7 +12,7 @@ use bevy_replicon::{
             server_messages::ServerMessages,
         },
         replication::{
-            op_delta::{OpDeltaReceiver, OpDeltaWire},
+            diff::{DiffReceiver, DiffWire},
             registry::test_fns::TestFnsEntityExt,
             rules::ReplicationRules,
         },
@@ -26,18 +26,18 @@ use test_log::test;
 struct Points(VecDeque<Vec2>);
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-enum PointOp {
+enum PointPatch {
     PushBack(Vec2),
     PopFront(usize),
 }
 
-impl OpDeltaComponent for Points {
-    type Op = PointOp;
+impl Diffable for Points {
+    type Patch = PointPatch;
 
-    fn apply_op(&mut self, op: &Self::Op) -> Result<()> {
-        match *op {
-            PointOp::PushBack(point) => self.0.push_back(point),
-            PointOp::PopFront(count) => {
+    fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()> {
+        match *patch {
+            PointPatch::PushBack(point) => self.0.push_back(point),
+            PointPatch::PopFront(count) => {
                 for _ in 0..count {
                     self.0.pop_front();
                 }
@@ -49,7 +49,7 @@ impl OpDeltaComponent for Points {
 }
 
 #[test]
-fn initial_snapshot_ops_and_direct_snapshot_fallback_replicate() {
+fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
@@ -61,8 +61,8 @@ fn initial_snapshot_ops_and_direct_snapshot_fallback_replicate() {
         server_app
             .world()
             .entity(server_entity)
-            .contains::<OpDeltaLog<Points>>(),
-        "op-delta components should automatically get an operation log"
+            .contains::<DiffLog<Points>>(),
+        "diff components should automatically get a patch log"
     );
 
     replicate_and_ack(&mut server_app, &mut client_app);
@@ -71,14 +71,14 @@ fn initial_snapshot_ops_and_direct_snapshot_fallback_replicate() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_op_delta::<Points>(PointOp::PushBack(Vec2::new(2.0, 2.0)))
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
         .unwrap();
     replicate_and_ack(&mut server_app, &mut client_app);
 
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_op_delta::<Points>(PointOp::PushBack(Vec2::new(3.0, 3.0)))
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(3.0, 3.0)))
         .unwrap();
     replicate_and_ack(&mut server_app, &mut client_app);
 
@@ -87,7 +87,7 @@ fn initial_snapshot_ops_and_direct_snapshot_fallback_replicate() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_op_delta::<Points>(PointOp::PopFront(1))
+        .apply_patch::<Points>(PointPatch::PopFront(1))
         .unwrap();
     replicate_and_ack(&mut server_app, &mut client_app);
 
@@ -105,7 +105,7 @@ fn initial_snapshot_ops_and_direct_snapshot_fallback_replicate() {
 }
 
 #[test]
-fn lost_op_is_included_in_next_unacked_delta() {
+fn lost_patch_is_included_in_next_unacked_diff() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
@@ -118,16 +118,16 @@ fn lost_op_is_included_in_next_unacked_delta() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_op_delta::<Points>(PointOp::PushBack(Vec2::new(2.0, 2.0)))
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
         .unwrap();
     server_app.update();
     let dropped = drain_server_channel(&mut server_app, ServerChannel::Mutations);
-    assert_eq!(dropped.len(), 1, "first op should be sent as a mutation");
+    assert_eq!(dropped.len(), 1, "first patch should be sent as a mutation");
 
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_op_delta::<Points>(PointOp::PushBack(Vec2::new(3.0, 3.0)))
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(3.0, 3.0)))
         .unwrap();
     server_app.update();
     deliver_server_messages(&mut server_app, &mut client_app);
@@ -137,7 +137,7 @@ fn lost_op_is_included_in_next_unacked_delta() {
 }
 
 #[test]
-fn pruned_ops_fall_back_to_snapshot_and_then_resume_ops() {
+fn pruned_patches_fall_back_to_snapshot_and_then_resume_patches() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
@@ -151,7 +151,7 @@ fn pruned_ops_fall_back_to_snapshot_and_then_resume_ops() {
         server_app
             .world_mut()
             .entity_mut(server_entity)
-            .apply_op_delta::<Points>(PointOp::PushBack(Vec2::splat(value as f32)))
+            .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(value as f32)))
             .unwrap();
     }
     replicate_and_ack(&mut server_app, &mut client_app);
@@ -160,7 +160,7 @@ fn pruned_ops_fall_back_to_snapshot_and_then_resume_ops() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_op_delta::<Points>(PointOp::PushBack(Vec2::splat(66.0)))
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(66.0)))
         .unwrap();
     replicate_and_ack(&mut server_app, &mut client_app);
     assert_client_point_values(&mut client_app, 0..=66);
@@ -180,8 +180,8 @@ fn removal_removes_receiver_state() {
     let client_entity = single_client_entity(&mut client_app);
     let entity = client_app.world().entity(client_entity);
     assert!(entity.contains::<Points>());
-    assert!(entity.contains::<OpDeltaReceiver<Points>>());
-    assert!(entity.contains::<OpDeltaLog<Points>>());
+    assert!(entity.contains::<DiffReceiver<Points>>());
+    assert!(entity.contains::<DiffLog<Points>>());
 
     server_app
         .world_mut()
@@ -191,12 +191,12 @@ fn removal_removes_receiver_state() {
 
     let entity = client_app.world().entity(client_entity);
     assert!(!entity.contains::<Points>());
-    assert!(!entity.contains::<OpDeltaReceiver<Points>>());
-    assert!(!entity.contains::<OpDeltaLog<Points>>());
+    assert!(!entity.contains::<DiffReceiver<Points>>());
+    assert!(!entity.contains::<DiffLog<Points>>());
 }
 
 #[test]
-fn duplicate_ops_are_ignored_by_receiver() {
+fn duplicate_patches_are_ignored_by_receiver() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
@@ -207,12 +207,12 @@ fn duplicate_ops_are_ignored_by_receiver() {
         RepliconTick::default(),
     );
     entity.apply_write(
-        ops(0, 1, [(1, PointOp::PushBack(Vec2::new(2.0, 2.0)))]),
+        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(2.0, 2.0)))]),
         fns_id,
         RepliconTick::default(),
     );
     entity.apply_write(
-        ops(0, 1, [(1, PointOp::PushBack(Vec2::new(2.0, 2.0)))]),
+        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(2.0, 2.0)))]),
         fns_id,
         RepliconTick::default(),
     );
@@ -221,7 +221,7 @@ fn duplicate_ops_are_ignored_by_receiver() {
 }
 
 #[test]
-fn out_of_order_ops_wait_for_missing_predecessor() {
+fn out_of_order_patches_wait_for_missing_predecessor() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
@@ -232,14 +232,14 @@ fn out_of_order_ops_wait_for_missing_predecessor() {
         RepliconTick::default(),
     );
     entity.apply_write(
-        ops(1, 2, [(2, PointOp::PushBack(Vec2::new(3.0, 3.0)))]),
+        patches(1, 2, [(2, PointPatch::PushBack(Vec2::new(3.0, 3.0)))]),
         fns_id,
         RepliconTick::default(),
     );
     assert_entity_points(&entity, [(1.0, 1.0)]);
 
     entity.apply_write(
-        ops(0, 1, [(1, PointOp::PushBack(Vec2::new(2.0, 2.0)))]),
+        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(2.0, 2.0)))]),
         fns_id,
         RepliconTick::default(),
     );
@@ -248,13 +248,13 @@ fn out_of_order_ops_wait_for_missing_predecessor() {
 
 #[test]
 #[should_panic(expected = "writing data into an entity shouldn't fail")]
-fn ops_before_snapshot_are_rejected() {
+fn patches_before_snapshot_are_rejected() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
 
     entity.apply_write(
-        ops(0, 1, [(1, PointOp::PushBack(Vec2::new(1.0, 1.0)))]),
+        patches(0, 1, [(1, PointPatch::PushBack(Vec2::new(1.0, 1.0)))]),
         fns_id,
         RepliconTick::default(),
     );
@@ -273,7 +273,7 @@ fn setup_app() -> App {
         StatesPlugin,
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
-    .replicate_op_delta::<Points>()
+    .replicate_diff::<Points>()
     .finish();
     app
 }
@@ -368,26 +368,26 @@ fn points<const N: usize>(points: [(f32, f32); N]) -> Points {
     Points(points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect())
 }
 
-fn snapshot(cursor: OpIndex, value: Points) -> Vec<u8> {
-    wire(OpDeltaWire::Snapshot { cursor, value })
+fn snapshot(cursor: PatchIndex, value: Points) -> Vec<u8> {
+    wire(DiffWire::Snapshot { cursor, value })
 }
 
-fn ops<const N: usize>(
-    base_cursor: OpIndex,
-    cursor: OpIndex,
-    ops: [(OpIndex, PointOp); N],
+fn patches<const N: usize>(
+    base_cursor: PatchIndex,
+    cursor: PatchIndex,
+    patches: [(PatchIndex, PointPatch); N],
 ) -> Vec<u8> {
-    wire(OpDeltaWire::Ops {
+    wire(DiffWire::Patches {
         base_cursor,
         cursor,
-        ops: ops
+        patches: patches
             .into_iter()
-            .map(|(seq, op)| SequencedOp { seq, op })
+            .map(|(index, patch)| SequencedPatch { index, patch })
             .collect(),
     })
 }
 
-fn wire(wire: OpDeltaWire<Points, PointOp>) -> Vec<u8> {
+fn wire(wire: DiffWire<Points, PointPatch>) -> Vec<u8> {
     let mut message = Vec::new();
     postcard_utils::to_extend_mut(&wire, &mut message).unwrap();
     message

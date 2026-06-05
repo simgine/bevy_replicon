@@ -4,6 +4,7 @@ use bytes::Bytes;
 use super::ctx::{RemoveCtx, SerializeCtx, WriteCtx};
 use crate::shared::replication::{
     deferred_entity::DeferredEntity,
+    diff::DiffFns,
     receive_markers::{EntityMarkers, ReceiveMarkers},
     registry::{component_fns::ComponentFns, rule_fns::UntypedRuleFns},
 };
@@ -37,6 +38,12 @@ impl<'a> SerdeFns<'a> {
             rule_fns,
         }
     }
+
+    /// Returns diff serialization functions, if enabled for this rule.
+    pub(crate) fn diff(&self) -> Option<DiffFns> {
+        self.rule_fns.diff()
+    }
+
     /// Restores the erased type from `ptr` to the type for which this instance was created,
     /// and serializes it.
     ///

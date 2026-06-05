@@ -13,7 +13,10 @@ use bevy::{
 };
 use log::debug;
 
-use crate::{prelude::*, shared::replication::rules::ReplicationRules};
+use crate::{
+    prelude::*,
+    shared::replication::{registry::ReplicationRegistry, rules::ReplicationRules},
+};
 
 /// Like [`Query`], but provides dynamic access only for replicated components.
 ///
@@ -80,13 +83,14 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         let marker_id = world.register_component::<Replicated>();
         component_access.add_component_read(marker_id);
 
+        let registry = world.resource::<ReplicationRegistry>();
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
         for rule in rules.iter() {
             for component in &rule.components {
                 component_access.add_component_read(component.id);
-                if let Some(op_delta) = component.op_delta {
-                    component_access.add_component_read(op_delta.log_component_id);
+                if let Some(diff) = registry.diff(component.fns_id) {
+                    component_access.add_component_read(diff.log_component_id);
                 }
             }
         }

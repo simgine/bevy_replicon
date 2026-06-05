@@ -7,8 +7,8 @@ use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
-use crate::{prelude::*, shared::replication::op_delta::OpDeltaComponent};
-use component::{BundleRules, ComponentRule, IntoComponentRules, OpDeltaRuleFns};
+use crate::{prelude::*, shared::replication::diff::Diffable};
+use component::{BundleRules, ComponentRule, IntoComponentRules};
 use filter::{FilterRule, FilterRules};
 
 /// Replication functions for [`App`].
@@ -36,28 +36,22 @@ pub trait AppRuleExt {
     }
 
     /// Defines a replication rule that sends the initial component state as a snapshot
-    /// and later mutations as logged operations.
+    /// and later mutations as logged patches.
     ///
     /// The component itself remains the authoritative state. Mutations should be
-    /// performed through [`OpDeltaEntityExt::apply_op_delta`](crate::shared::replication::op_delta::OpDeltaEntityExt)
-    /// so Replicon can record operations for efficient per-client resending.
-    fn replicate_op_delta<C>(&mut self) -> &mut Self
+    /// performed through [`DiffEntityExt::apply_patch`](crate::shared::replication::diff::DiffEntityExt)
+    /// so Replicon can record patches for efficient per-client resending.
+    fn replicate_diff<C>(&mut self) -> &mut Self
     where
-        C: OpDeltaComponent,
+        C: Diffable,
     {
-        self.replicate_op_delta_filtered::<C, ()>()
+        self.replicate_diff_filtered::<C, ()>()
     }
 
-    /// Like [`Self::replicate_op_delta`], but also adds filters like [`Self::replicate_filtered`].
-    fn replicate_op_delta_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    /// Like [`Self::replicate_diff`], but also adds filters like [`Self::replicate_filtered`].
+    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
     where
-        C: OpDeltaComponent,
-    {
-        self.replicate_with_priority_filtered::<_, F>(
-            1 + F::DEFAULT_PRIORITY,
-            OpDeltaRuleFns::<C>::default(),
-        )
-    }
+        C: Diffable;
 
     /// Like [`Self::replicate`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
@@ -829,6 +823,33 @@ pub trait AppRuleExt {
 }
 
 impl AppRuleExt for App {
+    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        let priority = 1 + F::DEFAULT_PRIORITY;
+        self.world_mut()
+            .resource_mut::<ProtocolHasher>()
+            .replicate::<RuleFns<C>>(priority);
+
+        let (id, fns_id) =
+            self.world_mut()
+                .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                    registry.register_diff_rule_fns::<C>(world)
+                });
+        let filters = F::filter_rules(self.world_mut());
+
+        self.world_mut()
+            .resource_mut::<ReplicationRules>()
+            .insert(ReplicationRule {
+                priority,
+                components: vec![ComponentRule::new(id, fns_id)],
+                filters,
+            });
+
+        self
+    }
+
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(
         &mut self,
         priority: usize,

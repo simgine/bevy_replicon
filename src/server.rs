@@ -675,6 +675,7 @@ fn collect_changes(
 
             for &(rule, storage) in &replicated_archetype.components {
                 let (component_index, component_id, fns) = registry.get(rule.fns_id);
+                let diff = fns.diff();
 
                 // SAFETY: component and storage were obtained from this archetype.
                 let (ptr, ticks) = unsafe {
@@ -692,11 +693,11 @@ fn collect_changes(
                     type_registry: &type_registry,
                 };
 
-                let op_delta_log = if let Some(op_delta) = rule.op_delta {
+                let diff_log = if let Some(diff) = diff {
                     let storage = archetype
-                        .get_storage_type(op_delta.log_component_id)
+                        .get_storage_type(diff.log_component_id)
                         .unwrap_or_else(|| {
-                            panic!("op-delta log should be present for `{component_id:?}`")
+                            panic!("diff log should be present for `{component_id:?}`")
                         });
                     Some(unsafe {
                         query
@@ -704,7 +705,7 @@ fn collect_changes(
                                 entity,
                                 archetype.table_id(),
                                 storage,
-                                op_delta.log_component_id,
+                                diff.log_component_id,
                             )
                             .0
                     })
@@ -763,23 +764,23 @@ fn collect_changes(
                                     entity_range,
                                 );
                             }
-                            let component_range = if let Some(op_delta) = rule.op_delta {
-                                let log = op_delta_log.expect("op-delta log should be present");
+                            let component_range = if let Some(diff) = diff {
+                                let log = diff_log.expect("diff log should be present");
                                 let start = serialized.len();
                                 postcard_utils::to_extend_mut(
                                     &rule.fns_id,
                                     serialized.as_vec_mut(),
                                 )?;
                                 let cursor = unsafe {
-                                    op_delta.serialize_mutation(
+                                    diff.serialize_mutation(
                                         &serialize_ctx,
                                         ptr,
                                         log,
-                                        entity_ticks.op_delta_cursor(component_index),
+                                        Some(entity_ticks.patch_cursor(component_index)),
                                         serialized.as_vec_mut(),
                                     )?
                                 };
-                                mutations.add_op_delta_cursor(component_index, cursor);
+                                mutations.add_patch_cursor(component_index, cursor);
                                 start..serialized.len()
                             } else {
                                 component.write_cached(&mut serialized, &mut component_range)?
@@ -799,15 +800,16 @@ fn collect_changes(
                                 .write_cached(&mut serialized, &mut entity_range)?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
-                        let component_range = if let Some(op_delta) = rule.op_delta {
-                            let log = op_delta_log.expect("op-delta log should be present");
+                        let component_range = if let Some(diff) = diff {
+                            let log = diff_log.expect("diff log should be present");
                             let start = serialized.len();
                             postcard_utils::to_extend_mut(&rule.fns_id, serialized.as_vec_mut())?;
                             unsafe {
-                                op_delta.serialize_snapshot(
+                                diff.serialize_mutation(
                                     &serialize_ctx,
                                     ptr,
                                     log,
+                                    None,
                                     serialized.as_vec_mut(),
                                 )?;
                             }

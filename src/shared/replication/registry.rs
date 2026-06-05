@@ -11,7 +11,13 @@ use log::trace;
 use serde::{Deserialize, Serialize};
 
 use super::receive_markers::ReceiveMarkerIndex;
-use crate::{prelude::*, shared::replication::registry::serde_fns::SerdeFns};
+use crate::{
+    prelude::*,
+    shared::replication::{
+        diff::{self, DiffFns, DiffLog, Diffable},
+        registry::serde_fns::SerdeFns,
+    },
+};
 use component_fns::ComponentFns;
 use ctx::DespawnCtx;
 use receive_fns::{MutWrite, RemoveFn, UntypedReceiveFns, WriteFn};
@@ -111,11 +117,27 @@ impl ReplicationRegistry {
         rule_fns: RuleFns<C>,
     ) -> (ComponentId, FnsId) {
         let (index, component_id) = self.init_component_fns::<C>(world);
-        self.rules.push((index, rule_fns.into()));
+        self.rules.push((index, rule_fns.into_untyped()));
         let fns_id = FnsId(self.rules.len() - 1);
 
         trace!("registering `{fns_id:?}` for `{}`", ShortName::of::<C>());
         (component_id, fns_id)
+    }
+
+    /// Registers patch-based diff serialization/deserialization functions for a component.
+    ///
+    /// This is like [`Self::register_rule_fns`], but also registers `DiffLog<C>`
+    /// as a required component and replaces the live receive path so it can
+    /// apply both snapshot and patch payloads.
+    pub fn register_diff_rule_fns<C: Diffable>(
+        &mut self,
+        world: &mut World,
+    ) -> (ComponentId, FnsId) {
+        world.register_required_components::<C, DiffLog<C>>();
+        self.set_receive_fns::<C>(world, diff::write::<C>, diff::remove::<C>);
+
+        let diff = DiffFns::new::<C>(world);
+        self.register_rule_fns(world, RuleFns::<C>::new_diff(diff))
     }
 
     /// Initializes [`ComponentFns`] for a component and returns its index and ID.
@@ -156,6 +178,16 @@ impl ReplicationRegistry {
         let fns = unsafe { SerdeFns::new(component_fns, rule_fns) };
 
         (*index, *component_id, fns)
+    }
+
+    /// Returns diff serialization functions for a registered rule, if enabled.
+    pub(crate) fn diff(&self, fns_id: FnsId) -> Option<DiffFns> {
+        let (_, rule_fns) = self
+            .rules
+            .get(fns_id.0)
+            .unwrap_or_else(|| panic!("replication `{fns_id:?}` should be registered first"));
+
+        rule_fns.diff()
     }
 
     /// Returns component ID and its functions from the index.

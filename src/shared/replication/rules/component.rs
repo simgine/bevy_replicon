@@ -1,14 +1,9 @@
-use core::marker::PhantomData;
-
 use bevy::{ecs::component::ComponentId, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     prelude::*,
-    shared::replication::{
-        op_delta::{self, OpDeltaComponent, OpDeltaFns, OpDeltaLog},
-        registry::{FnsId, ReplicationRegistry, receive_fns::MutWrite},
-    },
+    shared::replication::registry::{FnsId, ReplicationRegistry, receive_fns::MutWrite},
 };
 
 /// Component for [`ReplicationRule`](super::ReplicationRule).
@@ -20,8 +15,6 @@ pub struct ComponentRule {
     pub fns_id: FnsId,
     /// Replication configuration.
     pub mode: ReplicationMode,
-    /// Operation-log delta replication functions, if enabled for this component.
-    pub(crate) op_delta: Option<OpDeltaFns>,
 }
 
 impl ComponentRule {
@@ -31,7 +24,6 @@ impl ComponentRule {
             id,
             fns_id,
             mode: Default::default(),
-            op_delta: None,
         }
     }
 }
@@ -76,36 +68,7 @@ impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for (RuleFns<C>, R
     fn into_rule(self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
         let (rule_fns, mode) = self;
         let (id, fns_id) = registry.register_rule_fns(world, rule_fns);
-        ComponentRule {
-            id,
-            fns_id,
-            mode,
-            op_delta: None,
-        }
-    }
-}
-
-impl<C: OpDeltaComponent> IntoComponentRule for OpDeltaRuleFns<C> {
-    fn into_rule(self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
-        world.register_required_components::<C, OpDeltaLog<C>>();
-        registry.set_receive_fns::<C>(world, op_delta::write::<C>, op_delta::remove::<C>);
-
-        let op_delta = OpDeltaFns::new::<C>(world);
-        let (id, fns_id) = registry.register_rule_fns(
-            world,
-            RuleFns::new(
-                op_delta::serialize_without_log::<C>,
-                op_delta::deserialize_snapshot::<C>,
-            )
-            .with_consume(op_delta::consume::<C>),
-        );
-
-        ComponentRule {
-            id,
-            fns_id,
-            mode: ReplicationMode::OnChange,
-            op_delta: Some(op_delta),
-        }
+        ComponentRule { id, fns_id, mode }
     }
 }
 
@@ -191,7 +154,6 @@ macro_rules! impl_into_bundle_rules {
                                 id,
                                 fns_id,
                                 mode: Default::default(),
-                                op_delta: None,
                             }
                         },
                     )*
@@ -202,12 +164,3 @@ macro_rules! impl_into_bundle_rules {
 }
 
 variadics_please::all_tuples_with_size!(impl_into_bundle_rules, 1, 15, C);
-
-/// Marker value used by [`AppRuleExt::replicate_op_delta`].
-pub struct OpDeltaRuleFns<C: OpDeltaComponent>(PhantomData<fn() -> C>);
-
-impl<C: OpDeltaComponent> Default for OpDeltaRuleFns<C> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}

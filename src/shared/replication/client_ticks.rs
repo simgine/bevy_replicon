@@ -11,7 +11,7 @@ use super::mutate_index::MutateIndex;
 use crate::{
     prelude::*,
     shared::replication::{
-        op_delta::OpIndex,
+        diff::PatchIndex,
         registry::{ComponentIndex, component_mask::ComponentMask},
     },
 };
@@ -84,18 +84,18 @@ impl ClientTicks {
                 entity_ticks.components |= &info.components;
             }
 
-            // Op-delta ACKs are tracked per component because the next mutation
-            // should contain only ops after the last ACKed op index.
+            // Diff ACKs are tracked per component because the next mutation
+            // should contain only patches after the last ACKed patch index.
             //
             // If this ACK is older than `entity_ticks.server_tick`, the entity
             // already moved to a newer state. For example, a component could
-            // have been removed and inserted again, clearing its op cursor. In
+            // have been removed and inserted again, clearing its patch cursor. In
             // that case an old ACK must not seed a cursor for the current
             // component lifetime.
             if !is_stale_mutation {
-                for &(component, cursor) in &info.op_delta_cursors {
+                for &(component, cursor) in &info.patch_cursors {
                     if entity_ticks.components.contains(component) {
-                        entity_ticks.set_op_delta_cursor(component, cursor);
+                        entity_ticks.set_patch_cursor(component, cursor);
                     }
                 }
             }
@@ -142,15 +142,15 @@ pub(crate) struct EntityTicks {
     /// The list of components that were replicated on this tick.
     pub(crate) components: ComponentMask,
 
-    /// Last acknowledged op-delta operation cursor for each component.
+    /// Last acknowledged diff patch cursor for each component.
     ///
     /// This is separate from [`Self::server_tick`]: the server tick controls change
-    /// detection for the component as a whole, while this cursor controls the op-log
-    /// base used to serialize only operations the client has not acknowledged yet.
+    /// detection for the component as a whole, while this cursor controls the patch-log
+    /// base used to serialize only patches the client has not acknowledged yet.
     ///
-    /// This stores cursors, not operations. It contains at most one entry per
-    /// tracked op-delta component and is pruned when that component is removed.
-    op_delta_cursors: Vec<(ComponentIndex, OpIndex)>,
+    /// This stores cursors, not patches. It contains at most one entry per
+    /// tracked diff component and is pruned when that component is removed.
+    patch_cursors: Vec<(ComponentIndex, PatchIndex)>,
 }
 
 impl EntityTicks {
@@ -163,40 +163,39 @@ impl EntityTicks {
             server_tick,
             system_tick,
             components,
-            op_delta_cursors: Default::default(),
+            patch_cursors: Default::default(),
         }
     }
 
-    pub(crate) fn op_delta_cursor(&self, component: ComponentIndex) -> OpIndex {
-        self.op_delta_cursors
+    pub(crate) fn patch_cursor(&self, component: ComponentIndex) -> PatchIndex {
+        self.patch_cursors
             .iter()
             .find_map(|&(index, cursor)| (index == component).then_some(cursor))
             .unwrap_or_default()
     }
 
-    /// Advances the acknowledged op-delta cursor for `component`.
+    /// Advances the acknowledged diff patch cursor for `component`.
     ///
     /// Mutation ACKs can arrive late relative to newer mutation ACKs. Keep the
-    /// greatest cursor so an older ACK cannot make the sender resend operations
+    /// greatest cursor so an older ACK cannot make the sender resend patches
     /// already acknowledged by a newer packet.
-    fn set_op_delta_cursor(&mut self, component: ComponentIndex, cursor: OpIndex) {
+    fn set_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
         if let Some((_, existing)) = self
-            .op_delta_cursors
+            .patch_cursors
             .iter_mut()
             .find(|(index, _)| *index == component)
         {
             *existing = (*existing).max(cursor);
         } else {
-            self.op_delta_cursors.push((component, cursor));
+            self.patch_cursors.push((component, cursor));
         }
     }
 
     pub(crate) fn remove_component(&mut self, component: ComponentIndex) {
         self.components.remove(component);
         // Component removal resets the entity's state for this component on
-        // the client, so any per-component op-log cursor becomes stale too.
-        self.op_delta_cursors
-            .retain(|(index, _)| *index != component);
+        // the client, so any per-component patch-log cursor becomes stale too.
+        self.patch_cursors.retain(|(index, _)| *index != component);
     }
 }
 
@@ -212,5 +211,5 @@ pub(crate) struct MutateInfo {
 pub(crate) struct MutatedEntityInfo {
     pub(crate) entity: Entity,
     pub(crate) components: ComponentMask,
-    pub(crate) op_delta_cursors: Vec<(ComponentIndex, OpIndex)>,
+    pub(crate) patch_cursors: Vec<(ComponentIndex, PatchIndex)>,
 }
