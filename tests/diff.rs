@@ -12,9 +12,7 @@ use bevy_replicon::{
             server_messages::ServerMessages,
         },
         replication::{
-            diff::{DiffReceiver, DiffWire},
-            registry::test_fns::TestFnsEntityExt,
-            rules::ReplicationRules,
+            diff::DiffWire, registry::test_fns::TestFnsEntityExt, rules::ReplicationRules,
         },
     },
     test_app::ServerTestAppExt,
@@ -23,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use test_log::test;
 
 #[derive(Component, Debug, Deserialize, Serialize)]
-struct Points(VecDeque<Vec2>);
+struct Points(VecDeque<Vec2>, #[serde(skip)] PatchIndex);
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 enum PointPatch {
@@ -45,6 +43,14 @@ impl Diffable for Points {
         }
 
         Ok(())
+    }
+
+    fn patch_cursor(&self) -> PatchIndex {
+        self.1
+    }
+
+    fn set_patch_cursor(&mut self, cursor: PatchIndex) {
+        self.1 = cursor;
     }
 }
 
@@ -215,7 +221,7 @@ fn pruned_patches_fall_back_to_snapshot_and_then_resume_patches() {
 }
 
 #[test]
-fn removal_removes_receiver_state() {
+fn removal_removes_diff_state() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
@@ -228,7 +234,6 @@ fn removal_removes_receiver_state() {
     let client_entity = single_client_entity(&mut client_app);
     let entity = client_app.world().entity(client_entity);
     assert!(entity.contains::<Points>());
-    assert!(entity.contains::<DiffReceiver<Points>>());
     assert!(entity.contains::<DiffLog<Points>>());
 
     server_app
@@ -239,12 +244,11 @@ fn removal_removes_receiver_state() {
 
     let entity = client_app.world().entity(client_entity);
     assert!(!entity.contains::<Points>());
-    assert!(!entity.contains::<DiffReceiver<Points>>());
     assert!(!entity.contains::<DiffLog<Points>>());
 }
 
 #[test]
-fn duplicate_patches_are_ignored_by_receiver() {
+fn duplicate_patches_are_ignored_by_component_cursor() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
@@ -269,7 +273,8 @@ fn duplicate_patches_are_ignored_by_receiver() {
 }
 
 #[test]
-fn out_of_order_patches_wait_for_missing_predecessor() {
+#[should_panic(expected = "writing data into an entity shouldn't fail")]
+fn patch_gap_is_rejected() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
@@ -284,14 +289,6 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
         fns_id,
         RepliconTick::default(),
     );
-    assert_entity_points(&entity, [(1.0, 1.0)]);
-
-    entity.apply_write(
-        patches(1, [PointPatch::PushBack(Vec2::new(2.0, 2.0))]),
-        fns_id,
-        RepliconTick::default(),
-    );
-    assert_entity_points(&entity, [(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]);
 }
 
 #[test]
@@ -426,7 +423,10 @@ fn assert_diff_cursor(app: &App, entity: Entity, cursor: PatchIndex) {
 }
 
 fn points<const N: usize>(points: [(f32, f32); N]) -> Points {
-    Points(points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect())
+    Points(
+        points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect(),
+        0,
+    )
 }
 
 fn snapshot(cursor: PatchIndex, value: Points) -> Vec<u8> {

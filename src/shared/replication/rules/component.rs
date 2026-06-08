@@ -58,7 +58,8 @@ pub trait IntoComponentRule {
 }
 
 impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for RuleFns<C> {
-    fn into_rule(self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
+    fn into_rule(mut self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
+        self.register_diff(world, registry);
         let (id, fns_id) = registry.register_rule_fns(world, self);
         ComponentRule::new(id, fns_id)
     }
@@ -67,8 +68,9 @@ impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for RuleFns<C> {
 impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for (RuleFns<C>, ReplicationMode) {
     fn into_rule(self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
         let (rule_fns, mode) = self;
-        let (id, fns_id) = registry.register_rule_fns(world, rule_fns);
-        ComponentRule { id, fns_id, mode }
+        let mut rule = rule_fns.into_rule(world, registry);
+        rule.mode = mode;
+        rule
     }
 }
 

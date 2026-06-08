@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
 
-use super::ctx::{SerializeCtx, WriteCtx};
+use super::{
+    ReplicationRegistry,
+    ctx::{SerializeCtx, WriteCtx},
+};
 use crate::{
     postcard_utils,
     shared::replication::diff::{self, DiffFns, Diffable},
@@ -176,6 +179,15 @@ impl<C: Component> RuleFns<C> {
     pub(super) fn consume(&self, ctx: &mut WriteCtx, message: &mut Bytes) -> Result<()> {
         (self.consume)(self.deserialize, ctx, message)
     }
+
+    /// Registers required diff state for this rule, if diff replication is enabled.
+    pub(crate) fn register_diff(&mut self, world: &mut World, registry: &mut ReplicationRegistry) {
+        if let Some(diff) = &mut self.diff
+            && diff.log_component_id.is_none()
+        {
+            diff.log_component_id = Some((diff.register_required_components)(world, registry));
+        }
+    }
 }
 
 impl<C: Diffable> RuleFns<C> {
@@ -183,14 +195,15 @@ impl<C: Diffable> RuleFns<C> {
     ///
     /// The regular [`RuleFns`] serializer/deserializer handles snapshot
     /// payloads. The patch-aware sender serializer lives in [`DiffFns`],
-    /// which is created during registry setup because it needs `World`.
-    pub(crate) fn new_diff(diff: DiffFns) -> Self {
+    /// which is finalized during registry setup because it needs `World`.
+    pub fn new_diff() -> Self {
         let mut rule_fns = Self::new(
             diff::serialize_snapshot_without_log::<C>,
             diff::deserialize_snapshot::<C>,
         );
+        rule_fns.deserialize_in_place = diff::deserialize_in_place::<C>;
         rule_fns.consume = diff::consume::<C>;
-        rule_fns.diff = Some(diff);
+        rule_fns.diff = Some(DiffFns::new::<C>());
         rule_fns
     }
 }

@@ -2,11 +2,7 @@
 //!
 //! See [`Diffable`] for the main user-facing API and example.
 
-use alloc::{
-    collections::{BTreeMap, VecDeque},
-    format,
-    vec::Vec,
-};
+use alloc::{collections::VecDeque, format, vec::Vec};
 use core::marker::PhantomData;
 
 use bevy::{
@@ -26,9 +22,10 @@ use crate::{
     shared::replication::{
         deferred_entity::DeferredEntity,
         registry::{
+            ReplicationRegistry,
             ctx::{RemoveCtx, SerializeCtx, WriteCtx},
+            receive_fns,
             rule_fns::DeserializeFn,
-            rule_fns::RuleFns,
         },
     },
 };
@@ -50,10 +47,10 @@ pub type PatchIndex = u64;
 /// Replicon applies the patch locally and records it in a [`DiffLog`]. For each
 /// client, the server sends either the patches after that client's latest
 /// acknowledged patch cursor, or a full snapshot if the needed patches are no longer
-/// retained. On the receiver, patches are deduplicated, buffered until they can be
-/// applied in order, and then applied to the local component. Components can override
-/// [`Self::HISTORY_LEN`] to tune how many patches are kept before snapshot fallback
-/// becomes necessary.
+/// retained. On the receiver, patches are applied through the regular in-place
+/// deserialization path and deduplicated via [`Self::patch_cursor`]. Components can
+/// override [`Self::HISTORY_LEN`] to tune how many patches are kept before snapshot
+/// fallback becomes necessary.
 ///
 /// Direct component mutations are still supported for correctness, but they are not
 /// recorded as patches and will be sent as a snapshot fallback.
@@ -74,7 +71,11 @@ pub type PatchIndex = u64;
 /// }
 ///
 /// #[derive(Component, Deserialize, Serialize)]
-/// struct Trail(VecDeque<Point>);
+/// struct Trail {
+///     points: VecDeque<Point>,
+///     #[serde(skip)]
+///     patch_cursor: PatchIndex,
+/// }
 ///
 /// #[derive(Clone, Deserialize, Serialize)]
 /// enum TrailPatch {
@@ -88,15 +89,23 @@ pub type PatchIndex = u64;
 ///
 ///     fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()> {
 ///         match *patch {
-///             TrailPatch::PushBack(point) => self.0.push_back(point),
+///             TrailPatch::PushBack(point) => self.points.push_back(point),
 ///             TrailPatch::PopFront(count) => {
 ///                 for _ in 0..count {
-///                     self.0.pop_front();
+///                     self.points.pop_front();
 ///                 }
 ///             }
 ///         }
 ///
 ///         Ok(())
+///     }
+///
+///     fn patch_cursor(&self) -> PatchIndex {
+///         self.patch_cursor
+///     }
+///
+///     fn set_patch_cursor(&mut self, cursor: PatchIndex) {
+///         self.patch_cursor = cursor;
 ///     }
 /// }
 ///
@@ -107,7 +116,10 @@ pub type PatchIndex = u64;
 ///
 /// let entity = app
 ///     .world_mut()
-///     .spawn((Replicated, Trail(VecDeque::new())))
+///     .spawn((Replicated, Trail {
+///         points: VecDeque::new(),
+///         patch_cursor: 0,
+///     }))
 ///     .id();
 ///
 /// let point = Point { x: 1.0, y: 2.0 };
@@ -128,6 +140,15 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
 
     /// Applies a patch to the component state.
     fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()>;
+
+    /// Returns the latest patch index applied to this component.
+    ///
+    /// The cursor is serialized separately in diff snapshots. If the cursor is
+    /// stored inside the component, mark that field with `#[serde(skip)]`.
+    fn patch_cursor(&self) -> PatchIndex;
+
+    /// Sets the latest patch index applied to this component.
+    fn set_patch_cursor(&mut self, cursor: PatchIndex);
 }
 
 /// Patch log associated with a [`Diffable`].
@@ -230,54 +251,6 @@ impl<C: Diffable> Default for DiffLog<C> {
     }
 }
 
-/// Receiver-side state for applying diff patches exactly once and in order.
-#[derive(Component, Debug)]
-pub struct DiffReceiver<C: Diffable> {
-    last_applied: PatchIndex,
-    pending: BTreeMap<PatchIndex, C::Patch>,
-}
-
-impl<C: Diffable> DiffReceiver<C> {
-    pub fn new(cursor: PatchIndex) -> Self {
-        Self {
-            last_applied: cursor,
-            pending: Default::default(),
-        }
-    }
-
-    /// Queues newly received patches and returns patches that can be applied now.
-    ///
-    /// Patches must be applied sequentially by [`PatchIndex`]. If a patch arrives
-    /// ahead of a missing predecessor, it stays pending until the missing patch is
-    /// received. Duplicate or already-applied patches are ignored.
-    pub fn queue_and_take_ready(
-        &mut self,
-        first_patch_index: PatchIndex,
-        patches: Vec<C::Patch>,
-    ) -> Vec<C::Patch> {
-        for (offset, patch) in patches.into_iter().enumerate() {
-            let index = first_patch_index + offset as PatchIndex;
-            if index > self.last_applied {
-                self.pending.entry(index).or_insert(patch);
-            }
-        }
-
-        let mut ready = Vec::new();
-        while let Some(patch) = self.pending.remove(&(self.last_applied + 1)) {
-            self.last_applied += 1;
-            ready.push(patch);
-        }
-
-        ready
-    }
-}
-
-impl<C: Diffable> Default for DiffReceiver<C> {
-    fn default() -> Self {
-        Self::new(0)
-    }
-}
-
 /// Wire format for diff replicated components.
 #[derive(Deserialize, Serialize)]
 pub enum DiffWire<C, Patch> {
@@ -314,49 +287,14 @@ pub trait DiffEntityExt {
 
 impl DiffEntityExt for EntityWorldMut<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        let entity = self.id();
-        {
-            let mut component = self.get_mut::<C>().ok_or_else(|| {
-                format!("entity `{entity}` is missing `{}`", ShortName::of::<C>())
-            })?;
-            component.apply_patch(&patch)?;
-        }
-
-        let mut log = self.get_mut::<DiffLog<C>>().ok_or_else(|| {
-            format!(
-                "entity `{}` is missing `{}`; register `{}` with `replicate_diff`",
-                entity,
-                ShortName::of::<DiffLog<C>>(),
-                ShortName::of::<C>(),
-            )
-        })?;
-        log.record(patch);
-
-        Ok(())
+        let mut entity = self.as_mutable();
+        apply_patch_to_entity::<C>(&mut entity, patch)
     }
 }
 
 impl DiffEntityExt for EntityMut<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        let entity = self.id();
-        {
-            let mut component = self.get_mut::<C>().ok_or_else(|| {
-                format!("entity `{entity}` is missing `{}`", ShortName::of::<C>())
-            })?;
-            component.apply_patch(&patch)?;
-        }
-
-        let mut log = self.get_mut::<DiffLog<C>>().ok_or_else(|| {
-            format!(
-                "entity `{}` is missing `{}`; register `{}` with `replicate_diff`",
-                entity,
-                ShortName::of::<DiffLog<C>>(),
-                ShortName::of::<C>(),
-            )
-        })?;
-        log.record(patch);
-
-        Ok(())
+        apply_patch_to_entity::<C>(self, patch)
     }
 }
 
@@ -365,6 +303,35 @@ impl DiffEntityExt for EntityCommands<'_> {
         self.queue(move |mut entity: EntityWorldMut| entity.apply_patch::<C>(patch));
         Ok(())
     }
+}
+
+fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityMut, patch: C::Patch) -> Result<()> {
+    let entity_id = entity.id();
+    {
+        let mut component = entity
+            .get_mut::<C>()
+            .ok_or_else(|| format!("entity `{entity_id}` is missing `{}`", ShortName::of::<C>()))?;
+        component.apply_patch(&patch)?;
+    }
+
+    let cursor = {
+        let mut log = entity.get_mut::<DiffLog<C>>().ok_or_else(|| {
+            format!(
+                "entity `{}` is missing `{}`; register `{}` with `replicate_diff`",
+                entity_id,
+                ShortName::of::<DiffLog<C>>(),
+                ShortName::of::<C>(),
+            )
+        })?;
+        log.record(patch)
+    };
+
+    entity
+        .get_mut::<C>()
+        .expect("component was already checked")
+        .set_patch_cursor(cursor);
+
+    Ok(())
 }
 
 /// Sender-side functions for diff replication.
@@ -377,17 +344,25 @@ impl DiffEntityExt for EntityCommands<'_> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DiffFns {
     /// Component ID for `DiffLog<C>` associated with the diff component.
-    pub(crate) log_component_id: ComponentId,
+    pub(crate) log_component_id: Option<ComponentId>,
+    pub(crate) register_required_components:
+        fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
     serialize_mutation:
         unsafe fn(&SerializeCtx, Ptr, Ptr, Option<PatchIndex>, &mut Vec<u8>) -> Result<PatchIndex>,
 }
 
 impl DiffFns {
-    pub(crate) fn new<C: Diffable>(world: &mut World) -> Self {
+    pub(crate) fn new<C: Diffable>() -> Self {
         Self {
-            log_component_id: world.register_component::<DiffLog<C>>(),
+            log_component_id: None,
+            register_required_components: register_required_components::<C>,
             serialize_mutation: serialize_mutation::<C>,
         }
+    }
+
+    pub(crate) fn log_component_id(&self) -> ComponentId {
+        self.log_component_id
+            .expect("diff functions should be registered before use")
     }
 
     /// Serializes patches after `acked_cursor`, or a snapshot if required.
@@ -410,6 +385,15 @@ impl DiffFns {
     }
 }
 
+pub(crate) fn register_required_components<C: Diffable>(
+    world: &mut World,
+    registry: &mut ReplicationRegistry,
+) -> ComponentId {
+    world.register_required_components::<C, DiffLog<C>>();
+    registry.set_receive_fns::<C>(world, receive_fns::default_write::<C>, remove::<C>);
+    world.register_component::<DiffLog<C>>()
+}
+
 unsafe fn serialize_mutation<C: Diffable>(
     _ctx: &SerializeCtx,
     component: Ptr,
@@ -421,22 +405,18 @@ unsafe fn serialize_mutation<C: Diffable>(
     let log = unsafe { log.deref::<DiffLog<C>>() };
     let cursor = log.current_cursor();
 
-    match acked_cursor.and_then(|cursor| log.patches_after(cursor)) {
-        Some(patches) if !patches.is_empty() => {
-            let wire: DiffWireRef<'_, C, C::Patch> = DiffWireRef::Patches {
+    let wire: DiffWireRef<'_, C, C::Patch> =
+        match acked_cursor.and_then(|cursor| log.patches_after(cursor)) {
+            Some(patches) if !patches.is_empty() => DiffWireRef::Patches {
                 first_patch_index: patches.first_index(),
                 patches,
-            };
-            postcard_utils::to_extend_mut(&wire, message)?;
-        }
-        _ => {
-            let wire: DiffWireRef<'_, C, C::Patch> = DiffWireRef::Snapshot {
+            },
+            _ => DiffWireRef::Snapshot {
                 cursor,
                 value: component,
-            };
-            postcard_utils::to_extend_mut(&wire, message)?;
-        }
-    }
+            },
+        };
+    postcard_utils::to_extend_mut(&wire, message)?;
 
     Ok(cursor)
 }
@@ -452,7 +432,7 @@ pub(crate) fn serialize_snapshot_without_log<C: Diffable>(
     message: &mut Vec<u8>,
 ) -> Result<()> {
     let wire: DiffWireRef<'_, C, C::Patch> = DiffWireRef::Snapshot {
-        cursor: 0,
+        cursor: component.patch_cursor(),
         value: component,
     };
     postcard_utils::to_extend_mut(&wire, message)?;
@@ -461,16 +441,19 @@ pub(crate) fn serialize_snapshot_without_log<C: Diffable>(
 
 /// Deserializes a diff snapshot payload into a component value.
 ///
-/// Live replication uses [`write`] so it can handle both snapshots and patches.
-/// This function exists for [`RuleFns`] paths that need to deserialize a
-/// standalone `C`; patch payloads are rejected because they require receiver
-/// history to apply.
+/// Insertion uses this function because no component state exists yet. Patch
+/// payloads are rejected because they need an existing component cursor and must
+/// be applied through [`deserialize_in_place`].
 pub(crate) fn deserialize_snapshot<C: Diffable>(
-    _ctx: &mut WriteCtx,
+    ctx: &mut WriteCtx,
     message: &mut Bytes,
 ) -> Result<C> {
     match postcard_utils::from_buf(message)? {
-        DiffWire::<C, C::Patch>::Snapshot { value, .. } => Ok(value),
+        DiffWire::<C, C::Patch>::Snapshot { cursor, mut value } => {
+            C::map_entities(&mut value, ctx);
+            value.set_patch_cursor(cursor);
+            Ok(value)
+        }
         DiffWire::<C, C::Patch>::Patches { .. } => Err(format!(
             "cannot deserialize diff patches into `{}`",
             ShortName::of::<C>()
@@ -497,48 +480,42 @@ pub(crate) fn consume<C: Diffable>(
     Ok(())
 }
 
-pub(crate) fn write<C: Diffable>(
-    _ctx: &mut WriteCtx,
-    _rule_fns: &RuleFns<C>,
-    entity: &mut DeferredEntity,
+pub(crate) fn deserialize_in_place<C: Diffable>(
+    _deserialize: DeserializeFn<C>,
+    ctx: &mut WriteCtx,
+    component: &mut C,
     message: &mut Bytes,
 ) -> Result<()> {
-    // This is the live receive path for diff components. Snapshots replace or
-    // insert the component and reset the receiver cursor; patches are queued and
-    // applied only once all earlier patches have been applied.
     let wire: DiffWire<C, C::Patch> = postcard_utils::from_buf(message)?;
 
     match wire {
-        DiffWire::Snapshot { cursor, value } => {
-            if let Some(mut component) = entity.get_mut::<C>() {
-                *component = value;
-            } else {
-                entity.insert(value);
-            }
-            entity.insert(DiffReceiver::<C>::new(cursor));
+        DiffWire::Snapshot { cursor, mut value } => {
+            C::map_entities(&mut value, ctx);
+            value.set_patch_cursor(cursor);
+            *component = value;
         }
         DiffWire::Patches {
             first_patch_index,
             patches,
         } => {
-            let ready_patches = {
-                let mut receiver = entity.get_mut::<DiffReceiver<C>>().ok_or_else(|| {
-                    format!(
-                        "received diff patches for `{}` before a snapshot",
+            for (offset, patch) in patches.into_iter().enumerate() {
+                let index = first_patch_index + offset as PatchIndex;
+                let cursor = component.patch_cursor();
+                if index <= cursor {
+                    continue;
+                }
+
+                let expected = cursor + 1;
+                if index != expected {
+                    return Err(format!(
+                        "received diff patch {index} for `{}`, but expected {expected}",
                         ShortName::of::<C>()
                     )
-                })?;
-                receiver.queue_and_take_ready(first_patch_index, patches)
-            };
+                    .into());
+                }
 
-            let mut component = entity.get_mut::<C>().ok_or_else(|| {
-                format!(
-                    "received diff patches for missing `{}`",
-                    ShortName::of::<C>()
-                )
-            })?;
-            for patch in ready_patches {
                 component.apply_patch(&patch)?;
+                component.set_patch_cursor(index);
             }
         }
     }
@@ -547,8 +524,5 @@ pub(crate) fn write<C: Diffable>(
 }
 
 pub(crate) fn remove<C: Diffable>(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
-    entity
-        .remove::<C>()
-        .remove::<DiffLog<C>>()
-        .remove::<DiffReceiver<C>>();
+    entity.remove::<C>().remove::<DiffLog<C>>();
 }

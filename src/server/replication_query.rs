@@ -90,7 +90,7 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
             for component in &rule.components {
                 component_access.add_component_read(component.id);
                 if let Some(diff) = registry.diff(component.fns_id) {
-                    component_access.add_component_read(diff.log_component_id);
+                    component_access.add_component_read(diff.log_component_id());
                 }
             }
         }

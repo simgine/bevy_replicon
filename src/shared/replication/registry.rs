@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::receive_markers::ReceiveMarkerIndex;
 use crate::{
     prelude::*,
-    shared::replication::{
-        diff::{self, DiffFns, DiffLog, Diffable},
-        registry::serde_fns::SerdeFns,
-    },
+    shared::replication::{diff::DiffFns, registry::serde_fns::SerdeFns},
 };
 use component_fns::ComponentFns;
 use ctx::DespawnCtx;
@@ -122,22 +119,6 @@ impl ReplicationRegistry {
 
         trace!("registering `{fns_id:?}` for `{}`", ShortName::of::<C>());
         (component_id, fns_id)
-    }
-
-    /// Registers patch-based diff serialization/deserialization functions for a component.
-    ///
-    /// This is like [`Self::register_rule_fns`], but also registers `DiffLog<C>`
-    /// as a required component and replaces the live receive path so it can
-    /// apply both snapshot and patch payloads.
-    pub fn register_diff_rule_fns<C: Diffable>(
-        &mut self,
-        world: &mut World,
-    ) -> (ComponentId, FnsId) {
-        world.register_required_components::<C, DiffLog<C>>();
-        self.set_receive_fns::<C>(world, diff::write::<C>, diff::remove::<C>);
-
-        let diff = DiffFns::new::<C>(world);
-        self.register_rule_fns(world, RuleFns::<C>::new_diff(diff))
     }
 
     /// Initializes [`ComponentFns`] for a component and returns its index and ID.

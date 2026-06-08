@@ -829,27 +829,10 @@ impl AppRuleExt for App {
     where
         C: Diffable,
     {
-        let priority = 1 + F::DEFAULT_PRIORITY;
-        self.world_mut()
-            .resource_mut::<ProtocolHasher>()
-            .replicate::<RuleFns<C>>(priority);
-
-        let (id, fns_id) =
-            self.world_mut()
-                .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
-                    registry.register_diff_rule_fns::<C>(world)
-                });
-        let filters = F::filter_rules(self.world_mut());
-
-        self.world_mut()
-            .resource_mut::<ReplicationRules>()
-            .insert(ReplicationRule {
-                priority,
-                components: vec![ComponentRule::new(id, fns_id)],
-                filters,
-            });
-
-        self
+        self.replicate_with_priority_filtered::<_, F>(
+            1 + F::DEFAULT_PRIORITY,
+            RuleFns::<C>::new_diff(),
+        )
     }
 
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(

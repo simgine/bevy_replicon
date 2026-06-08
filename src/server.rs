@@ -687,18 +687,20 @@ fn collect_changes(
                 };
 
                 let diff = if let Some(diff) = fns.diff() {
-                    let storage = archetype
-                        .get_storage_type(diff.log_component_id)
-                        .unwrap_or_else(|| {
-                            panic!("diff log should be present for `{component_id:?}`")
-                        });
+                    let log_component_id = diff.log_component_id();
+                    let storage =
+                        archetype
+                            .get_storage_type(log_component_id)
+                            .unwrap_or_else(|| {
+                                panic!("diff log should be present for `{component_id:?}`")
+                            });
                     let log = unsafe {
                         query
                             .get_component_unchecked(
                                 entity,
                                 archetype.table_id(),
                                 storage,
-                                diff.log_component_id,
+                                log_component_id,
                             )
                             .0
                     };
