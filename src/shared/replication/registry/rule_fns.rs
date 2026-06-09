@@ -194,8 +194,8 @@ impl<C: Diffable> RuleFns<C> {
     /// Creates a new instance for patch-based diff replication.
     ///
     /// The regular [`RuleFns`] serializer/deserializer handles snapshot
-    /// payloads. The patch-aware sender serializer lives in [`DiffFns`],
-    /// which is finalized during registry setup because it needs `World`.
+    /// payloads. The patch-aware sender serializer is finalized during registry
+    /// setup because it needs `World`.
     pub fn new_diff() -> Self {
         let mut rule_fns = Self::new(
             diff::serialize_snapshot_without_log::<C>,

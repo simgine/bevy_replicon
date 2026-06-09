@@ -37,7 +37,7 @@ pub type PatchIndex = u64;
 ///
 /// Diff replication is useful when a component is large, but most changes can be
 /// represented by a small semantic patch. A common example is a component that stores
-/// a growing [`VecDeque`](std::collections::VecDeque) of points for a trail/path.
+/// a growing [`VecDeque`] of points for a trail/path.
 /// Sending the full queue after every push can become expensive; sending a patch
 /// like `PushBack(point)` or `PopFront(count)` only transmits the part that changed.
 ///
