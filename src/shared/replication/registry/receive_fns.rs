@@ -153,6 +153,15 @@ pub fn default_insert_write<C: Component>(
 }
 
 /// Default component removal function.
+///
+/// Removes `C` and its required components. See also [`remove_without_requires`].
 pub fn default_remove<C: Component>(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
+    entity.remove_with_requires::<C>();
+}
+
+/// Removes only `C`, leaving required components untouched.
+///
+/// You can use it to override [`default_remove`] with [`AppMarkerExt::set_receive_fns`].
+pub fn remove_without_requires<C: Component>(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
     entity.remove::<C>();
 }
