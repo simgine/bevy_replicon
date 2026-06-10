@@ -3,13 +3,9 @@ use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,
     server::server_tick::ServerTick,
-    shared::replication::{
-        deferred_entity::DeferredEntity,
-        registry::{ctx::WriteCtx, receive_fns},
-    },
+    shared::replication::registry::receive_fns,
     test_app::{ServerTestAppExt, TestClientEntity},
 };
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use test_log::test;
 
@@ -39,6 +35,9 @@ fn single() {
     let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
 
+    let mut required = client_app.world_mut().query::<&Required>();
+    assert_eq!(required.iter(client_app.world()).len(), 1);
+
     server_app
         .world_mut()
         .entity_mut(server_entity)
@@ -49,6 +48,7 @@ fn single() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
+    assert_eq!(required.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -107,33 +107,40 @@ fn receive_fns() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate::<Original>()
-        .set_receive_fns(replace, receive_fns::default_remove::<Replaced>)
+        .replicate::<A>()
+        .set_receive_fns::<A>(
+            receive_fns::default_write,
+            receive_fns::remove_without_requires::<A>,
+        )
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn((Replicated, Original)).id();
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut components = client_app.world_mut().query::<&Replaced>();
+    let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    let mut required = client_app.world_mut().query::<&Required>();
+    assert_eq!(required.iter(client_app.world()).len(), 1);
 
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .remove::<Original>();
+        .remove::<A>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
+    assert_eq!(required.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -147,8 +154,11 @@ fn marker() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker::<ReplaceMarker>()
-        .replicate::<Original>()
-        .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
+        .replicate::<A>()
+        .set_marker_fns::<ReplaceMarker, A>(
+            receive_fns::default_write,
+            receive_fns::remove_without_requires::<A>,
+        )
         .finish();
     }
 
@@ -156,7 +166,7 @@ fn marker() {
 
     let server_entity = server_app
         .world_mut()
-        .spawn((Replicated, Original, Signature::from(0)))
+        .spawn((Replicated, A, Signature::from(0)))
         .id();
 
     let client_entity = client_app
@@ -172,14 +182,15 @@ fn marker() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .remove::<Original>();
+        .remove::<A>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
     let client_entity = client_app.world().entity(client_entity);
-    assert!(!client_entity.contains::<Replaced>());
+    assert!(!client_entity.contains::<A>());
+    assert!(client_entity.contains::<Required>());
 }
 
 #[test]
@@ -615,6 +626,7 @@ fn visibility_lose() {
 }
 
 #[derive(Component, Deserialize, Serialize)]
+#[require(Required)]
 struct A;
 
 #[derive(Component, Deserialize, Serialize)]
@@ -626,11 +638,8 @@ struct NotReplicated;
 #[derive(Component)]
 struct ReplaceMarker;
 
-#[derive(Component, Deserialize, Serialize)]
-struct Original;
-
-#[derive(Component, Deserialize, Serialize)]
-struct Replaced;
+#[derive(Component, Default)]
+struct Required;
 
 #[derive(Component)]
 #[component(immutable)]
@@ -656,17 +665,4 @@ impl VisibilityFilter for ComponentVisibility {
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()
     }
-}
-
-/// Deserializes [`OriginalComponent`], but ignores it and inserts [`ReplacedComponent`].
-fn replace(
-    ctx: &mut WriteCtx,
-    rule_fns: &RuleFns<Original>,
-    entity: &mut DeferredEntity,
-    message: &mut Bytes,
-) -> Result<()> {
-    rule_fns.deserialize(ctx, message)?;
-    entity.insert(Replaced);
-
-    Ok(())
 }
