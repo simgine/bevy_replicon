@@ -95,7 +95,7 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
 
-            commands.spawn((LocalPlayer, symbol));
+            commands.spawn((LocalPlayer, Replicated, symbol));
         }
         Cli::Client { ip, port } => {
             info!("connecting to {ip}:{port}");
@@ -176,7 +176,9 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
                     },
                     Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<_>| {
                         for index in 0..GRID_SIZE * GRID_SIZE {
-                            parent.spawn(Cell { index }).observe(pick_cell);
+                            parent
+                                .spawn((Cell { index }, Replicated))
+                                .observe(pick_cell);
                         }
                     }))
                 ),
@@ -312,11 +314,9 @@ fn init_client(
     server_symbol: Single<&Symbol, With<LocalPlayer>>,
 ) {
     // Utilize client entity as a player for convenient lookups by `client`.
-    commands.entity(add.entity).insert((
-        ClientPlayer,
-        Signature::of::<ClientPlayer>(),
-        server_symbol.next(),
-    ));
+    commands
+        .entity(add.entity)
+        .insert((ClientPlayer, Replicated, server_symbol.next()));
 
     commands.set_state(GameState::InGame);
 }
@@ -549,13 +549,11 @@ struct BottomText;
 
 /// Cell location on the grid.
 ///
-/// We want to replicate all cells, so we set [`Replicated`] as a required component.
-/// We also want entities with this component to be automatically mapped between
+/// We want entities with this component to be automatically mapped between
 /// client and server, so we also require the [`Signature`] component.
 #[derive(Component, Hash)]
 #[require(
     Button,
-    Replicated,
     BackgroundColor(BACKGROUND_COLOR),
     Signature::of::<Cell>(),
     Node {
@@ -574,7 +572,6 @@ struct Cell {
 /// Used to determine if player can place a symbol.
 /// See also [`local_player_turn`].
 #[derive(Component)]
-#[require(Replicated)]
 struct LocalPlayer;
 
 /// Player that is also a client.
@@ -583,7 +580,7 @@ struct LocalPlayer;
 /// and automatically map it to the player entity on the server
 /// with the [`Signature`] component.
 #[derive(Component, Hash)]
-#[require(Replicated, Signature::of::<ClientPlayer>())]
+#[require(Signature::of::<ClientPlayer>())]
 struct ClientPlayer;
 
 /// A symbol pick.

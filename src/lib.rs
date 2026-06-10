@@ -180,8 +180,7 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 
 You don't want to replicate all components because not all of them are
 necessary to send over the network. Components that can be calculated on the client can
-be inserted using Bevy's required components feature. You can also mark [`Replicated`]
-as required to automatically replicate all entities with this component.
+be inserted using Bevy's required components feature.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -204,7 +203,7 @@ fn init_player_mesh(
 }
 
 #[derive(Component, Deserialize, Serialize)]
-#[require(Replicated, Mesh2d)]
+#[require(Mesh2d)]
 struct Player;
 ```
 
@@ -241,6 +240,12 @@ will resend the data (because it might have been lost). Since the tick for this 
 client will write the component again, even if it is the same. If your game logic relies on this behavior, you can set
 [`write_if_neq`](shared::replication::registry::receive_fns::write_if_neq) as your writing function for
 the desired components. See [receive markers](#receive-markers) for more details.
+
+### Removals
+
+In Bevy, a component can be removed either alone or together with its required components. However, there is no way to
+distinguish between these two cases, so we always remove its required components as well. While this is a sensible default,
+you can override it using [receive markers](#receive-markers).
 
 #### Component relations
 

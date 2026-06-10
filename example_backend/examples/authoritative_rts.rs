@@ -203,6 +203,7 @@ fn apply_unit_spawn(
 
     commands.spawn((
         Unit,
+        Replicated,
         team,
         Transform::from_translation(spawn.position.extend(0.0)),
     ));
@@ -686,7 +687,7 @@ struct MoveUnits {
 
 #[derive(Component, Serialize, Deserialize)]
 #[component(immutable)]
-#[require(Replicated, Command, Mesh2d, MeshMaterial2d<ColorMaterial>)]
+#[require(Command, Mesh2d, MeshMaterial2d<ColorMaterial>)]
 struct Unit;
 
 #[derive(Component)]
