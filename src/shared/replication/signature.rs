@@ -353,17 +353,10 @@ impl SignatureMap {
                 debug!("inserting hash 0x{hash:016x} for `{entity}`");
                 self.to_hashes.insert(entity, hash);
             }
-            Err(e) => {
-                let existing = *e.entry.get();
-                if existing == entity {
-                    debug!("hash 0x{hash:016x} for `{entity}` was already registered");
-                    self.to_hashes.insert(entity, hash);
-                } else {
-                    error!(
-                        "hash 0x{hash:016x} for `{entity}` already corresponds to `{existing}` and will be ignored"
-                    );
-                }
-            }
+            Err(e) => error!(
+                "hash 0x{hash:016x} for `{entity}` already corresponds to `{}` and will be ignored",
+                e.value
+            ),
         }
     }
 
