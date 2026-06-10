@@ -765,7 +765,7 @@ fn collect_changes(
                                 &mut serialized,
                                 &mut component_range,
                                 diff,
-                                Some(entity_ticks.patch_cursor(component_index)),
+                                entity_ticks.patch_cursor(component_index),
                             )?;
                             if let Some(cursor) = component.patch_cursor {
                                 mutations.add_patch_cursor(component_index, cursor);

@@ -4,6 +4,7 @@ use alloc::collections::VecDeque;
 
 use bevy::{prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
+    bytes::Bytes,
     postcard_utils,
     prelude::*,
     shared::{
@@ -12,7 +13,15 @@ use bevy_replicon::{
             server_messages::ServerMessages,
         },
         replication::{
-            diff::DiffWire, registry::test_fns::TestFnsEntityExt, rules::ReplicationRules,
+            deferred_entity::DeferredEntity,
+            diff::{DiffReceiver, DiffWire},
+            receive_markers::MarkerConfig,
+            registry::{
+                ctx::{RemoveCtx, WriteCtx},
+                rule_fns::RuleFns,
+                test_fns::TestFnsEntityExt,
+            },
+            rules::ReplicationRules,
         },
     },
     test_app::ServerTestAppExt,
@@ -20,8 +29,8 @@ use bevy_replicon::{
 use serde::{Deserialize, Serialize};
 use test_log::test;
 
-#[derive(Component, Debug, Deserialize, Serialize)]
-struct Points(VecDeque<Vec2>, #[serde(skip)] PatchIndex);
+#[derive(Clone, Component, Debug, Deserialize, Serialize)]
+struct Points(VecDeque<Vec2>);
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 enum PointPatch {
@@ -44,18 +53,16 @@ impl Diffable for Points {
 
         Ok(())
     }
-
-    fn patch_cursor(&self) -> PatchIndex {
-        self.1
-    }
-
-    fn set_patch_cursor(&mut self, cursor: PatchIndex) {
-        self.1 = cursor;
-    }
 }
 
 #[derive(Resource)]
 struct TargetEntity(Entity);
+
+#[derive(Component)]
+struct HistoryMarker;
+
+#[derive(Component, Default)]
+struct PointHistory(Vec<(RepliconTick, Option<PatchIndex>, Points)>);
 
 #[test]
 fn entity_mut_apply_patch_records_patch() {
@@ -69,7 +76,7 @@ fn entity_mut_apply_patch_records_patch() {
     app.update();
 
     assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
-    assert_diff_cursor(&app, entity, 1);
+    assert_diff_cursor(&app, entity, Some(0));
 }
 
 #[test]
@@ -85,7 +92,7 @@ fn entity_commands_apply_patch_records_patch() {
     app.update();
 
     assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
-    assert_diff_cursor(&app, entity, 1);
+    assert_diff_cursor(&app, entity, Some(0));
 }
 
 fn apply_patch_with_entity_mut(mut query: Query<EntityMut, With<Points>>) {
@@ -191,6 +198,91 @@ fn lost_patch_is_included_in_next_unacked_diff() {
 }
 
 #[test]
+fn cumulative_diff_applies_before_older_subset_diff() {
+    let (mut server_app, mut client_app) = setup_apps();
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, points([(0.0, 0.0)])))
+        .id();
+    replicate_and_ack(&mut server_app, &mut client_app);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(1.0)))
+        .unwrap();
+    server_app.update();
+    let mutation_0_1 = drain_server_channel(&mut server_app, ServerChannel::Mutations);
+    assert_eq!(mutation_0_1.len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(2.0)))
+        .unwrap();
+    server_app.update();
+    let mutation_0_2 = drain_server_channel(&mut server_app, ServerChannel::Mutations);
+    assert_eq!(mutation_0_2.len(), 1);
+
+    deliver_messages_to_client(&mut client_app, mutation_0_2);
+    client_app.update();
+    assert_client_point_values(&mut client_app, 0..=2);
+
+    deliver_messages_to_client(&mut client_app, mutation_0_1);
+    client_app.update();
+    assert_client_point_values(&mut client_app, 0..=2);
+}
+
+#[test]
+fn prediction_history_records_older_state_after_cumulative_diff_arrives_first() {
+    let (mut server_app, mut client_app) = setup_history_apps();
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, points([(0.0, 0.0)])))
+        .id();
+    replicate_and_ack(&mut server_app, &mut client_app);
+
+    let client_entity = single_client_entity(&mut client_app);
+    client_app
+        .world_mut()
+        .entity_mut(client_entity)
+        .insert((HistoryMarker, PointHistory::default()));
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(1.0)))
+        .unwrap();
+    server_app.update();
+    let mutation_0_1 = drain_server_channel(&mut server_app, ServerChannel::Mutations);
+    assert_eq!(mutation_0_1.len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(2.0)))
+        .unwrap();
+    server_app.update();
+    let mutation_0_2 = drain_server_channel(&mut server_app, ServerChannel::Mutations);
+    assert_eq!(mutation_0_2.len(), 1);
+
+    deliver_messages_to_client(&mut client_app, mutation_0_2);
+    client_app.update();
+    deliver_messages_to_client(&mut client_app, mutation_0_1);
+    client_app.update();
+
+    let mut history = point_history_values(&mut client_app);
+    history.sort_by_key(|(tick, _)| *tick);
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].1, vec![(0.0, 0.0), (1.0, 1.0)]);
+    assert_eq!(history[1].1, vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
+}
+
+#[test]
 fn pruned_patches_fall_back_to_snapshot_and_then_resume_patches() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
@@ -221,7 +313,7 @@ fn pruned_patches_fall_back_to_snapshot_and_then_resume_patches() {
 }
 
 #[test]
-fn removal_removes_diff_state() {
+fn removal_removes_receiver_state() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
@@ -234,6 +326,7 @@ fn removal_removes_diff_state() {
     let client_entity = single_client_entity(&mut client_app);
     let entity = client_app.world().entity(client_entity);
     assert!(entity.contains::<Points>());
+    assert!(entity.contains::<DiffReceiver<Points>>());
     assert!(entity.contains::<DiffLog<Points>>());
 
     server_app
@@ -244,27 +337,37 @@ fn removal_removes_diff_state() {
 
     let entity = client_app.world().entity(client_entity);
     assert!(!entity.contains::<Points>());
+    assert!(!entity.contains::<DiffReceiver<Points>>());
     assert!(!entity.contains::<DiffLog<Points>>());
 }
 
 #[test]
-fn duplicate_patches_are_ignored_by_component_cursor() {
+fn duplicate_patches_are_ignored_by_receiver() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
 
     entity.apply_write(
-        snapshot(0, points([(1.0, 1.0)])),
+        wire(DiffWire::Snapshot {
+            cursor: None,
+            value: points([(1.0, 1.0)]),
+        }),
         fns_id,
         RepliconTick::default(),
     );
     entity.apply_write(
-        patches(1, [PointPatch::PushBack(Vec2::new(2.0, 2.0))]),
+        wire(DiffWire::Patches {
+            first_patch_index: 0,
+            patches: vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))],
+        }),
         fns_id,
         RepliconTick::default(),
     );
     entity.apply_write(
-        patches(1, [PointPatch::PushBack(Vec2::new(2.0, 2.0))]),
+        wire(DiffWire::Patches {
+            first_patch_index: 0,
+            patches: vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))],
+        }),
         fns_id,
         RepliconTick::default(),
     );
@@ -273,22 +376,38 @@ fn duplicate_patches_are_ignored_by_component_cursor() {
 }
 
 #[test]
-#[should_panic(expected = "writing data into an entity shouldn't fail")]
-fn patch_gap_is_rejected() {
+fn out_of_order_patches_wait_for_missing_predecessor() {
     let mut app = setup_app();
     let fns_id = points_fns_id(&app);
     let mut entity = app.world_mut().spawn_empty();
 
     entity.apply_write(
-        snapshot(0, points([(1.0, 1.0)])),
+        wire(DiffWire::Snapshot {
+            cursor: None,
+            value: points([(1.0, 1.0)]),
+        }),
         fns_id,
         RepliconTick::default(),
     );
     entity.apply_write(
-        patches(2, [PointPatch::PushBack(Vec2::new(3.0, 3.0))]),
+        wire(DiffWire::Patches {
+            first_patch_index: 1,
+            patches: vec![PointPatch::PushBack(Vec2::new(3.0, 3.0))],
+        }),
         fns_id,
         RepliconTick::default(),
     );
+    assert_entity_points(&entity, [(1.0, 1.0)]);
+
+    entity.apply_write(
+        wire(DiffWire::Patches {
+            first_patch_index: 0,
+            patches: vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))],
+        }),
+        fns_id,
+        RepliconTick::default(),
+    );
+    assert_entity_points(&entity, [(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]);
 }
 
 #[test]
@@ -299,7 +418,10 @@ fn patches_before_snapshot_are_rejected() {
     let mut entity = app.world_mut().spawn_empty();
 
     entity.apply_write(
-        patches(1, [PointPatch::PushBack(Vec2::new(1.0, 1.0))]),
+        wire(DiffWire::Patches {
+            first_patch_index: 0,
+            patches: vec![PointPatch::PushBack(Vec2::new(1.0, 1.0))],
+        }),
         fns_id,
         RepliconTick::default(),
     );
@@ -308,6 +430,12 @@ fn patches_before_snapshot_are_rejected() {
 fn setup_apps() -> (App, App) {
     let server_app = setup_app();
     let client_app = setup_app();
+    (server_app, client_app)
+}
+
+fn setup_history_apps() -> (App, App) {
+    let server_app = setup_history_app();
+    let client_app = setup_history_app();
     (server_app, client_app)
 }
 
@@ -323,6 +451,16 @@ fn setup_app() -> App {
     app
 }
 
+fn setup_history_app() -> App {
+    let mut app = setup_app();
+    app.register_marker_with::<HistoryMarker>(MarkerConfig {
+        priority: 100,
+        need_history: true,
+    })
+    .set_marker_fns::<HistoryMarker, Points>(write_point_history, remove_point_history);
+    app
+}
+
 fn replicate_and_ack(server_app: &mut App, client_app: &mut App) {
     server_app.update();
     server_app.exchange_with_client(client_app);
@@ -333,6 +471,10 @@ fn replicate_and_ack(server_app: &mut App, client_app: &mut App) {
 
 fn deliver_server_messages(server_app: &mut App, client_app: &mut App) {
     let messages = drain_server_messages_where(server_app, |_| true);
+    deliver_messages_to_client(client_app, messages);
+}
+
+fn deliver_messages_to_client(client_app: &mut App, messages: Vec<(Entity, usize, Bytes)>) {
     let mut client_messages = client_app.world_mut().resource_mut::<ClientMessages>();
     for (_, channel_id, message) in messages {
         client_messages.insert_received(channel_id, message);
@@ -372,6 +514,71 @@ fn drain_server_messages_where(
     }
 
     drained
+}
+
+fn write_point_history(
+    ctx: &mut WriteCtx,
+    _rule_fns: &RuleFns<Points>,
+    entity: &mut DeferredEntity,
+    message: &mut Bytes,
+) -> Result<()> {
+    let wire: DiffWire<Points, PointPatch> = postcard_utils::from_buf(message)?;
+    let (cursor, value) = match wire {
+        DiffWire::Snapshot { cursor, value } => {
+            entity.insert(DiffReceiver::<Points>::new(cursor));
+            (cursor, value)
+        }
+        DiffWire::Patches {
+            first_patch_index,
+            patches,
+        } => {
+            if patches.is_empty() {
+                return Ok(());
+            }
+            // Patch N transforms state cursor N - 1 into cursor N. Patch 0
+            // transforms the pre-patch base, represented by `None`, into
+            // cursor `Some(0)`.
+            let base_cursor = first_patch_index.checked_sub(1);
+            let cursor = Some(first_patch_index + patches.len() as PatchIndex - 1);
+            let live_is_base = entity
+                .get::<DiffReceiver<Points>>()
+                .is_some_and(|receiver| receiver.last_applied() == base_cursor);
+            let mut value = entity
+                .get::<PointHistory>()
+                .and_then(|history| {
+                    history.0.iter().rev().find_map(|(_, cursor, value)| {
+                        (*cursor == base_cursor).then(|| value.clone())
+                    })
+                })
+                .or_else(|| {
+                    live_is_base
+                        .then(|| entity.get::<Points>().cloned())
+                        .flatten()
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "received diff patches for `{}` without a confirmed base",
+                        ShortName::of::<Points>()
+                    )
+                })?;
+            for patch in patches {
+                value.apply_patch(&patch)?;
+            }
+            (cursor, value)
+        }
+    };
+
+    if let Some(mut history) = entity.get_mut::<PointHistory>() {
+        history.0.push((ctx.message_tick, cursor, value));
+    } else {
+        entity.insert(PointHistory(vec![(ctx.message_tick, cursor, value)]));
+    }
+
+    Ok(())
+}
+
+fn remove_point_history(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
+    entity.remove::<PointHistory>().remove::<Points>();
 }
 
 fn assert_client_points<const N: usize>(client_app: &mut App, expected: [(f32, f32); N]) {
@@ -416,28 +623,30 @@ fn assert_world_points<const N: usize>(app: &App, entity: Entity, expected: [(f3
     assert_eq!(points, expected);
 }
 
-fn assert_diff_cursor(app: &App, entity: Entity, cursor: PatchIndex) {
+fn point_history_values(client_app: &mut App) -> Vec<(RepliconTick, Vec<(f32, f32)>)> {
+    let mut history = client_app.world_mut().query::<&PointHistory>();
+    history
+        .single(client_app.world())
+        .unwrap()
+        .0
+        .iter()
+        .map(|(tick, _, points)| {
+            (
+                *tick,
+                points.0.iter().map(|point| (point.x, point.y)).collect(),
+            )
+        })
+        .collect()
+}
+
+fn assert_diff_cursor(app: &App, entity: Entity, cursor: Option<PatchIndex>) {
     let entity = app.world().entity(entity);
     let log = entity.get::<DiffLog<Points>>().unwrap();
     assert_eq!(log.current_cursor(), cursor);
 }
 
 fn points<const N: usize>(points: [(f32, f32); N]) -> Points {
-    Points(
-        points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect(),
-        0,
-    )
-}
-
-fn snapshot(cursor: PatchIndex, value: Points) -> Vec<u8> {
-    wire(DiffWire::Snapshot { cursor, value })
-}
-
-fn patches<const N: usize>(first_patch_index: PatchIndex, patches: [PointPatch; N]) -> Vec<u8> {
-    wire(DiffWire::Patches {
-        first_patch_index,
-        patches: patches.into(),
-    })
+    Points(points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect())
 }
 
 fn wire(wire: DiffWire<Points, PointPatch>) -> Vec<u8> {

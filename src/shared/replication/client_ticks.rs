@@ -151,7 +151,8 @@ pub(crate) struct EntityTicks {
     /// detection for the component as a whole, while this cursor controls the patch-log
     /// base used to serialize only patches the client has not acknowledged yet.
     ///
-    /// This stores cursors, not patches. It contains at most one entry per
+    /// This stores cursors, not patches. Absence means we don't know a diff
+    /// base cursor for this component. It contains at most one entry per
     /// tracked diff component and is pruned when that component is removed.
     ///
     /// We use a smallvec because we don't expect to have more than a few components
@@ -173,11 +174,10 @@ impl EntityTicks {
         }
     }
 
-    pub(crate) fn patch_cursor(&self, component: ComponentIndex) -> PatchIndex {
+    pub(crate) fn patch_cursor(&self, component: ComponentIndex) -> Option<PatchIndex> {
         self.patch_cursors
             .iter()
             .find_map(|&(index, cursor)| (index == component).then_some(cursor))
-            .unwrap_or_default()
     }
 
     /// Advances the acknowledged diff patch cursor for `component`.

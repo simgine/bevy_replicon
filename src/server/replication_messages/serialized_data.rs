@@ -88,17 +88,17 @@ impl<'a> WritableComponent<'a> {
 
     /// Writes component data for an update or mutation message.
     ///
-    /// Without `diff`, this uses the normal cached component serialization.
-    /// With `diff`, `acked_patch_cursor` controls the payload: [`None`] writes a
-    /// cacheable snapshot, and [`Some`] writes patches after that cursor or falls
-    /// back to a snapshot. The returned patch cursor should be tracked only for
-    /// mutation messages that passed [`Some`].
+    /// Without `diff`, this uses normal cached component serialization.
+    /// With `diff`, this writes patches after `base_patch_cursor`. If the cursor
+    /// is [`None`], or if the needed patches were pruned, it writes a snapshot.
+    /// The caller decides whether the returned patch cursor should be tracked in
+    /// mutation ACK bookkeeping.
     pub(crate) fn write_mutation(
         &self,
         serialized: &mut SerializedData,
         cached_range: &mut Option<Range<usize>>,
         diff: Option<WritableDiff<'a>>,
-        acked_patch_cursor: Option<PatchIndex>,
+        base_patch_cursor: Option<PatchIndex>,
     ) -> Result<WrittenComponent> {
         let Some(diff) = diff else {
             return Ok(WrittenComponent {
@@ -106,15 +106,6 @@ impl<'a> WritableComponent<'a> {
                 patch_cursor: None,
             });
         };
-
-        if acked_patch_cursor.is_none()
-            && let Some(range) = cached_range.clone()
-        {
-            return Ok(WrittenComponent {
-                range,
-                patch_cursor: None,
-            });
-        }
 
         let start = serialized.len();
 
@@ -125,20 +116,16 @@ impl<'a> WritableComponent<'a> {
                 &self.ctx,
                 self.ptr,
                 diff.log,
-                acked_patch_cursor,
+                base_patch_cursor,
                 &mut serialized.0,
             )?
         };
 
         let end = serialized.len();
         let range = start..end;
-        if acked_patch_cursor.is_none() {
-            *cached_range = Some(range.clone());
-        }
-
         Ok(WrittenComponent {
             range,
-            patch_cursor: acked_patch_cursor.map(|_| cursor),
+            patch_cursor: cursor,
         })
     }
 }
