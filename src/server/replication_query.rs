@@ -85,12 +85,14 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
 
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
-        let registry = world.resource::<ReplicationRegistry>();
-        for rule in rules.iter() {
-            for component in &rule.components {
-                component_access.add_component_read(component.id);
-                if let Some(diff) = registry.diff(component.fns_id) {
-                    component_access.add_component_read(diff.log_component_id());
+        if !rules.is_empty() {
+            let registry = world.resource::<ReplicationRegistry>();
+            for rule in rules.iter() {
+                for component in &rule.components {
+                    component_access.add_component_read(component.id);
+                    if let Some(diff) = registry.diff(component.fns_id) {
+                        component_access.add_component_read(diff.log_component_id());
+                    }
                 }
             }
         }
