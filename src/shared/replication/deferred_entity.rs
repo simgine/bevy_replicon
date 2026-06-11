@@ -1,7 +1,10 @@
 use core::ptr::NonNull;
 
 use bevy::{
-    ecs::component::{ComponentId, Mutable},
+    ecs::{
+        component::{ComponentId, Mutable},
+        query::{QueryAccessError, ReleaseStateQueryData},
+    },
     prelude::*,
     ptr::OwningPtr,
 };
@@ -73,6 +76,30 @@ impl<'w> DeferredEntity<'w> {
     #[inline]
     pub fn get_mut<C: Component<Mutability = Mutable>>(&mut self) -> Option<Mut<'_, C>> {
         self.entity.get_mut()
+    }
+
+    /// Returns components for the current entity that match the query `Q`.
+    ///
+    /// For more details, see [`EntityWorldMut::get_components_mut`].
+    #[inline]
+    pub fn get_components_mut<Q: ReleaseStateQueryData>(
+        &mut self,
+    ) -> Result<Q::Item<'_, 'static>, QueryAccessError> {
+        self.entity.get_components_mut::<Q>()
+    }
+
+    /// Like [`Self::get_components_mut_unchecked`], but doesn't check for aliasing.
+    ///
+    /// For more details, see [`EntityWorldMut::get_components_mut`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `Q` does not provide aliasing mutable references to the same component.
+    #[inline]
+    pub unsafe fn get_components_mut_unchecked<Q: ReleaseStateQueryData>(
+        &mut self,
+    ) -> Result<Q::Item<'_, 'static>, QueryAccessError> {
+        unsafe { self.entity.get_components_mut_unchecked::<Q>() }
     }
 
     fn register_component<C: Component>(&mut self) -> ComponentId {
