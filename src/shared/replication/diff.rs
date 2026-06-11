@@ -33,7 +33,7 @@ use crate::{
     },
 };
 
-/// Monotonic index assigned to a diff patch.
+/// Monotonic index assigned to a sent diff batch.
 pub type PatchIndex = u64;
 
 /// Component whose mutations can be represented as an ordered log of patches.
@@ -120,7 +120,7 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
     /// Patch that transforms this component from one state to the next.
     type Patch: Clone + Serialize + DeserializeOwned + Send + Sync + 'static;
 
-    /// Maximum number of patches retained for diff serialization.
+    /// Maximum number of sent patch batches retained for diff serialization.
     ///
     /// If a client acknowledges a patch older than the retained range,
     /// Replicon will fall back to sending a full component snapshot.
@@ -137,43 +137,53 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
 #[derive(Component, Debug)]
 pub struct DiffLog<C: Diffable> {
     last_index: Option<PatchIndex>,
-    patches: VecDeque<C::Patch>,
+    batches: VecDeque<PatchBatch<C::Patch>>,
+    pending: Vec<C::Patch>,
     _marker: PhantomData<fn() -> C>,
 }
 
 impl<C: Diffable> DiffLog<C> {
-    /// Records a patch and returns the assigned patch index.
-    pub fn record(&mut self, patch: C::Patch) -> PatchIndex {
-        let index = self
-            .last_index
-            .map_or(0, |last_index| last_index.saturating_add(1));
-        self.last_index = Some(index);
-        self.patches.push_back(patch);
-        self.prune_to_limit();
-        index
+    /// Records a patch to be included in the next serialized diff batch.
+    pub fn record(&mut self, patch: C::Patch) {
+        self.pending.push(patch);
     }
 
-    /// Returns the latest patch index.
+    /// Returns the latest sealed patch index.
     pub fn current_cursor(&self) -> Option<PatchIndex> {
         self.last_index
     }
 
-    /// Returns all retained patches after `cursor`.
+    /// Finishes patches recorded since the previous serialization into one batch.
+    fn finish_pending(&mut self) -> Option<PatchIndex> {
+        if self.pending.is_empty() {
+            return self.last_index;
+        }
+
+        let index = self
+            .last_index
+            .map_or(0, |last_index| last_index.saturating_add(1));
+        self.last_index = Some(index);
+        self.batches.push_back(core::mem::take(&mut self.pending));
+        self.prune_to_limit();
+        self.last_index
+    }
+
+    /// Returns all retained patch batches after `cursor`.
     ///
-    /// Returns `None` if patches needed to continue from `cursor` were already
+    /// Returns `None` if batches needed to continue from `cursor` were already
     /// pruned and the sender must fall back to a snapshot.
-    pub(crate) fn patches_after(&self, cursor: PatchIndex) -> Option<PatchSlice<'_, C::Patch>> {
+    pub(crate) fn batches_after(&self, cursor: PatchIndex) -> Option<BatchSlice<'_, C::Patch>> {
         let Some(last_index) = self.last_index else {
-            return Some(PatchSlice {
+            return Some(BatchSlice {
                 first_index: 0,
-                patches: &self.patches,
+                batches: &self.batches,
                 start: 0,
             });
         };
-        if self.patches.is_empty() {
-            return (cursor == last_index).then_some(PatchSlice {
+        if self.batches.is_empty() {
+            return (cursor == last_index).then_some(BatchSlice {
                 first_index: last_index.saturating_add(1),
-                patches: &self.patches,
+                batches: &self.batches,
                 start: 0,
             });
         }
@@ -184,13 +194,13 @@ impl<C: Diffable> DiffLog<C> {
         }
 
         let start = if cursor >= last_index {
-            self.patches.len()
+            self.batches.len()
         } else {
             (cursor + 1 - first_index) as usize
         };
-        Some(PatchSlice {
+        Some(BatchSlice {
             first_index: first_index + start as PatchIndex,
-            patches: &self.patches,
+            batches: &self.batches,
             start,
         })
     }
@@ -198,29 +208,31 @@ impl<C: Diffable> DiffLog<C> {
     fn first_index(&self) -> PatchIndex {
         let last_index = self
             .last_index
-            .expect("patch index should only be requested when patches exist");
-        debug_assert!(!self.patches.is_empty());
-        debug_assert!(self.patches.len() as PatchIndex - 1 <= last_index);
-        last_index - (self.patches.len() as PatchIndex - 1)
+            .expect("patch index should only be requested when batches exist");
+        debug_assert!(!self.batches.is_empty());
+        debug_assert!(self.batches.len() as PatchIndex - 1 <= last_index);
+        last_index - (self.batches.len() as PatchIndex - 1)
     }
 
     fn prune_to_limit(&mut self) {
-        let excess = self.patches.len().saturating_sub(C::HISTORY_LEN);
+        let excess = self.batches.len().saturating_sub(C::HISTORY_LEN);
         if excess > 0 {
-            self.patches.drain(..excess);
+            self.batches.drain(..excess);
         }
     }
 }
 
-pub(crate) struct PatchSlice<'a, Patch> {
+pub type PatchBatch<Patch> = Vec<Patch>;
+
+pub(crate) struct BatchSlice<'a, Patch> {
     first_index: PatchIndex,
-    patches: &'a VecDeque<Patch>,
+    batches: &'a VecDeque<PatchBatch<Patch>>,
     start: usize,
 }
 
-impl<Patch> PatchSlice<'_, Patch> {
+impl<Patch> BatchSlice<'_, Patch> {
     fn is_empty(&self) -> bool {
-        self.start == self.patches.len()
+        self.start == self.batches.len()
     }
 
     fn first_index(&self) -> PatchIndex {
@@ -228,14 +240,14 @@ impl<Patch> PatchSlice<'_, Patch> {
     }
 }
 
-impl<Patch: Serialize> Serialize for PatchSlice<'_, Patch> {
+impl<Patch: Serialize> Serialize for BatchSlice<'_, Patch> {
     fn serialize<S: serde::Serializer>(
         &self,
         serializer: S,
     ) -> core::result::Result<S::Ok, S::Error> {
-        let mut seq = serializer.serialize_seq(Some(self.patches.len() - self.start))?;
-        for patch in self.patches.iter().skip(self.start) {
-            seq.serialize_element(patch)?;
+        let mut seq = serializer.serialize_seq(Some(self.batches.len() - self.start))?;
+        for batch in self.batches.iter().skip(self.start) {
+            seq.serialize_element(batch)?;
         }
         seq.end()
     }
@@ -245,7 +257,8 @@ impl<C: Diffable> Default for DiffLog<C> {
     fn default() -> Self {
         Self {
             last_index: None,
-            patches: Default::default(),
+            batches: Default::default(),
+            pending: Default::default(),
             _marker: PhantomData,
         }
     }
@@ -255,7 +268,7 @@ impl<C: Diffable> Default for DiffLog<C> {
 #[derive(Component, Debug)]
 pub struct DiffReceiver<C: Diffable> {
     last_applied: Option<PatchIndex>,
-    pending: BTreeMap<PatchIndex, C::Patch>,
+    pending: BTreeMap<PatchIndex, PatchBatch<C::Patch>>,
 }
 
 impl<C: Diffable> DiffReceiver<C> {
@@ -271,32 +284,32 @@ impl<C: Diffable> DiffReceiver<C> {
         self.last_applied
     }
 
-    /// Queues newly received patches and returns patches that can be applied now.
+    /// Queues newly received patch batches and returns batches that can be applied now.
     ///
-    /// Patches must be applied sequentially by [`PatchIndex`]. If a patch arrives
-    /// ahead of a missing predecessor, it stays pending until the missing patch is
-    /// received. Duplicate or already-applied patches are ignored.
+    /// Batches must be applied sequentially by [`PatchIndex`]. If a batch arrives
+    /// ahead of a missing predecessor, it stays pending until the missing batch is
+    /// received. Duplicate or already-applied batches are ignored.
     pub fn queue_and_take_ready(
         &mut self,
         first_patch_index: PatchIndex,
-        patches: Vec<C::Patch>,
-    ) -> Vec<C::Patch> {
-        for (offset, patch) in patches.into_iter().enumerate() {
+        batches: Vec<PatchBatch<C::Patch>>,
+    ) -> Vec<PatchBatch<C::Patch>> {
+        for (offset, batch) in batches.into_iter().enumerate() {
             let index = first_patch_index + offset as PatchIndex;
             if self
                 .last_applied
                 .is_none_or(|last_applied| index > last_applied)
             {
-                self.pending.entry(index).or_insert(patch);
+                self.pending.entry(index).or_insert(batch);
             }
         }
 
         let mut ready = Vec::new();
         while let Some(next_index) = self.next_patch_index()
-            && let Some(patch) = self.pending.remove(&next_index)
+            && let Some(batch) = self.pending.remove(&next_index)
         {
             self.last_applied = Some(next_index);
-            ready.push(patch);
+            ready.push(batch);
         }
 
         ready
@@ -325,7 +338,7 @@ pub enum DiffWire<C, Patch> {
     },
     Patches {
         first_patch_index: PatchIndex,
-        patches: Vec<Patch>,
+        patches: Vec<PatchBatch<Patch>>,
     },
 }
 
@@ -337,7 +350,7 @@ enum DiffWireRef<'a, C, Patch> {
     },
     Patches {
         first_patch_index: PatchIndex,
-        patches: PatchSlice<'a, Patch>,
+        patches: BatchSlice<'a, Patch>,
     },
 }
 
@@ -429,7 +442,7 @@ impl DiffFns {
 
     /// Serializes patches after `base_cursor`, or a snapshot if required.
     ///
-    /// If `base_cursor` is [`None`], or if the needed patches were already
+    /// If `base_cursor` is [`None`], or if the needed batches were already
     /// pruned, this falls back to a snapshot.
     ///
     /// # Safety
@@ -464,14 +477,14 @@ unsafe fn serialize_mutation<C: Diffable>(
     message: &mut Vec<u8>,
 ) -> Result<Option<PatchIndex>> {
     let component = unsafe { component.deref::<C>() };
-    let log = unsafe { log.deref::<DiffLog<C>>() };
-    let cursor = log.current_cursor();
+    let log = unsafe { log.assert_unique().deref_mut::<DiffLog<C>>() };
+    let cursor = log.finish_pending();
 
     let wire: DiffWireRef<'_, C, C::Patch> =
-        match base_cursor.and_then(|cursor| log.patches_after(cursor)) {
-            Some(patches) if !patches.is_empty() => DiffWireRef::Patches {
-                first_patch_index: patches.first_index(),
-                patches,
+        match base_cursor.and_then(|cursor| log.batches_after(cursor)) {
+            Some(batches) if !batches.is_empty() => DiffWireRef::Patches {
+                first_patch_index: batches.first_index(),
+                patches: batches,
             },
             _ => DiffWireRef::Snapshot {
                 cursor,
@@ -567,7 +580,7 @@ pub(crate) fn write<C: Diffable>(
             first_patch_index,
             patches,
         } => {
-            let ready_patches = {
+            let ready_batches = {
                 let mut receiver = entity.get_mut::<DiffReceiver<C>>().ok_or_else(|| {
                     format!(
                         "received diff patches for `{}` before a snapshot",
@@ -583,8 +596,10 @@ pub(crate) fn write<C: Diffable>(
                     ShortName::of::<C>()
                 )
             })?;
-            for patch in ready_patches {
-                component.apply_patch(&patch)?;
+            for batch in ready_batches {
+                for patch in batch.iter() {
+                    component.apply_patch(patch)?;
+                }
             }
         }
     }
@@ -616,13 +631,15 @@ mod tests {
     }
 
     #[test]
-    fn patches_after_returns_retained_patches_after_cursor() {
+    fn batches_after_returns_retained_batches_after_cursor() {
         let mut log = DiffLog::<TestDiff>::default();
         log.record(1);
+        log.finish_pending();
         log.record(2);
+        log.finish_pending();
 
-        let patches = log.patches_after(0).unwrap();
-        assert_eq!(patches.first_index(), 1);
-        assert!(!patches.is_empty());
+        let batches = log.batches_after(0).unwrap();
+        assert_eq!(batches.first_index(), 1);
+        assert!(!batches.is_empty());
     }
 }

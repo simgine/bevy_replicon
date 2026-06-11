@@ -76,7 +76,7 @@ fn entity_mut_apply_patch_records_patch() {
     app.update();
 
     assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
-    assert_diff_cursor(&app, entity, Some(0));
+    assert_diff_cursor(&app, entity, None);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn entity_commands_apply_patch_records_patch() {
     app.update();
 
     assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
-    assert_diff_cursor(&app, entity, Some(0));
+    assert_diff_cursor(&app, entity, None);
 }
 
 fn apply_patch_with_entity_mut(mut query: Query<EntityMut, With<Points>>) {
@@ -198,6 +198,43 @@ fn lost_patch_is_included_in_next_unacked_diff() {
 }
 
 #[test]
+fn multiple_patches_in_same_send_share_patch_cursor() {
+    let (mut server_app, mut client_app) = setup_apps();
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, points([(0.0, 0.0)])))
+        .id();
+    replicate_and_ack(&mut server_app, &mut client_app);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(1.0)))
+        .unwrap();
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(2.0)))
+        .unwrap();
+    replicate_and_ack(&mut server_app, &mut client_app);
+
+    assert_client_point_values(&mut client_app, 0..=2);
+    assert_diff_cursor(&server_app, server_entity, Some(0));
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(3.0)))
+        .unwrap();
+    replicate_and_ack(&mut server_app, &mut client_app);
+
+    assert_client_point_values(&mut client_app, 0..=3);
+    assert_diff_cursor(&server_app, server_entity, Some(1));
+}
+
+#[test]
 fn cumulative_diff_applies_before_older_subset_diff() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
@@ -293,23 +330,39 @@ fn pruned_patches_fall_back_to_snapshot_and_then_resume_patches() {
         .id();
     replicate_and_ack(&mut server_app, &mut client_app);
 
-    for value in 1..=65 {
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(1.0)))
+        .unwrap();
+    replicate_and_ack(&mut server_app, &mut client_app);
+    assert_client_point_values(&mut client_app, 0..=1);
+
+    for value in 2..=66 {
         server_app
             .world_mut()
             .entity_mut(server_entity)
             .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(value as f32)))
             .unwrap();
+        server_app.update();
+        drain_server_channel(&mut server_app, ServerChannel::Mutations);
     }
-    replicate_and_ack(&mut server_app, &mut client_app);
-    assert_client_point_values(&mut client_app, 0..=65);
 
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(66.0)))
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(67.0)))
         .unwrap();
     replicate_and_ack(&mut server_app, &mut client_app);
-    assert_client_point_values(&mut client_app, 0..=66);
+    assert_client_point_values(&mut client_app, 0..=67);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::splat(68.0)))
+        .unwrap();
+    replicate_and_ack(&mut server_app, &mut client_app);
+    assert_client_point_values(&mut client_app, 0..=68);
 }
 
 #[test]
@@ -358,7 +411,7 @@ fn duplicate_patches_are_ignored_by_receiver() {
     entity.apply_write(
         wire(DiffWire::Patches {
             first_patch_index: 0,
-            patches: vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))],
+            patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
         RepliconTick::default(),
@@ -366,7 +419,7 @@ fn duplicate_patches_are_ignored_by_receiver() {
     entity.apply_write(
         wire(DiffWire::Patches {
             first_patch_index: 0,
-            patches: vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))],
+            patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
         RepliconTick::default(),
@@ -392,7 +445,7 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
     entity.apply_write(
         wire(DiffWire::Patches {
             first_patch_index: 1,
-            patches: vec![PointPatch::PushBack(Vec2::new(3.0, 3.0))],
+            patches: vec![vec![PointPatch::PushBack(Vec2::new(3.0, 3.0))]],
         }),
         fns_id,
         RepliconTick::default(),
@@ -402,7 +455,7 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
     entity.apply_write(
         wire(DiffWire::Patches {
             first_patch_index: 0,
-            patches: vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))],
+            patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
         RepliconTick::default(),
@@ -420,7 +473,7 @@ fn patches_before_snapshot_are_rejected() {
     entity.apply_write(
         wire(DiffWire::Patches {
             first_patch_index: 0,
-            patches: vec![PointPatch::PushBack(Vec2::new(1.0, 1.0))],
+            patches: vec![vec![PointPatch::PushBack(Vec2::new(1.0, 1.0))]],
         }),
         fns_id,
         RepliconTick::default(),
@@ -535,7 +588,7 @@ fn write_point_history(
             if patches.is_empty() {
                 return Ok(());
             }
-            // Patch N transforms state cursor N - 1 into cursor N. Patch 0
+            // Batch N transforms state cursor N - 1 into cursor N. Batch 0
             // transforms the pre-patch base, represented by `None`, into
             // cursor `Some(0)`.
             let base_cursor = first_patch_index.checked_sub(1);
@@ -561,8 +614,10 @@ fn write_point_history(
                         ShortName::of::<Points>()
                     )
                 })?;
-            for patch in patches {
-                value.apply_patch(&patch)?;
+            for batch in patches {
+                for patch in batch.iter() {
+                    value.apply_patch(patch)?;
+                }
             }
             (cursor, value)
         }
