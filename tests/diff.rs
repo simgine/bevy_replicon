@@ -593,20 +593,15 @@ fn write_point_history(
             // cursor `Some(0)`.
             let base_cursor = first_patch_index.checked_sub(1);
             let cursor = Some(first_patch_index + patches.len() as PatchIndex - 1);
-            let live_is_base = entity
-                .get::<DiffReceiver<Points>>()
-                .is_some_and(|receiver| receiver.last_applied() == base_cursor);
+            // The base must come from a confirmed value in the history: consumers
+            // like prediction/interpolation may locally mutate the live component,
+            // so it can never be used as a patch base.
             let mut value = entity
                 .get::<PointHistory>()
                 .and_then(|history| {
                     history.0.iter().rev().find_map(|(_, cursor, value)| {
                         (*cursor == base_cursor).then(|| value.clone())
                     })
-                })
-                .or_else(|| {
-                    live_is_base
-                        .then(|| entity.get::<Points>().cloned())
-                        .flatten()
                 })
                 .ok_or_else(|| {
                     format!(
