@@ -7,7 +7,10 @@ use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
-use crate::{prelude::*, shared::replication::diff::Diffable};
+use crate::{
+    prelude::*,
+    shared::replication::diff::{Diffable, PatchHistory},
+};
 use component::{BundleRules, ComponentRule, IntoComponentRules};
 use filter::{FilterRule, FilterRules};
 
@@ -40,7 +43,8 @@ pub trait AppRuleExt {
     ///
     /// The component itself remains the authoritative state. Mutations should be
     /// performed through [`DiffEntityExt::apply_patch`](crate::shared::replication::diff::DiffEntityExt)
-    /// so Replicon can record patches for efficient per-client resending.
+    /// so Replicon can record patches for efficient per-client resending. Entities
+    /// with `C` are replicated only after sender-side [`PatchHistory`] is present.
     ///
     /// For more details and an example, see [`Diffable`].
     fn replicate_diff<C>(&mut self) -> &mut Self
@@ -829,7 +833,7 @@ impl AppRuleExt for App {
     where
         C: Diffable,
     {
-        self.replicate_with_filtered::<_, F>(RuleFns::<C>::new_diff())
+        self.replicate_with_filtered::<_, (F, With<PatchHistory<C>>)>(RuleFns::<C>::new_diff())
     }
 
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(

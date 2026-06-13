@@ -180,12 +180,12 @@ impl<C: Component> RuleFns<C> {
         (self.consume)(self.deserialize, ctx, message)
     }
 
-    /// Registers required diff state for this rule, if diff replication is enabled.
+    /// Registers diff state for this rule, if diff replication is enabled.
     pub(crate) fn register_diff(&mut self, world: &mut World, registry: &mut ReplicationRegistry) {
         if let Some(diff) = &mut self.diff
             && diff.history_component_id.is_none()
         {
-            diff.history_component_id = Some((diff.register_required_components)(world, registry));
+            diff.history_component_id = Some((diff.register_diff_state)(world, registry));
         }
     }
 }

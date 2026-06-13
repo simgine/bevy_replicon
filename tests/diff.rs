@@ -55,9 +55,6 @@ impl Diffable for Points {
     }
 }
 
-#[derive(Resource)]
-struct TargetEntity(Entity);
-
 #[derive(Component)]
 struct HistoryMarker;
 
@@ -65,52 +62,7 @@ struct HistoryMarker;
 struct PointHistory(Vec<(RepliconTick, Option<PatchIndex>, Points)>);
 
 #[test]
-fn entity_mut_apply_patch_records_patch() {
-    let mut app = setup_app();
-    let entity = app
-        .world_mut()
-        .spawn((Replicated, points([(1.0, 1.0)])))
-        .id();
-
-    app.add_systems(Update, apply_patch_with_entity_mut);
-    app.update();
-
-    assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
-    assert_diff_cursor(&app, entity, None);
-}
-
-#[test]
-fn entity_commands_apply_patch_records_patch() {
-    let mut app = setup_app();
-    let entity = app
-        .world_mut()
-        .spawn((Replicated, points([(1.0, 1.0)])))
-        .id();
-
-    app.insert_resource(TargetEntity(entity));
-    app.add_systems(Update, apply_patch_with_entity_commands);
-    app.update();
-
-    assert_world_points(&app, entity, [(1.0, 1.0), (2.0, 2.0)]);
-    assert_diff_cursor(&app, entity, None);
-}
-
-fn apply_patch_with_entity_mut(mut query: Query<EntityMut, With<Points>>) {
-    let mut entity = query.single_mut().unwrap();
-    entity
-        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
-        .unwrap();
-}
-
-fn apply_patch_with_entity_commands(mut commands: Commands, target: Res<TargetEntity>) {
-    commands
-        .entity(target.0)
-        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
-        .unwrap();
-}
-
-#[test]
-fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
+fn component_without_patch_history_is_not_replicated() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
@@ -118,13 +70,26 @@ fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
         .world_mut()
         .spawn((Replicated, points([(1.0, 1.0)])))
         .id();
-    assert!(
-        server_app
-            .world()
-            .entity(server_entity)
-            .contains::<PatchHistory<Points>>(),
-        "diff components should automatically get a patch history"
-    );
+
+    replicate_and_ack(&mut server_app, &mut client_app);
+    assert_client_has_no_points(&mut client_app);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
+        .unwrap();
+    replicate_and_ack(&mut server_app, &mut client_app);
+
+    assert_client_points(&mut client_app, [(1.0, 1.0), (2.0, 2.0)]);
+}
+
+#[test]
+fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
+    let (mut server_app, mut client_app) = setup_apps();
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = spawn_replicated_points(&mut server_app, [(1.0, 1.0)]);
 
     replicate_and_ack(&mut server_app, &mut client_app);
     assert_client_points(&mut client_app, [(1.0, 1.0)]);
@@ -170,10 +135,7 @@ fn lost_patch_is_included_in_next_unacked_diff() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(1.0, 1.0)])))
-        .id();
+    let server_entity = spawn_replicated_points(&mut server_app, [(1.0, 1.0)]);
     replicate_and_ack(&mut server_app, &mut client_app);
 
     server_app
@@ -202,10 +164,7 @@ fn multiple_patches_in_same_send_share_patch_cursor() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(0.0, 0.0)])))
-        .id();
+    let server_entity = spawn_replicated_points(&mut server_app, [(0.0, 0.0)]);
     replicate_and_ack(&mut server_app, &mut client_app);
 
     server_app
@@ -239,10 +198,7 @@ fn cumulative_diff_applies_before_older_subset_diff() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(0.0, 0.0)])))
-        .id();
+    let server_entity = spawn_replicated_points(&mut server_app, [(0.0, 0.0)]);
     replicate_and_ack(&mut server_app, &mut client_app);
 
     server_app
@@ -277,10 +233,7 @@ fn prediction_history_records_older_state_after_cumulative_diff_arrives_first() 
     let (mut server_app, mut client_app) = setup_history_apps();
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(0.0, 0.0)])))
-        .id();
+    let server_entity = spawn_replicated_points(&mut server_app, [(0.0, 0.0)]);
     replicate_and_ack(&mut server_app, &mut client_app);
 
     let client_entity = single_client_entity(&mut client_app);
@@ -324,10 +277,7 @@ fn pruned_patches_fall_back_to_snapshot_and_then_resume_patches() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(0.0, 0.0)])))
-        .id();
+    let server_entity = spawn_replicated_points(&mut server_app, [(0.0, 0.0)]);
     replicate_and_ack(&mut server_app, &mut client_app);
 
     server_app
@@ -370,17 +320,14 @@ fn removal_removes_receiver_state() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(1.0, 1.0)])))
-        .id();
+    let server_entity = spawn_replicated_points(&mut server_app, [(1.0, 1.0)]);
     replicate_and_ack(&mut server_app, &mut client_app);
 
     let client_entity = single_client_entity(&mut client_app);
     let entity = client_app.world().entity(client_entity);
     assert!(entity.contains::<Points>());
     assert!(entity.contains::<PatchBuffer<Points>>());
-    assert!(entity.contains::<PatchHistory<Points>>());
+    assert!(!entity.contains::<PatchHistory<Points>>());
 
     server_app
         .world_mut()
@@ -514,6 +461,16 @@ fn setup_history_app() -> App {
     app
 }
 
+fn spawn_replicated_points<const N: usize>(app: &mut App, points: [(f32, f32); N]) -> Entity {
+    app.world_mut()
+        .spawn((
+            Replicated,
+            self::points(points),
+            PatchHistory::<Points>::default(),
+        ))
+        .id()
+}
+
 fn replicate_and_ack(server_app: &mut App, client_app: &mut App) {
     server_app.update();
     server_app.exchange_with_client(client_app);
@@ -635,6 +592,11 @@ fn assert_client_points<const N: usize>(client_app: &mut App, expected: [(f32, f
     assert_client_points_slice(client_app, &expected);
 }
 
+fn assert_client_has_no_points(client_app: &mut App) {
+    let mut points = client_app.world_mut().query::<&Points>();
+    assert_eq!(points.iter(client_app.world()).len(), 0);
+}
+
 fn assert_client_point_values(client_app: &mut App, expected: impl IntoIterator<Item = i32>) {
     let expected: Vec<_> = expected
         .into_iter()
@@ -661,13 +623,6 @@ fn single_client_entity(client_app: &mut App) -> Entity {
 }
 
 fn assert_entity_points<const N: usize>(entity: &EntityWorldMut, expected: [(f32, f32); N]) {
-    let points = entity.get::<Points>().unwrap();
-    let points: Vec<_> = points.0.iter().map(|point| (point.x, point.y)).collect();
-    assert_eq!(points, expected);
-}
-
-fn assert_world_points<const N: usize>(app: &App, entity: Entity, expected: [(f32, f32); N]) {
-    let entity = app.world().entity(entity);
     let points = entity.get::<Points>().unwrap();
     let points: Vec<_> = points.0.iter().map(|point| (point.x, point.y)).collect();
     assert_eq!(points, expected);

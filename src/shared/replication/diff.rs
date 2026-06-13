@@ -13,7 +13,7 @@ use bevy::{
     ecs::{
         component::{ComponentId, Mutable},
         system::EntityCommands,
-        world::{EntityMut, EntityWorldMut},
+        world::EntityWorldMut,
     },
     prelude::*,
     ptr::Ptr,
@@ -55,7 +55,9 @@ pub type PatchIndex = u64;
 /// [`Self::HISTORY_LEN`] to tune how many patches are kept before snapshot fallback
 /// becomes necessary.
 ///
-/// Direct component mutations are still supported for correctness, but they are not
+/// Components without sender-side [`PatchHistory`] don't match diff replication
+/// rules. [`DiffEntityExt::apply_patch`] inserts this history automatically. Direct
+/// component mutations are still supported after history exists, but they are not
 /// recorded as patches and will be sent as a snapshot fallback.
 ///
 /// # Example
@@ -132,8 +134,8 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
 
 /// Patch history associated with a [`Diffable`].
 ///
-/// This component is registered as a required component for diff components.
-/// It is not replicated directly.
+/// This sender-side component is inserted lazily when recording patches. It is
+/// not replicated directly.
 #[derive(Component, Debug)]
 pub struct PatchHistory<C: Diffable> {
     last_index: Option<PatchIndex>,
@@ -359,8 +361,7 @@ pub trait DiffEntityExt {
     /// Applies `patch` to component `C` and records it in the entity's [`PatchHistory`].
     ///
     /// [`EntityWorldMut`] and [`EntityCommands`] insert missing patch history before
-    /// recording. [`EntityMut`] can't perform structural changes, so it requires an
-    /// existing [`PatchHistory`].
+    /// recording.
     ///
     /// For [`EntityCommands`], this queues the patch application. Missing components
     /// or patch application errors are reported when commands are applied.
@@ -369,7 +370,7 @@ pub trait DiffEntityExt {
 
 impl DiffEntityExt for EntityWorldMut<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        apply_patch_to_entity::<C>(entity, patch)
+        apply_patch_to_entity::<C>(self, patch)
     }
 }
 
@@ -381,9 +382,6 @@ impl DiffEntityExt for EntityCommands<'_> {
 }
 
 fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityWorldMut, patch: C::Patch) -> Result<()> {
-    if !entity.contains::<PatchHistory<C>>() {
-        entity.insert(PatchHistory::<C>::default());
-    }
     let entity_id = entity.id();
     {
         let mut component = entity
@@ -392,14 +390,13 @@ fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityWorldMut, patch: C::Pat
         component.apply_patch(&patch)?;
     }
 
-    let mut history = entity.get_mut::<PatchHistory<C>>().ok_or_else(|| {
-        format!(
-            "entity `{}` is missing `{}`; register `{}` with `replicate_diff`",
-            entity_id,
-            ShortName::of::<PatchHistory<C>>(),
-            ShortName::of::<C>(),
-        )
-    })?;
+    if !entity.contains::<PatchHistory<C>>() {
+        entity.insert(PatchHistory::<C>::default());
+    }
+
+    let mut history = entity
+        .get_mut::<PatchHistory<C>>()
+        .expect("patch history should exist after insertion");
     history.record(patch);
 
     Ok(())
@@ -415,8 +412,7 @@ fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityWorldMut, patch: C::Pat
 pub(crate) struct DiffFns {
     /// Component ID for `PatchHistory<C>` associated with the diff component.
     pub(crate) history_component_id: Option<ComponentId>,
-    pub(crate) register_required_components:
-        fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
+    pub(crate) register_diff_state: fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
     serialize_mutation: unsafe fn(
         &SerializeCtx,
         Ptr,
@@ -430,7 +426,7 @@ impl DiffFns {
     pub(crate) fn new<C: Diffable>() -> Self {
         Self {
             history_component_id: None,
-            register_required_components: register_required_components::<C>,
+            register_diff_state: register_diff_state::<C>,
             serialize_mutation: serialize_mutation::<C>,
         }
     }
@@ -460,7 +456,7 @@ impl DiffFns {
     }
 }
 
-pub(crate) fn register_required_components<C: Diffable>(
+pub(crate) fn register_diff_state<C: Diffable>(
     world: &mut World,
     registry: &mut ReplicationRegistry,
 ) -> ComponentId {
