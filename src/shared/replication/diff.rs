@@ -369,33 +369,21 @@ pub trait DiffEntityExt {
 
 impl DiffEntityExt for EntityWorldMut<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        if !self.contains::<PatchHistory<C>>() {
-            self.insert(PatchHistory::<C>::default());
-        }
-        let mut entity = self.as_mutable();
-        apply_patch_to_entity::<C>(&mut entity, patch)
-    }
-}
-
-impl DiffEntityExt for EntityMut<'_> {
-    fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        apply_patch_to_entity::<C>(self, patch)
+        apply_patch_to_entity::<C>(entity, patch)
     }
 }
 
 impl DiffEntityExt for EntityCommands<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        self.queue(move |mut entity: EntityWorldMut| {
-            if !self.contains::<PatchHistory<C>>() {
-                self.insert(PatchHistory::<C>::default());
-            }
-            entity.apply_patch::<C>(patch)
-        });
+        self.queue(move |mut entity: EntityWorldMut| entity.apply_patch::<C>(patch));
         Ok(())
     }
 }
 
-fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityMut, patch: C::Patch) -> Result<()> {
+fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityWorldMut, patch: C::Patch) -> Result<()> {
+    if !entity.contains::<PatchHistory<C>>() {
+        entity.insert(PatchHistory::<C>::default());
+    }
     let entity_id = entity.id();
     {
         let mut component = entity
@@ -621,7 +609,6 @@ pub(crate) fn write<C: Diffable>(
 pub(crate) fn remove<C: Diffable>(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
     entity
         .remove_with_requires::<C>()
-        .remove::<PatchHistory<C>>()
         .remove::<PatchBuffer<C>>();
 }
 
