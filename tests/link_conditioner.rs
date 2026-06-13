@@ -45,13 +45,14 @@ fn latency_holds_then_delivers() {
     // Handshake first, unconditioned, so authorization isn't delayed.
     server_app.connect_client(&mut client_app);
 
-    let latency = Duration::from_millis(250);
     let step = Duration::from_millis(100);
     client_app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
-    client_app
-        .world_mut()
-        .resource_mut::<LinkConditioner>()
-        .latency = latency;
+    client_app.insert_resource(GlobalConditionerConfig(ConditionerConfig {
+        latency: 250,
+        jitter: 0,
+        loss: 0.0,
+        duplication: 0.0,
+    }));
 
     server_app.world_mut().spawn(Replicated);
     server_app.update();

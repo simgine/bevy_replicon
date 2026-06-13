@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
-- `LinkConditioner` resource and `LinkConditionerPlugin` behind the `link_conditioner` feature to apply artificial latency, jitter, packet loss and duplication to the message exchange. It operates on `ClientMessages` and `ServerMessages`, so it works with any backend (including the in-memory one used in tests). Reliability-aware: only unreliable channels are dropped or duplicated, and ordered channels are never reordered.
+- `LinkConditionerPlugin` behind the `link_conditioner` feature to emulate latency, jitter, packet loss and duplication on received messages. Configure it per-client with a `ConditionerConfig` component or globally with a `GlobalConditionerConfig` resource (with presets like `ConditionerConfig::POOR`). It operates on `ClientMessages` and `ServerMessages`, so it works with any backend. Reliability-aware: only unreliable channels are dropped or duplicated, and ordered channels are never reordered.
 
 ### Changed
 
