@@ -358,6 +358,10 @@ enum DiffWireRef<'a, C, Patch> {
 pub trait DiffEntityExt {
     /// Applies `patch` to component `C` and records it in the entity's [`PatchHistory`].
     ///
+    /// [`EntityWorldMut`] and [`EntityCommands`] insert missing patch history before
+    /// recording. [`EntityMut`] can't perform structural changes, so it requires an
+    /// existing [`PatchHistory`].
+    ///
     /// For [`EntityCommands`], this queues the patch application. Missing components
     /// or patch application errors are reported when commands are applied.
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()>;
@@ -365,6 +369,9 @@ pub trait DiffEntityExt {
 
 impl DiffEntityExt for EntityWorldMut<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
+        if !self.contains::<PatchHistory<C>>() {
+            self.insert(PatchHistory::<C>::default());
+        }
         let mut entity = self.as_mutable();
         apply_patch_to_entity::<C>(&mut entity, patch)
     }
@@ -378,7 +385,12 @@ impl DiffEntityExt for EntityMut<'_> {
 
 impl DiffEntityExt for EntityCommands<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        self.queue(move |mut entity: EntityWorldMut| entity.apply_patch::<C>(patch));
+        self.queue(move |mut entity: EntityWorldMut| {
+            if !self.contains::<PatchHistory<C>>() {
+                self.insert(PatchHistory::<C>::default());
+            }
+            entity.apply_patch::<C>(patch)
+        });
         Ok(())
     }
 }
@@ -464,7 +476,6 @@ pub(crate) fn register_required_components<C: Diffable>(
     world: &mut World,
     registry: &mut ReplicationRegistry,
 ) -> ComponentId {
-    world.register_required_components::<C, PatchHistory<C>>();
     registry.set_receive_fns::<C>(world, write::<C>, remove::<C>);
     world.register_component::<PatchHistory<C>>()
 }
@@ -609,7 +620,7 @@ pub(crate) fn write<C: Diffable>(
 
 pub(crate) fn remove<C: Diffable>(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
     entity
-        .remove::<C>()
+        .remove_with_requires::<C>()
         .remove::<PatchHistory<C>>()
         .remove::<PatchBuffer<C>>();
 }
@@ -641,5 +652,17 @@ mod tests {
         let batches = history.batches_after(0).unwrap();
         assert_eq!(batches.first_index(), 1);
         assert!(!batches.is_empty());
+    }
+
+    #[test]
+    fn entity_world_mut_apply_patch_inserts_missing_history() {
+        let mut world = World::new();
+        let entity = world.spawn(TestDiff(0)).id();
+
+        world.entity_mut(entity).apply_patch::<TestDiff>(1).unwrap();
+
+        let entity = world.entity(entity);
+        assert_eq!(entity.get::<TestDiff>().unwrap().0, 1);
+        assert!(entity.contains::<PatchHistory<TestDiff>>());
     }
 }
