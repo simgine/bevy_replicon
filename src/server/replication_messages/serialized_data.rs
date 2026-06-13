@@ -51,8 +51,8 @@ pub(crate) struct WritableComponent<'a> {
 pub(crate) struct WritableDiff<'a> {
     /// Diff functions for the same component type as [`WritableComponent`].
     pub(crate) fns: DiffFns,
-    /// Pointer to `DiffLog<C>` for the same component type as [`WritableComponent`].
-    pub(crate) log: Ptr<'a>,
+    /// Pointer to `PatchHistory<C>` for the same component type as [`WritableComponent`].
+    pub(crate) history: Ptr<'a>,
 }
 
 pub(crate) struct WrittenComponent {
@@ -110,12 +110,12 @@ impl<'a> WritableComponent<'a> {
         let start = serialized.len();
 
         postcard_utils::to_extend_mut(&self.fns_id, &mut serialized.0)?;
-        // SAFETY: `diff`, `ptr` and `log` were created for the same component type.
+        // SAFETY: `diff`, `ptr` and `history` were created for the same component type.
         let cursor = unsafe {
             diff.fns.serialize_mutation(
                 &self.ctx,
                 self.ptr,
-                diff.log,
+                diff.history,
                 base_patch_cursor,
                 &mut serialized.0,
             )?

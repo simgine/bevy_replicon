@@ -14,7 +14,7 @@ use bevy_replicon::{
         },
         replication::{
             deferred_entity::DeferredEntity,
-            diff::{DiffReceiver, DiffWire},
+            diff::{DiffWire, PatchBuffer},
             receive_markers::MarkerConfig,
             registry::{
                 ctx::{RemoveCtx, WriteCtx},
@@ -122,8 +122,8 @@ fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
         server_app
             .world()
             .entity(server_entity)
-            .contains::<DiffLog<Points>>(),
-        "diff components should automatically get a patch log"
+            .contains::<PatchHistory<Points>>(),
+        "diff components should automatically get a patch history"
     );
 
     replicate_and_ack(&mut server_app, &mut client_app);
@@ -379,8 +379,8 @@ fn removal_removes_receiver_state() {
     let client_entity = single_client_entity(&mut client_app);
     let entity = client_app.world().entity(client_entity);
     assert!(entity.contains::<Points>());
-    assert!(entity.contains::<DiffReceiver<Points>>());
-    assert!(entity.contains::<DiffLog<Points>>());
+    assert!(entity.contains::<PatchBuffer<Points>>());
+    assert!(entity.contains::<PatchHistory<Points>>());
 
     server_app
         .world_mut()
@@ -390,8 +390,8 @@ fn removal_removes_receiver_state() {
 
     let entity = client_app.world().entity(client_entity);
     assert!(!entity.contains::<Points>());
-    assert!(!entity.contains::<DiffReceiver<Points>>());
-    assert!(!entity.contains::<DiffLog<Points>>());
+    assert!(!entity.contains::<PatchBuffer<Points>>());
+    assert!(!entity.contains::<PatchHistory<Points>>());
 }
 
 #[test]
@@ -578,7 +578,7 @@ fn write_point_history(
     let wire: DiffWire<Points, PointPatch> = postcard_utils::from_buf(message)?;
     let (cursor, value) = match wire {
         DiffWire::Snapshot { cursor, value } => {
-            entity.insert(DiffReceiver::<Points>::new(cursor));
+            entity.insert(PatchBuffer::<Points>::new(cursor));
             (cursor, value)
         }
         DiffWire::Patches {
@@ -691,8 +691,8 @@ fn point_history_values(client_app: &mut App) -> Vec<(RepliconTick, Vec<(f32, f3
 
 fn assert_diff_cursor(app: &App, entity: Entity, cursor: Option<PatchIndex>) {
     let entity = app.world().entity(entity);
-    let log = entity.get::<DiffLog<Points>>().unwrap();
-    assert_eq!(log.current_cursor(), cursor);
+    let history = entity.get::<PatchHistory<Points>>().unwrap();
+    assert_eq!(history.current_cursor(), cursor);
 }
 
 fn points<const N: usize>(points: [(f32, f32); N]) -> Points {

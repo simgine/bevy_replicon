@@ -183,9 +183,9 @@ impl<C: Component> RuleFns<C> {
     /// Registers required diff state for this rule, if diff replication is enabled.
     pub(crate) fn register_diff(&mut self, world: &mut World, registry: &mut ReplicationRegistry) {
         if let Some(diff) = &mut self.diff
-            && diff.log_component_id.is_none()
+            && diff.history_component_id.is_none()
         {
-            diff.log_component_id = Some((diff.register_required_components)(world, registry));
+            diff.history_component_id = Some((diff.register_required_components)(world, registry));
         }
     }
 }
@@ -198,7 +198,7 @@ impl<C: Diffable> RuleFns<C> {
     /// registry setup so it can handle both snapshots and patches.
     pub fn new_diff() -> Self {
         let mut rule_fns = Self::new(
-            diff::serialize_snapshot_without_log::<C>,
+            diff::serialize_snapshot_without_history::<C>,
             diff::deserialize_snapshot::<C>,
         );
         rule_fns.consume = diff::consume::<C>;

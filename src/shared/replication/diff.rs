@@ -36,7 +36,7 @@ use crate::{
 /// Monotonic index assigned to a sent diff batch.
 pub type PatchIndex = u64;
 
-/// Component whose mutations can be represented as an ordered log of patches.
+/// Component whose mutations can be represented as an ordered history of patches.
 ///
 /// Diff replication is useful when a component is large, but most changes can be
 /// represented by a small semantic patch. A common example is a component that stores
@@ -47,7 +47,7 @@ pub type PatchIndex = u64;
 /// The component remains the authoritative state. The user provides a patch type and
 /// implements [`Self::apply_patch`] to describe how each patch changes the component.
 /// When the server mutates the component through [`DiffEntityExt::apply_patch`],
-/// Replicon applies the patch locally and records it in a [`DiffLog`]. For each
+/// Replicon applies the patch locally and records it in a [`PatchHistory`]. For each
 /// client, the server sends either the patches after that client's latest
 /// acknowledged patch cursor, or a full snapshot if the needed patches are no longer
 /// retained. On the receiver, patches are deduplicated, buffered until they can be
@@ -130,19 +130,19 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
     fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()>;
 }
 
-/// Patch log associated with a [`Diffable`].
+/// Patch history associated with a [`Diffable`].
 ///
 /// This component is registered as a required component for diff components.
 /// It is not replicated directly.
 #[derive(Component, Debug)]
-pub struct DiffLog<C: Diffable> {
+pub struct PatchHistory<C: Diffable> {
     last_index: Option<PatchIndex>,
     batches: VecDeque<PatchBatch<C::Patch>>,
     pending: Vec<C::Patch>,
     _marker: PhantomData<fn() -> C>,
 }
 
-impl<C: Diffable> DiffLog<C> {
+impl<C: Diffable> PatchHistory<C> {
     /// Records a patch to be included in the next serialized diff batch.
     pub fn record(&mut self, patch: C::Patch) {
         self.pending.push(patch);
@@ -253,7 +253,7 @@ impl<Patch: Serialize> Serialize for BatchSlice<'_, Patch> {
     }
 }
 
-impl<C: Diffable> Default for DiffLog<C> {
+impl<C: Diffable> Default for PatchHistory<C> {
     fn default() -> Self {
         Self {
             last_index: None,
@@ -266,12 +266,12 @@ impl<C: Diffable> Default for DiffLog<C> {
 
 /// Receiver-side state for applying diff patches exactly once and in order.
 #[derive(Component, Debug)]
-pub struct DiffReceiver<C: Diffable> {
+pub struct PatchBuffer<C: Diffable> {
     last_applied: Option<PatchIndex>,
     pending: BTreeMap<PatchIndex, PatchBatch<C::Patch>>,
 }
 
-impl<C: Diffable> DiffReceiver<C> {
+impl<C: Diffable> PatchBuffer<C> {
     pub fn new(cursor: Option<PatchIndex>) -> Self {
         Self {
             last_applied: cursor,
@@ -323,7 +323,7 @@ impl<C: Diffable> DiffReceiver<C> {
     }
 }
 
-impl<C: Diffable> Default for DiffReceiver<C> {
+impl<C: Diffable> Default for PatchBuffer<C> {
     fn default() -> Self {
         Self::new(None)
     }
@@ -356,7 +356,7 @@ enum DiffWireRef<'a, C, Patch> {
 
 /// Extension trait for recording diff patches on an entity.
 pub trait DiffEntityExt {
-    /// Applies `patch` to component `C` and records it in the entity's [`DiffLog`].
+    /// Applies `patch` to component `C` and records it in the entity's [`PatchHistory`].
     ///
     /// For [`EntityCommands`], this queues the patch application. Missing components
     /// or patch application errors are reported when commands are applied.
@@ -392,15 +392,15 @@ fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityMut, patch: C::Patch) -
         component.apply_patch(&patch)?;
     }
 
-    let mut log = entity.get_mut::<DiffLog<C>>().ok_or_else(|| {
+    let mut history = entity.get_mut::<PatchHistory<C>>().ok_or_else(|| {
         format!(
             "entity `{}` is missing `{}`; register `{}` with `replicate_diff`",
             entity_id,
-            ShortName::of::<DiffLog<C>>(),
+            ShortName::of::<PatchHistory<C>>(),
             ShortName::of::<C>(),
         )
     })?;
-    log.record(patch);
+    history.record(patch);
 
     Ok(())
 }
@@ -409,12 +409,12 @@ fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityMut, patch: C::Patch) -
 ///
 /// Diff components still use [`RuleFns`](crate::shared::replication::registry::rule_fns::RuleFns)
 /// for snapshot payloads and receive-side deserialization. `DiffFns` stores the
-/// extra state needed to serialize patches: the `DiffLog<C>` component ID and a
-/// type-erased serializer that can read both the component and its log.
+/// extra state needed to serialize patches: the `PatchHistory<C>` component ID and a
+/// type-erased serializer that can read both the component and its patch history.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DiffFns {
-    /// Component ID for `DiffLog<C>` associated with the diff component.
-    pub(crate) log_component_id: Option<ComponentId>,
+    /// Component ID for `PatchHistory<C>` associated with the diff component.
+    pub(crate) history_component_id: Option<ComponentId>,
     pub(crate) register_required_components:
         fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
     serialize_mutation: unsafe fn(
@@ -429,14 +429,14 @@ pub(crate) struct DiffFns {
 impl DiffFns {
     pub(crate) fn new<C: Diffable>() -> Self {
         Self {
-            log_component_id: None,
+            history_component_id: None,
             register_required_components: register_required_components::<C>,
             serialize_mutation: serialize_mutation::<C>,
         }
     }
 
-    pub(crate) fn log_component_id(&self) -> ComponentId {
-        self.log_component_id
+    pub(crate) fn history_component_id(&self) -> ComponentId {
+        self.history_component_id
             .expect("diff functions should be registered before use")
     }
 
@@ -447,16 +447,16 @@ impl DiffFns {
     ///
     /// # Safety
     ///
-    /// `component` must point to `C`, and `log` must point to `DiffLog<C>`.
+    /// `component` must point to `C`, and `history` must point to `PatchHistory<C>`.
     pub(crate) unsafe fn serialize_mutation(
         &self,
         ctx: &SerializeCtx,
         component: Ptr,
-        log: Ptr,
+        history: Ptr,
         base_cursor: Option<PatchIndex>,
         message: &mut Vec<u8>,
     ) -> Result<Option<PatchIndex>> {
-        unsafe { (self.serialize_mutation)(ctx, component, log, base_cursor, message) }
+        unsafe { (self.serialize_mutation)(ctx, component, history, base_cursor, message) }
     }
 }
 
@@ -464,24 +464,24 @@ pub(crate) fn register_required_components<C: Diffable>(
     world: &mut World,
     registry: &mut ReplicationRegistry,
 ) -> ComponentId {
-    world.register_required_components::<C, DiffLog<C>>();
+    world.register_required_components::<C, PatchHistory<C>>();
     registry.set_receive_fns::<C>(world, write::<C>, remove::<C>);
-    world.register_component::<DiffLog<C>>()
+    world.register_component::<PatchHistory<C>>()
 }
 
 unsafe fn serialize_mutation<C: Diffable>(
     _ctx: &SerializeCtx,
     component: Ptr,
-    log: Ptr,
+    history: Ptr,
     base_cursor: Option<PatchIndex>,
     message: &mut Vec<u8>,
 ) -> Result<Option<PatchIndex>> {
     let component = unsafe { component.deref::<C>() };
-    let log = unsafe { log.assert_unique().deref_mut::<DiffLog<C>>() };
-    let cursor = log.finish_pending();
+    let history = unsafe { history.assert_unique().deref_mut::<PatchHistory<C>>() };
+    let cursor = history.finish_pending();
 
     let wire: DiffWireRef<'_, C, C::Patch> =
-        match base_cursor.and_then(|cursor| log.batches_after(cursor)) {
+        match base_cursor.and_then(|cursor| history.batches_after(cursor)) {
             Some(batches) if !batches.is_empty() => DiffWireRef::Patches {
                 first_patch_index: batches.first_index(),
                 patches: batches,
@@ -499,9 +499,9 @@ unsafe fn serialize_mutation<C: Diffable>(
 /// Serializes a full snapshot when only the component is available.
 ///
 /// The normal server path uses [`DiffFns::serialize_mutation`] because it can
-/// access the component's [`DiffLog`]. This function is the [`RuleFns`] snapshot
+/// access the component's [`PatchHistory`]. This function is the [`RuleFns`] snapshot
 /// serializer for generic paths that only receive `&C`.
-pub(crate) fn serialize_snapshot_without_log<C: Diffable>(
+pub(crate) fn serialize_snapshot_without_history<C: Diffable>(
     _ctx: &SerializeCtx,
     component: &C,
     message: &mut Vec<u8>,
@@ -574,14 +574,14 @@ pub(crate) fn write<C: Diffable>(
             } else {
                 entity.insert(value);
             }
-            entity.insert(DiffReceiver::<C>::new(cursor));
+            entity.insert(PatchBuffer::<C>::new(cursor));
         }
         DiffWire::Patches {
             first_patch_index,
             patches,
         } => {
             let ready_batches = {
-                let mut receiver = entity.get_mut::<DiffReceiver<C>>().ok_or_else(|| {
+                let mut receiver = entity.get_mut::<PatchBuffer<C>>().ok_or_else(|| {
                     format!(
                         "received diff patches for `{}` before a snapshot",
                         ShortName::of::<C>()
@@ -610,8 +610,8 @@ pub(crate) fn write<C: Diffable>(
 pub(crate) fn remove<C: Diffable>(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
     entity
         .remove::<C>()
-        .remove::<DiffLog<C>>()
-        .remove::<DiffReceiver<C>>();
+        .remove::<PatchHistory<C>>()
+        .remove::<PatchBuffer<C>>();
 }
 
 #[cfg(test)]
@@ -632,13 +632,13 @@ mod tests {
 
     #[test]
     fn batches_after_returns_retained_batches_after_cursor() {
-        let mut log = DiffLog::<TestDiff>::default();
-        log.record(1);
-        log.finish_pending();
-        log.record(2);
-        log.finish_pending();
+        let mut history = PatchHistory::<TestDiff>::default();
+        history.record(1);
+        history.finish_pending();
+        history.record(2);
+        history.finish_pending();
 
-        let batches = log.batches_after(0).unwrap();
+        let batches = history.batches_after(0).unwrap();
         assert_eq!(batches.first_index(), 1);
         assert!(!batches.is_empty());
     }

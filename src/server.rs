@@ -687,24 +687,23 @@ fn collect_changes(
                 };
 
                 let diff = if let Some(diff) = fns.diff() {
-                    let log_component_id = diff.log_component_id();
-                    let storage =
-                        archetype
-                            .get_storage_type(log_component_id)
-                            .unwrap_or_else(|| {
-                                panic!("diff log should be present for `{component_id:?}`")
-                            });
-                    let log = unsafe {
+                    let history_component_id = diff.history_component_id();
+                    let storage = archetype
+                        .get_storage_type(history_component_id)
+                        .unwrap_or_else(|| {
+                            panic!("patch history should be present for `{component_id:?}`")
+                        });
+                    let history = unsafe {
                         query
                             .get_component_unchecked(
                                 entity,
                                 archetype.table_id(),
                                 storage,
-                                log_component_id,
+                                history_component_id,
                             )
                             .0
                     };
-                    Some(WritableDiff { fns: diff, log })
+                    Some(WritableDiff { fns: diff, history })
                 } else {
                     None
                 };

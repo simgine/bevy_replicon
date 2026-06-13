@@ -830,7 +830,7 @@ impl AppRuleExt for App {
         C: Diffable,
     {
         self.replicate_with_priority_filtered::<_, F>(
-            1 + F::DEFAULT_PRIORITY,
+            <RuleFns<C> as IntoComponentRules>::DEFAULT_PRIORITY + F::DEFAULT_PRIORITY,
             RuleFns::<C>::new_diff(),
         )
     }
