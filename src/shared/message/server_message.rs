@@ -493,7 +493,7 @@ impl ServerMessage {
             }
         }
 
-        for mut message in client_messages.receive(self.channel_id) {
+        for mut message in client_messages.drain_received(self.channel_id) {
             if !self.independent {
                 let tick = match postcard_utils::from_buf(&mut message) {
                     Ok(tick) => tick,

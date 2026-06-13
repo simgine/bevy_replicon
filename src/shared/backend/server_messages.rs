@@ -54,10 +54,13 @@ impl ServerMessages {
             .map(|(entity, bytes)| (*entity, bytes))
     }
 
-    /// Receives all available messages from clients over a channel.
+    /// Removes and returns all messages received from clients on a channel.
     ///
-    /// All messages will be drained.
-    pub(crate) fn receive<I: Into<usize>>(
+    /// The consuming counterpart of [`Self::iter_received`], mirroring
+    /// [`Self::drain_sent`]. Intended for the messaging backend and for
+    /// middleware that takes inbound traffic before Replicon consumes it (such
+    /// as a link conditioner that delays or drops messages).
+    pub fn drain_received<I: Into<usize>>(
         &mut self,
         channel_id: I,
     ) -> impl Iterator<Item = (Entity, Bytes)> + '_ {
