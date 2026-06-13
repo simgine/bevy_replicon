@@ -7,7 +7,7 @@ use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
-use crate::prelude::*;
+use crate::{prelude::*, shared::replication::diff::Diffable};
 use component::{BundleRules, ComponentRule, IntoComponentRules};
 use filter::{FilterRule, FilterRules};
 
@@ -34,6 +34,26 @@ pub trait AppRuleExt {
     {
         self.replicate_once_filtered::<C, ()>()
     }
+
+    /// Defines a replication rule that sends the initial component state as a snapshot
+    /// and later mutations as logged patches.
+    ///
+    /// The component itself remains the authoritative state. Mutations should be
+    /// performed through [`DiffEntityExt::apply_patch`](crate::shared::replication::diff::DiffEntityExt)
+    /// so Replicon can record patches for efficient per-client resending.
+    ///
+    /// For more details and an example, see [`Diffable`].
+    fn replicate_diff<C>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        self.replicate_diff_filtered::<C, ()>()
+    }
+
+    /// Like [`Self::replicate_diff`], but also adds filters like [`Self::replicate_filtered`].
+    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Diffable;
 
     /// Like [`Self::replicate`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
@@ -805,6 +825,13 @@ pub trait AppRuleExt {
 }
 
 impl AppRuleExt for App {
+    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        self.replicate_with_filtered::<_, F>(RuleFns::<C>::new_diff())
+    }
+
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(
         &mut self,
         priority: usize,

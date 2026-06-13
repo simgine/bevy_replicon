@@ -3,7 +3,9 @@ use core::ops::Range;
 use bevy::prelude::*;
 
 use super::replication_messages::mutations::EntityMutations;
-use crate::shared::replication::registry::component_mask::ComponentMask;
+use crate::shared::replication::{
+    client_ticks::MutatedEntityInfo, registry::component_mask::ComponentMask,
+};
 
 /// Pools for various client components to reuse allocated capacity.
 ///
@@ -12,7 +14,7 @@ use crate::shared::replication::registry::component_mask::ComponentMask;
 pub(super) struct ClientPools {
     /// Entities with bitvecs for components from
     /// [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo).
-    entities: Vec<Vec<(Entity, ComponentMask)>>,
+    entities: Vec<Vec<MutatedEntityInfo>>,
     /// Bitvecs for components from [`Updates`], [`Mutations`] and
     /// [`MutateInfo`](crate::shared::replication::client_ticks::MutateInfo).
     ///
@@ -25,9 +27,10 @@ pub(super) struct ClientPools {
 }
 
 impl ClientPools {
-    pub(super) fn recycle_entities(&mut self, mut entities: Vec<(Entity, ComponentMask)>) {
-        for (_, components) in entities.drain(..) {
-            self.recycle_components(components);
+    pub(super) fn recycle_entities(&mut self, mut entities: Vec<MutatedEntityInfo>) {
+        for mut entity in entities.drain(..) {
+            self.recycle_components(entity.components);
+            entity.patch_cursors.clear();
         }
         self.entities.push(entities);
     }
@@ -56,7 +59,7 @@ impl ClientPools {
         }));
     }
 
-    pub(super) fn take_entities(&mut self) -> Vec<(Entity, ComponentMask)> {
+    pub(super) fn take_entities(&mut self) -> Vec<MutatedEntityInfo> {
         self.entities.pop().unwrap_or_default()
     }
 

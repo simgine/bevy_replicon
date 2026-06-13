@@ -5,7 +5,10 @@ use bevy::{ecs::component::ComponentId, prelude::*, ptr::Ptr};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
+    shared::replication::{
+        diff::{DiffFns, PatchIndex},
+        registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
+    },
 };
 
 /// Single continuous buffer that stores serialized data for messages.
@@ -44,6 +47,19 @@ pub(crate) struct WritableComponent<'a> {
     pub(crate) ctx: SerializeCtx<'a>,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct WritableDiff<'a> {
+    /// Diff functions for the same component type as [`WritableComponent`].
+    pub(crate) fns: DiffFns,
+    /// Pointer to `PatchHistory<C>` for the same component type as [`WritableComponent`].
+    pub(crate) history: Ptr<'a>,
+}
+
+pub(crate) struct WrittenComponent {
+    pub(crate) range: Range<usize>,
+    pub(crate) patch_cursor: Option<PatchIndex>,
+}
+
 impl<'a> WritableComponent<'a> {
     /// Creates a new instance for component data that can be written into a replication message.
     ///
@@ -68,6 +84,49 @@ impl<'a> WritableComponent<'a> {
                 type_registry,
             },
         }
+    }
+
+    /// Writes component data for an update or mutation message.
+    ///
+    /// Without `diff`, this uses normal cached component serialization.
+    /// With `diff`, this writes patches after `base_patch_cursor`. If the cursor
+    /// is [`None`], or if the needed patches were pruned, it writes a snapshot.
+    /// The caller decides whether the returned patch cursor should be tracked in
+    /// mutation ACK bookkeeping.
+    pub(crate) fn write_mutation(
+        &self,
+        serialized: &mut SerializedData,
+        cached_range: &mut Option<Range<usize>>,
+        diff: Option<WritableDiff<'a>>,
+        base_patch_cursor: Option<PatchIndex>,
+    ) -> Result<WrittenComponent> {
+        let Some(diff) = diff else {
+            return Ok(WrittenComponent {
+                range: self.write_cached(serialized, cached_range)?,
+                patch_cursor: None,
+            });
+        };
+
+        let start = serialized.len();
+
+        postcard_utils::to_extend_mut(&self.fns_id, &mut serialized.0)?;
+        // SAFETY: `diff`, `ptr` and `history` were created for the same component type.
+        let cursor = unsafe {
+            diff.fns.serialize_mutation(
+                &self.ctx,
+                self.ptr,
+                diff.history,
+                base_patch_cursor,
+                &mut serialized.0,
+            )?
+        };
+
+        let end = serialized.len();
+        let range = start..end;
+        Ok(WrittenComponent {
+            range,
+            patch_cursor: cursor,
+        })
     }
 }
 

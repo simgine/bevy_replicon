@@ -12,9 +12,10 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
-            client_ticks::{ClientTicks, MutateInfo},
+            client_ticks::{ClientTicks, MutateInfo, MutatedEntityInfo, PatchCursors},
+            diff::PatchIndex,
             mutate_index::MutateIndex,
-            registry::component_mask::ComponentMask,
+            registry::{ComponentIndex, component_mask::ComponentMask},
         },
     },
 };
@@ -72,6 +73,7 @@ impl Mutations {
                 data: pools.take_ranges(),
             },
             components: pools.take_components(),
+            patch_cursors: Default::default(),
         };
 
         match graph_index {
@@ -97,6 +99,23 @@ impl Mutations {
             .expect("entity should be written before adding components");
 
         mutations.ranges.add_data(component);
+    }
+
+    /// Tracks the patch index serialized for a diff component.
+    ///
+    /// When the client ACKs this mutation message, this index becomes the last
+    /// ACKed patch index for the component. Future mutations can then resend all
+    /// delta patches after that index.
+    pub(crate) fn add_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
+        let mutations = self
+            .entity_location
+            .and_then(|location| match location {
+                EntityLocation::Related { index } => self.related[index].last_mut(),
+                EntityLocation::Standalone => self.standalone.last_mut(),
+            })
+            .expect("entity should be written before adding diff cursors");
+
+        mutations.patch_cursors.push((component, cursor));
     }
 
     /// Removes last added entity from [`Self::add_entity`] and returns it.
@@ -190,11 +209,13 @@ impl Mutations {
                 body_size = 0;
             }
 
-            mutate_info.entities.extend(
-                chunk
-                    .iter_mut()
-                    .map(|mutations| (mutations.entity, mem::take(&mut mutations.components))),
-            );
+            mutate_info
+                .entities
+                .extend(chunk.iter_mut().map(|mutations| MutatedEntityInfo {
+                    entity: mutations.entity,
+                    components: mem::take(&mut mutations.components),
+                    patch_cursors: mem::take(&mut mutations.patch_cursors),
+                }));
             chunks_range.end += 1;
             body_size += mutations_size;
         }
@@ -299,6 +320,11 @@ pub(crate) struct EntityMutations {
     ///
     /// Like [`Self::entity`], used for later component acknowledgement.
     pub(super) components: ComponentMask,
+
+    /// Diff patch cursors represented by the serialized component ranges.
+    ///
+    /// These are ACK bookkeeping metadata, paired with [`Self::components`].
+    pub(super) patch_cursors: PatchCursors,
 }
 
 #[derive(Clone, Copy)]

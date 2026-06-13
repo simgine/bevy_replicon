@@ -11,7 +11,10 @@ use log::trace;
 use serde::{Deserialize, Serialize};
 
 use super::receive_markers::ReceiveMarkerIndex;
-use crate::{prelude::*, shared::replication::registry::serde_fns::SerdeFns};
+use crate::{
+    prelude::*,
+    shared::replication::{diff::DiffFns, registry::serde_fns::SerdeFns},
+};
 use component_fns::ComponentFns;
 use ctx::DespawnCtx;
 use receive_fns::{MutWrite, RemoveFn, UntypedReceiveFns, WriteFn};
@@ -156,6 +159,16 @@ impl ReplicationRegistry {
         let fns = unsafe { SerdeFns::new(component_fns, rule_fns) };
 
         (*index, *component_id, fns)
+    }
+
+    /// Returns diff serialization functions for a registered rule, if enabled.
+    pub(crate) fn diff(&self, fns_id: FnsId) -> Option<DiffFns> {
+        let (_, rule_fns) = self
+            .rules
+            .get(fns_id.0)
+            .unwrap_or_else(|| panic!("replication `{fns_id:?}` should be registered first"));
+
+        rule_fns.diff()
     }
 
     /// Returns component ID and its functions from the index.
