@@ -1,5 +1,7 @@
 pub mod backend;
 pub mod client_id;
+#[cfg(feature = "link_conditioner")]
+pub mod link_conditioner;
 pub mod message;
 pub mod protocol;
 pub mod replication;

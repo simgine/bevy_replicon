@@ -776,6 +776,11 @@ pub mod prelude {
 
     #[cfg(feature = "client_diagnostics")]
     pub use super::client::diagnostics::ClientDiagnosticsPlugin;
+
+    #[cfg(feature = "link_conditioner")]
+    pub use super::shared::link_conditioner::{
+        ConditionerConfig, GlobalConditionerConfig, LinkConditionerPlugin,
+    };
 }
 
 pub use bytes;
