@@ -774,10 +774,6 @@ pub trait AppRuleExt {
             let (player_id, player_fns_id) = registry.register_rule_fns(world, RuleFns::<Player>::default());
             let player = ComponentRule::new(player_id, player_fns_id);
 
-            // We skip `replication` registration since it's a special component.
-            // It's automatically inserted on clients after replication and
-            // deserialization from scenes.
-
             vec![transform, player]
         }
     }

@@ -100,6 +100,7 @@ impl Signature {
                 };
 
                 commands.spawn((
+                    Replicated,
                     MeshMaterial2d(material.clone()),
                     Mesh2d(square.clone()),
                     Transform::from_xyz(x, y, 0.0),
@@ -111,17 +112,13 @@ impl Signature {
 
     /// Square location on the chessboard.
     ///
-    /// We want to replicate all squares, so we set [`Replicated`] as a required component.
-    /// We also want entities with this component to be automatically mapped between
+    /// We want entities with this component to be automatically mapped between
     /// client and server, so we require the [`Signature`] component, which generates a hash
     /// based on [`Square`]. Each entity will be spawned with a different value, making the hash
     /// unique. Since spawning on the server is identical, the server will generate the same hashes
     /// for the same squares, and the client will match them to the corresponding local squares.
     #[derive(Component, Serialize, Deserialize, Hash)]
-    #[require(
-        Replicated,
-        Signature::of::<Square>(),
-    )]
+    #[require(Signature::of::<Square>())]
     struct Square {
         /// Column, a..h.
         file: u8,
