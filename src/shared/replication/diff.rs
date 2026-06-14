@@ -140,7 +140,7 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
 #[derive(Component, Debug)]
 pub struct PatchHistory<C: Diffable> {
     last_index: Option<PatchIndex>,
-    batches: VecDeque<PatchBatch<C::Patch>>,
+    batches: VecDeque<Vec<C::Patch>>,
     pending: Vec<C::Patch>,
 }
 
@@ -221,11 +221,9 @@ impl<C: Diffable> PatchHistory<C> {
     }
 }
 
-pub type PatchBatch<Patch> = Vec<Patch>;
-
 pub(crate) struct BatchSlice<'a, Patch> {
     first_index: PatchIndex,
-    batches: vec_deque::Iter<'a, PatchBatch<Patch>>,
+    batches: vec_deque::Iter<'a, Vec<Patch>>,
 }
 
 impl<Patch: Serialize> Serialize for BatchSlice<'_, Patch> {
@@ -255,7 +253,7 @@ impl<C: Diffable> Default for PatchHistory<C> {
 #[derive(Component, Debug)]
 pub struct PatchBuffer<C: Diffable> {
     last_applied: Option<PatchIndex>,
-    pending: BTreeMap<PatchIndex, PatchBatch<C::Patch>>,
+    pending: BTreeMap<PatchIndex, Vec<C::Patch>>,
 }
 
 impl<C: Diffable> PatchBuffer<C> {
@@ -279,8 +277,8 @@ impl<C: Diffable> PatchBuffer<C> {
     pub fn queue_and_take_ready(
         &mut self,
         first_patch_index: PatchIndex,
-        batches: Vec<PatchBatch<C::Patch>>,
-    ) -> impl Iterator<Item = PatchBatch<C::Patch>> + '_ {
+        batches: Vec<Vec<C::Patch>>,
+    ) -> impl Iterator<Item = Vec<C::Patch>> + '_ {
         for (offset, batch) in batches.into_iter().enumerate() {
             let index = first_patch_index + offset as PatchIndex;
             if self
@@ -322,7 +320,7 @@ pub enum DiffWire<C, Patch> {
     },
     Patches {
         first_patch_index: PatchIndex,
-        patches: Vec<PatchBatch<Patch>>,
+        patches: Vec<Vec<Patch>>,
     },
 }
 
