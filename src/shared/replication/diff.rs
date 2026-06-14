@@ -2,6 +2,8 @@
 //!
 //! See [`Diffable`] for the main user-facing API and example.
 
+use core::iter;
+
 use alloc::{
     collections::{BTreeMap, VecDeque},
     format,
@@ -292,7 +294,7 @@ impl<C: Diffable> PatchBuffer<C> {
         &mut self,
         first_patch_index: PatchIndex,
         batches: Vec<PatchBatch<C::Patch>>,
-    ) -> Vec<PatchBatch<C::Patch>> {
+    ) -> impl Iterator<Item = PatchBatch<C::Patch>> + '_ {
         for (offset, batch) in batches.into_iter().enumerate() {
             let index = first_patch_index + offset as PatchIndex;
             if self
@@ -303,15 +305,12 @@ impl<C: Diffable> PatchBuffer<C> {
             }
         }
 
-        let mut ready = Vec::new();
-        while let Some(next_index) = self.next_patch_index()
-            && let Some(batch) = self.pending.remove(&next_index)
-        {
+        iter::from_fn(move || {
+            let next_index = self.next_patch_index()?;
+            let batch = self.pending.remove(&next_index)?;
             self.last_applied = Some(next_index);
-            ready.push(batch);
-        }
-
-        ready
+            Some(batch)
+        })
     }
 
     fn next_patch_index(&self) -> Option<PatchIndex> {
@@ -565,23 +564,10 @@ pub(crate) fn write<C: Diffable>(
             first_patch_index,
             patches,
         } => {
-            let ready_batches = {
-                let mut receiver = entity.get_mut::<PatchBuffer<C>>().ok_or_else(|| {
-                    format!(
-                        "received diff patches for `{}` before a snapshot",
-                        ShortName::of::<C>()
-                    )
-                })?;
-                receiver.queue_and_take_ready(first_patch_index, patches)
-            };
-
-            let mut component = entity.get_mut::<C>().ok_or_else(|| {
-                format!(
-                    "received diff patches for missing `{}`",
-                    ShortName::of::<C>()
-                )
-            })?;
-            for batch in ready_batches {
+            // SAFETY: components don't alias.
+            let (mut component, mut buffer) =
+                unsafe { entity.get_components_mut_unchecked::<(&mut C, &mut PatchBuffer<C>)>()? };
+            for batch in buffer.queue_and_take_ready(first_patch_index, patches) {
                 for patch in batch.iter() {
                     component.apply_patch(patch)?;
                 }
