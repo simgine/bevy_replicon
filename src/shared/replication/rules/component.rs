@@ -15,17 +15,8 @@ pub struct ComponentRule {
     pub fns_id: FnsId,
     /// Replication configuration.
     pub mode: ReplicationMode,
-}
-
-impl ComponentRule {
-    /// Creates a new instance with the default send rate.
-    pub fn new(id: ComponentId, fns_id: FnsId) -> Self {
-        Self {
-            id,
-            fns_id,
-            mode: Default::default(),
-        }
-    }
+    /// Component ID for [`PatchHistory<C>`] associated with the diff component.
+    pub history_id: Option<ComponentId>,
 }
 
 /// Describes how component changes should be replicated.
@@ -59,11 +50,14 @@ pub trait IntoComponentRule {
 
 impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for RuleFns<C> {
     fn into_rule(mut self, world: &mut World, registry: &mut ReplicationRegistry) -> ComponentRule {
-        if let Some(diff) = self.diff_mut() {
-            diff.register(world, registry);
-        }
+        let history_id = self.diff().map(|diff| diff.register(world, registry));
         let (id, fns_id) = registry.register_rule_fns(world, self);
-        ComponentRule::new(id, fns_id)
+        ComponentRule {
+            id,
+            fns_id,
+            mode: Default::default(),
+            history_id,
+        }
     }
 }
 
@@ -158,6 +152,7 @@ macro_rules! impl_into_bundle_rules {
                                 id,
                                 fns_id,
                                 mode: Default::default(),
+                                history_id: None,
                             }
                         },
                     )*

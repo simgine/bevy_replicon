@@ -177,8 +177,8 @@ impl<C: Component> RuleFns<C> {
         (self.consume)(self.deserialize, ctx, message)
     }
 
-    pub(crate) fn diff_mut(&mut self) -> Option<&mut DiffFns> {
-        self.diff.as_mut()
+    pub(crate) fn diff(&mut self) -> Option<DiffFns> {
+        self.diff
     }
 }
 

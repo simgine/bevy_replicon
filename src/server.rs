@@ -687,19 +687,19 @@ fn collect_changes(
                 };
 
                 let diff = if let Some(diff) = fns.diff() {
-                    let history_component_id = diff.history_id();
-                    let storage = archetype
-                        .get_storage_type(history_component_id)
-                        .unwrap_or_else(|| {
-                            panic!("patch history should be present for `{component_id:?}`")
-                        });
+                    let history_id = rule
+                        .history_id
+                        .expect("rules with diff should register history component");
+                    let storage = archetype.get_storage_type(history_id).unwrap_or_else(|| {
+                        panic!("patch history should be present for `{component_id:?}`")
+                    });
                     let history = unsafe {
                         query
                             .get_component_unchecked(
                                 entity,
                                 archetype.table_id(),
                                 storage,
-                                history_component_id,
+                                history_id,
                             )
                             .0
                     };
