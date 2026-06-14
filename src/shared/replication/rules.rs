@@ -57,7 +57,10 @@ pub trait AppRuleExt {
     /// Like [`Self::replicate_diff`], but also adds filters like [`Self::replicate_filtered`].
     fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
     where
-        C: Diffable;
+        C: Diffable,
+    {
+        self.replicate_with_filtered::<_, (F, With<PatchHistory<C>>)>(RuleFns::<C>::new_diff())
+    }
 
     /// Like [`Self::replicate`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
@@ -829,13 +832,6 @@ pub trait AppRuleExt {
 }
 
 impl AppRuleExt for App {
-    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
-    where
-        C: Diffable,
-    {
-        self.replicate_with_filtered::<_, (F, With<PatchHistory<C>>)>(RuleFns::<C>::new_diff())
-    }
-
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(
         &mut self,
         priority: usize,
