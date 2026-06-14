@@ -179,7 +179,8 @@ impl<C: Diffable> PatchHistory<C> {
         }
 
         let first_index = last_index - (self.batches.len() as PatchIndex - 1);
-        if first_index > 0 && cursor < first_index - 1 {
+        let next_index = cursor + 1;
+        if next_index < first_index {
             // Cursor is outside of the history window.
             return None;
         }
@@ -188,9 +189,9 @@ impl<C: Diffable> PatchHistory<C> {
             return None;
         }
 
-        let start = (cursor + 1 - first_index) as usize;
+        let start = (next_index - first_index) as usize;
         Some(BatchSlice {
-            first_index: first_index + start as PatchIndex,
+            first_index: next_index,
             batches: self.batches.range(start..),
         })
     }
