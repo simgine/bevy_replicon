@@ -310,26 +310,27 @@ impl<C: Diffable> Default for PatchBuffer<C> {
 
 /// Wire format for diff replicated components.
 #[derive(Deserialize, Serialize)]
-pub enum DiffWire<C, Patch> {
+#[serde(bound(deserialize = "C: Diffable"))]
+pub enum DiffWire<C: Diffable> {
     Snapshot {
         cursor: Option<PatchIndex>,
         value: C,
     },
     Patches {
         first_patch_index: PatchIndex,
-        patches: Vec<Vec<Patch>>,
+        patches: Vec<Vec<C::Patch>>,
     },
 }
 
 #[derive(Serialize)]
-enum DiffWireRef<'a, C, Patch> {
+enum DiffWireRef<'a, C: Diffable> {
     Snapshot {
         cursor: Option<PatchIndex>,
         value: &'a C,
     },
     Patches {
         first_patch_index: PatchIndex,
-        patches: BatchSlice<'a, Patch>,
+        patches: BatchSlice<'a, C::Patch>,
     },
 }
 
@@ -470,7 +471,7 @@ pub(crate) fn serialize_snapshot_without_history<C: Diffable>(
     component: &C,
     message: &mut Vec<u8>,
 ) -> Result<()> {
-    let wire: DiffWireRef<'_, C, C::Patch> = DiffWireRef::Snapshot {
+    let wire = DiffWireRef::Snapshot {
         cursor: None,
         value: component,
     };
@@ -489,11 +490,11 @@ pub(crate) fn deserialize_snapshot<C: Diffable>(
     message: &mut Bytes,
 ) -> Result<C> {
     match postcard_utils::from_buf(message)? {
-        DiffWire::<C, C::Patch>::Snapshot { mut value, .. } => {
+        DiffWire::Snapshot { mut value, .. } => {
             C::map_entities(&mut value, ctx);
             Ok(value)
         }
-        DiffWire::<C, C::Patch>::Patches { .. } => Err(format!(
+        DiffWire::Patches { .. } => Err(format!(
             "cannot deserialize diff patches into `{}`",
             ShortName::of::<C>()
         )
@@ -515,7 +516,7 @@ pub(crate) fn consume<C: Diffable>(
     _ctx: &mut WriteCtx,
     message: &mut Bytes,
 ) -> Result<()> {
-    let _wire: DiffWire<C, C::Patch> = postcard_utils::from_buf(message)?;
+    let _wire: DiffWire<C> = postcard_utils::from_buf(message)?;
     Ok(())
 }
 
@@ -528,9 +529,7 @@ pub(crate) fn write<C: Diffable>(
     // This is the live receive path for diff components. Snapshots replace or
     // insert the component and reset the receiver cursor; patches are queued and
     // applied only once all earlier patches have been applied.
-    let wire: DiffWire<C, C::Patch> = postcard_utils::from_buf(message)?;
-
-    match wire {
+    match postcard_utils::from_buf(message)? {
         DiffWire::Snapshot { cursor, mut value } => {
             C::map_entities(&mut value, ctx);
             if let Some(mut component) = entity.get_mut::<C>() {

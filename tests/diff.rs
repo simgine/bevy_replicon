@@ -532,8 +532,7 @@ fn write_point_history(
     entity: &mut DeferredEntity,
     message: &mut Bytes,
 ) -> Result<()> {
-    let wire: DiffWire<Points, PointPatch> = postcard_utils::from_buf(message)?;
-    let (cursor, value) = match wire {
+    let (cursor, value) = match postcard_utils::from_buf(message)? {
         DiffWire::Snapshot { cursor, value } => {
             entity.insert(PatchBuffer::<Points>::new(cursor));
             (cursor, value)
@@ -654,7 +653,7 @@ fn points<const N: usize>(points: [(f32, f32); N]) -> Points {
     Points(points.into_iter().map(|(x, y)| Vec2::new(x, y)).collect())
 }
 
-fn wire(wire: DiffWire<Points, PointPatch>) -> Vec<u8> {
+fn wire(wire: DiffWire<Points>) -> Vec<u8> {
     let mut message = Vec::new();
     postcard_utils::to_extend_mut(&wire, &mut message).unwrap();
     message
