@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
-- `ClientMessages::drain_received` and `ServerMessages::drain_received` to consume inbound messages on a channel: the now-public counterpart of `iter_received`, mirroring `drain_sent`.
+- `ClientMessages::drain_received` and `ServerMessages::drain_received` to drain inbound messages on a channel.
 
 ### Changed
 
