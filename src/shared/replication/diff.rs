@@ -2,7 +2,7 @@
 //!
 //! See [`Diffable`] for the main user-facing API and example.
 
-use core::iter;
+use core::{iter, mem};
 
 use alloc::{
     collections::{BTreeMap, VecDeque, vec_deque},
@@ -20,7 +20,7 @@ use bevy::{
     ptr::Ptr,
 };
 use bytes::Bytes;
-use serde::{Deserialize, Serialize, de::DeserializeOwned, ser::SerializeSeq};
+use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned, ser::SerializeSeq};
 
 use crate::{
     postcard_utils,
@@ -165,7 +165,7 @@ impl<C: Diffable> PatchHistory<C> {
             .last_index
             .map_or(0, |last_index| last_index.saturating_add(1));
         self.last_index = Some(index);
-        self.batches.push_back(core::mem::take(&mut self.pending));
+        self.batches.push_back(mem::take(&mut self.pending));
         self.prune_to_limit();
         self.last_index
     }
@@ -227,10 +227,7 @@ pub(crate) struct BatchSlice<'a, Patch> {
 }
 
 impl<Patch: Serialize> Serialize for BatchSlice<'_, Patch> {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> core::result::Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq(Some(self.batches.len()))?;
         for batch in self.batches.clone() {
             seq.serialize_element(batch)?;
