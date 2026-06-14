@@ -334,7 +334,7 @@ fn duplicate_patches_are_ignored_by_receiver() {
     );
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_patch_index: 0,
+            first_index: 0,
             patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
@@ -342,7 +342,7 @@ fn duplicate_patches_are_ignored_by_receiver() {
     );
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_patch_index: 0,
+            first_index: 0,
             patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
@@ -368,7 +368,7 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
     );
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_patch_index: 1,
+            first_index: 1,
             patches: vec![vec![PointPatch::PushBack(Vec2::new(3.0, 3.0))]],
         }),
         fns_id,
@@ -378,7 +378,7 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
 
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_patch_index: 0,
+            first_index: 0,
             patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
@@ -396,7 +396,7 @@ fn patches_before_snapshot_are_rejected() {
 
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_patch_index: 0,
+            first_index: 0,
             patches: vec![vec![PointPatch::PushBack(Vec2::new(1.0, 1.0))]],
         }),
         fns_id,
@@ -511,7 +511,7 @@ fn write_point_history(
             (cursor, value)
         }
         DiffWire::Patches {
-            first_patch_index,
+            first_index,
             patches,
         } => {
             if patches.is_empty() {
@@ -520,8 +520,8 @@ fn write_point_history(
             // Batch N transforms state cursor N - 1 into cursor N. Batch 0
             // transforms the pre-patch base, represented by `None`, into
             // cursor `Some(0)`.
-            let base_cursor = first_patch_index.checked_sub(1);
-            let cursor = Some(first_patch_index + patches.len() as PatchIndex - 1);
+            let base_cursor = first_index.checked_sub(1);
+            let cursor = Some(first_index + patches.len() as PatchIndex - 1);
             // The base must come from a confirmed value in the history: consumers
             // like prediction/interpolation may locally mutate the live component,
             // so it can never be used as a patch base.

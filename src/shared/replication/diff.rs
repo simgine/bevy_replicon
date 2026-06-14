@@ -271,11 +271,11 @@ impl<C: Diffable> PatchBuffer<C> {
     /// received. Duplicate or already-applied batches are ignored.
     pub fn queue_and_take_ready(
         &mut self,
-        first_patch_index: PatchIndex,
+        first_index: PatchIndex,
         batches: Vec<Vec<C::Patch>>,
     ) -> impl Iterator<Item = Vec<C::Patch>> + '_ {
         for (offset, batch) in batches.into_iter().enumerate() {
-            let index = first_patch_index + offset as PatchIndex;
+            let index = first_index + offset as PatchIndex;
             if self
                 .last_applied
                 .is_none_or(|last_applied| index > last_applied)
@@ -315,7 +315,7 @@ pub enum DiffWire<C: Diffable> {
         value: C,
     },
     Patches {
-        first_patch_index: PatchIndex,
+        first_index: PatchIndex,
         patches: Vec<Vec<C::Patch>>,
     },
 }
@@ -327,7 +327,7 @@ enum DiffWireRef<'a, C: Diffable> {
         value: &'a C,
     },
     Patches {
-        first_patch_index: PatchIndex,
+        first_index: PatchIndex,
         patches: BatchSlice<'a, C::Patch>,
     },
 }
@@ -445,7 +445,7 @@ unsafe fn serialize_mutation<C: Diffable>(
 
     let wire = match base_cursor.and_then(|cursor| history.batches_after(cursor)) {
         Some(slice) if slice.batches.len() != 0 => DiffWireRef::Patches {
-            first_patch_index: slice.first_index,
+            first_index: slice.first_index,
             patches: slice,
         },
         _ => DiffWireRef::Snapshot {
@@ -537,13 +537,13 @@ pub(crate) fn write<C: Diffable>(
             entity.insert(PatchBuffer::<C>::new(cursor));
         }
         DiffWire::Patches {
-            first_patch_index,
+            first_index,
             patches,
         } => {
             // SAFETY: components don't alias.
             let (mut component, mut buffer) =
                 unsafe { entity.get_components_mut_unchecked::<(&mut C, &mut PatchBuffer<C>)>()? };
-            for batch in buffer.queue_and_take_ready(first_patch_index, patches) {
+            for batch in buffer.queue_and_take_ready(first_index, patches) {
                 for patch in batch.iter() {
                     component.apply_patch(patch)?;
                 }
