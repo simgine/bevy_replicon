@@ -367,7 +367,22 @@ pub trait DiffEntityExt {
 
 impl DiffEntityExt for EntityWorldMut<'_> {
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
-        apply_patch_to_entity::<C>(self, patch)
+        let entity = self.id();
+        let mut component = self
+            .get_mut::<C>()
+            .ok_or_else(|| format!("`{entity}` doesn't have `{}`", ShortName::of::<C>()))?;
+        component.apply_patch(&patch)?;
+
+        if !self.contains::<PatchHistory<C>>() {
+            self.insert(PatchHistory::<C>::default());
+        }
+
+        let mut history = self
+            .get_mut::<PatchHistory<C>>()
+            .expect("patch history should exist after insertion");
+        history.record(patch);
+
+        Ok(())
     }
 }
 
@@ -376,27 +391,6 @@ impl DiffEntityExt for EntityCommands<'_> {
         self.queue(move |mut entity: EntityWorldMut| entity.apply_patch::<C>(patch));
         Ok(())
     }
-}
-
-fn apply_patch_to_entity<C: Diffable>(entity: &mut EntityWorldMut, patch: C::Patch) -> Result<()> {
-    let entity_id = entity.id();
-    {
-        let mut component = entity
-            .get_mut::<C>()
-            .ok_or_else(|| format!("entity `{entity_id}` is missing `{}`", ShortName::of::<C>()))?;
-        component.apply_patch(&patch)?;
-    }
-
-    if !entity.contains::<PatchHistory<C>>() {
-        entity.insert(PatchHistory::<C>::default());
-    }
-
-    let mut history = entity
-        .get_mut::<PatchHistory<C>>()
-        .expect("patch history should exist after insertion");
-    history.record(patch);
-
-    Ok(())
 }
 
 /// Diff functions for server-side serialization.
