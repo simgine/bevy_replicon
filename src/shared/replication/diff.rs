@@ -445,17 +445,16 @@ unsafe fn serialize_mutation<C: Diffable>(
     let history = unsafe { history.assert_unique().deref_mut::<PatchHistory<C>>() };
     let cursor = history.finish_pending();
 
-    let wire: DiffWireRef<'_, C, C::Patch> =
-        match base_cursor.and_then(|cursor| history.batches_after(cursor)) {
-            Some(slice) if slice.batches.len() != 0 => DiffWireRef::Patches {
-                first_patch_index: slice.first_index,
-                patches: slice,
-            },
-            _ => DiffWireRef::Snapshot {
-                cursor,
-                value: component,
-            },
-        };
+    let wire = match base_cursor.and_then(|cursor| history.batches_after(cursor)) {
+        Some(slice) if slice.batches.len() != 0 => DiffWireRef::Patches {
+            first_patch_index: slice.first_index,
+            patches: slice,
+        },
+        _ => DiffWireRef::Snapshot {
+            cursor,
+            value: component,
+        },
+    };
     postcard_utils::to_extend_mut(&wire, message)?;
 
     Ok(cursor)
