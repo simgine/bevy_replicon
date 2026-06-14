@@ -373,14 +373,13 @@ impl DiffEntityExt for EntityWorldMut<'_> {
             .ok_or_else(|| format!("`{entity}` doesn't have `{}`", ShortName::of::<C>()))?;
         component.apply_patch(&patch)?;
 
-        if !self.contains::<PatchHistory<C>>() {
-            self.insert(PatchHistory::<C>::default());
+        if let Some(mut history) = self.get_mut::<PatchHistory<C>>() {
+            history.record(patch);
+        } else {
+            let mut history = PatchHistory::<C>::default();
+            history.record(patch);
+            self.insert(history);
         }
-
-        let mut history = self
-            .get_mut::<PatchHistory<C>>()
-            .expect("patch history should exist after insertion");
-        history.record(patch);
 
         Ok(())
     }
