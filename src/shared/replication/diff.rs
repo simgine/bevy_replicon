@@ -56,9 +56,7 @@ pub type PatchIndex = u64;
 /// [`Self::HISTORY_LEN`] to tune how many patches are kept before snapshot fallback
 /// becomes necessary.
 ///
-/// Components without sender-side [`PatchHistory`] don't match diff replication
-/// rules. [`DiffEntityExt::apply_patch`] inserts this history automatically. Direct
-/// component mutations are still supported after history exists, but they are not
+/// Direct component mutations are still supported after history exists, but they are not
 /// recorded as patches and will be sent as a snapshot fallback.
 ///
 /// # Example
@@ -135,8 +133,8 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
 
 /// Patch history associated with a [`Diffable`].
 ///
-/// This sender-side component is inserted lazily when recording patches. It is
-/// not replicated directly.
+/// This component is registered as a required component for diff components.
+/// It is not replicated directly.
 #[derive(Component, Debug)]
 pub struct PatchHistory<C: Diffable> {
     last_index: Option<PatchIndex>,
@@ -338,9 +336,6 @@ enum DiffWireRef<'a, C: Diffable> {
 pub trait DiffEntityExt {
     /// Applies `patch` to component `C` and records it in the entity's [`PatchHistory`].
     ///
-    /// [`EntityWorldMut`] and [`EntityCommands`] insert missing patch history before
-    /// recording.
-    ///
     /// For [`EntityCommands`], this queues the patch application. Missing components
     /// or patch application errors are reported when commands are applied.
     fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()>;
@@ -354,13 +349,14 @@ impl DiffEntityExt for EntityWorldMut<'_> {
             .ok_or_else(|| format!("`{entity}` doesn't have `{}`", ShortName::of::<C>()))?;
         component.apply_patch(&patch)?;
 
-        if let Some(mut history) = self.get_mut::<PatchHistory<C>>() {
-            history.record(patch);
-        } else {
-            let mut history = PatchHistory::<C>::default();
-            history.record(patch);
-            self.insert(history);
-        }
+        let mut history = self.get_mut::<PatchHistory<C>>().ok_or_else(|| {
+            format!(
+                "`{entity}` doesn't have `{}`",
+                ShortName::of::<PatchHistory<C>>()
+            )
+        })?;
+
+        history.record(patch);
 
         Ok(())
     }
@@ -431,6 +427,7 @@ fn register_diff_state<C: Diffable>(
     world: &mut World,
     registry: &mut ReplicationRegistry,
 ) -> ComponentId {
+    world.register_required_components::<C, PatchHistory<C>>();
     registry.set_receive_fns::<C>(world, write::<C>, remove::<C>);
     world.register_component::<PatchHistory<C>>()
 }
@@ -590,17 +587,5 @@ mod tests {
         let slice = history.batches_after(0).unwrap();
         assert_eq!(slice.first_index, 1);
         assert_ne!(slice.batches.len(), 0);
-    }
-
-    #[test]
-    fn entity_world_mut_apply_patch_inserts_missing_history() {
-        let mut world = World::new();
-        let entity = world.spawn(TestDiff(0)).id();
-
-        world.entity_mut(entity).apply_patch::<TestDiff>(1).unwrap();
-
-        let entity = world.entity(entity);
-        assert_eq!(entity.get::<TestDiff>().unwrap().0, 1);
-        assert!(entity.contains::<PatchHistory<TestDiff>>());
     }
 }

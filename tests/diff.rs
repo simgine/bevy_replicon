@@ -62,29 +62,6 @@ struct HistoryMarker;
 struct PointHistory(Vec<(RepliconTick, Option<PatchIndex>, Points)>);
 
 #[test]
-fn component_without_patch_history_is_not_replicated() {
-    let (mut server_app, mut client_app) = setup_apps();
-    server_app.connect_client(&mut client_app);
-
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, points([(1.0, 1.0)])))
-        .id();
-
-    replicate_and_ack(&mut server_app, &mut client_app);
-    assert_client_has_no_points(&mut client_app);
-
-    server_app
-        .world_mut()
-        .entity_mut(server_entity)
-        .apply_patch::<Points>(PointPatch::PushBack(Vec2::new(2.0, 2.0)))
-        .unwrap();
-    replicate_and_ack(&mut server_app, &mut client_app);
-
-    assert_client_points(&mut client_app, [(1.0, 1.0), (2.0, 2.0)]);
-}
-
-#[test]
 fn initial_snapshot_patches_and_direct_snapshot_fallback_replicate() {
     let (mut server_app, mut client_app) = setup_apps();
     server_app.connect_client(&mut client_app);
@@ -327,7 +304,7 @@ fn removal_removes_receiver_state() {
     let entity = client_app.world().entity(client_entity);
     assert!(entity.contains::<Points>());
     assert!(entity.contains::<PatchBuffer<Points>>());
-    assert!(!entity.contains::<PatchHistory<Points>>());
+    assert!(entity.contains::<PatchHistory<Points>>());
 
     server_app
         .world_mut()
@@ -463,11 +440,7 @@ fn setup_history_app() -> App {
 
 fn spawn_replicated_points<const N: usize>(app: &mut App, points: [(f32, f32); N]) -> Entity {
     app.world_mut()
-        .spawn((
-            Replicated,
-            self::points(points),
-            PatchHistory::<Points>::default(),
-        ))
+        .spawn((Replicated, self::points(points)))
         .id()
 }
 
@@ -589,11 +562,6 @@ fn remove_point_history(_ctx: &mut RemoveCtx, entity: &mut DeferredEntity) {
 
 fn assert_client_points<const N: usize>(client_app: &mut App, expected: [(f32, f32); N]) {
     assert_client_points_slice(client_app, &expected);
-}
-
-fn assert_client_has_no_points(client_app: &mut App) {
-    let mut points = client_app.world_mut().query::<&Points>();
-    assert_eq!(points.iter(client_app.world()).len(), 0);
 }
 
 fn assert_client_point_values(client_app: &mut App, expected: impl IntoIterator<Item = i32>) {

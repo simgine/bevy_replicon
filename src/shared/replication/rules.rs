@@ -7,10 +7,7 @@ use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
-use crate::{
-    prelude::*,
-    shared::replication::diff::{Diffable, PatchHistory},
-};
+use crate::{prelude::*, shared::replication::diff::Diffable};
 use component::{BundleRules, ComponentRule, IntoComponentRules};
 use filter::{FilterRule, FilterRules};
 
@@ -42,8 +39,7 @@ pub trait AppRuleExt {
     /// when it changes, this sends a list of patches.
     ///
     /// All mutations should be performed through [`DiffEntityExt::apply_patch`],
-    /// which records the changes. Entities with `C` are replicated only after
-    /// sender-side [`PatchHistory`] is present.
+    /// which records the changes.
     ///
     /// See [`Diffable`] for more details.
     fn replicate_diff<C>(&mut self) -> &mut Self
@@ -58,7 +54,7 @@ pub trait AppRuleExt {
     where
         C: Diffable,
     {
-        self.replicate_with_filtered::<_, (F, With<PatchHistory<C>>)>(RuleFns::<C>::new_diff())
+        self.replicate_with_filtered::<_, F>(RuleFns::<C>::new_diff())
     }
 
     /// Like [`Self::replicate`], but converts the component into `T` before serialization
