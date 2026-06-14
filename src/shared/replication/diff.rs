@@ -382,8 +382,8 @@ impl DiffEntityExt for EntityCommands<'_> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DiffFns {
     /// Component ID for `PatchHistory<C>` associated with the diff component.
-    pub(crate) history_component_id: Option<ComponentId>,
-    pub(crate) register_diff_state: fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
+    history_component_id: Option<ComponentId>,
+    register: fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
     serialize_mutation: unsafe fn(
         &SerializeCtx,
         Ptr,
@@ -397,9 +397,17 @@ impl DiffFns {
     pub(crate) fn new<C: Diffable>() -> Self {
         Self {
             history_component_id: None,
-            register_diff_state: register_diff_state::<C>,
+            register: register_diff_state::<C>,
             serialize_mutation: serialize_mutation::<C>,
         }
+    }
+
+    pub(crate) fn register(&mut self, world: &mut World, registry: &mut ReplicationRegistry) {
+        debug_assert!(
+            self.history_component_id.is_none(),
+            "should be registered only once"
+        );
+        self.history_component_id = Some((self.register)(world, registry));
     }
 
     pub(crate) fn history_component_id(&self) -> ComponentId {
@@ -427,7 +435,7 @@ impl DiffFns {
     }
 }
 
-pub(crate) fn register_diff_state<C: Diffable>(
+fn register_diff_state<C: Diffable>(
     world: &mut World,
     registry: &mut ReplicationRegistry,
 ) -> ComponentId {

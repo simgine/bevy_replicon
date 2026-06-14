@@ -4,10 +4,7 @@ use bevy::prelude::*;
 use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
 
-use super::{
-    ReplicationRegistry,
-    ctx::{SerializeCtx, WriteCtx},
-};
+use super::ctx::{SerializeCtx, WriteCtx};
 use crate::{
     postcard_utils,
     shared::replication::diff::{self, DiffFns, Diffable},
@@ -180,13 +177,8 @@ impl<C: Component> RuleFns<C> {
         (self.consume)(self.deserialize, ctx, message)
     }
 
-    /// Registers diff state for this rule, if diff replication is enabled.
-    pub(crate) fn register_diff(&mut self, world: &mut World, registry: &mut ReplicationRegistry) {
-        if let Some(diff) = &mut self.diff
-            && diff.history_component_id.is_none()
-        {
-            diff.history_component_id = Some((diff.register_diff_state)(world, registry));
-        }
+    pub(crate) fn diff_mut(&mut self) -> Option<&mut DiffFns> {
+        self.diff.as_mut()
     }
 }
 
