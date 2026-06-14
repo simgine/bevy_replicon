@@ -14,6 +14,7 @@ use bevy::{
     ecs::{
         archetype::Archetypes,
         change_detection::{CheckChangeTicks, Tick},
+        component::StorageType,
         entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -690,18 +691,14 @@ fn collect_changes(
                     let history_id = rule
                         .history_id
                         .expect("rules with diff should register history component");
-                    let storage = archetype.get_storage_type(history_id).unwrap_or_else(|| {
-                        panic!("patch history should be present for `{component_id:?}`")
-                    });
-                    let history = unsafe {
-                        query
-                            .get_component_unchecked(
-                                entity,
-                                archetype.table_id(),
-                                storage,
-                                history_id,
-                            )
-                            .0
+                    // SAFETY: history component is registered as required and always has table storage.
+                    let (history, _) = unsafe {
+                        query.get_component_unchecked(
+                            entity,
+                            archetype.table_id(),
+                            StorageType::Table,
+                            history_id,
+                        )
                     };
                     Some(WritableDiff { fns: diff, history })
                 } else {
