@@ -17,10 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Replicated removals now also remove all required components. This may be unexpected if you set `Replicated` as a required component, because removing it also pauses replication. Use `remove_without_requires` with `AppMarkerExt::set_receive_fns` to restore the old behavior.
 
-### Removed
-
-- `ComponentRule::new`. Can be constructed with direct field initialization.
-
 ## [0.40.3] - 2026-06-02
 
 ### Added

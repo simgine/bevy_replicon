@@ -19,6 +19,18 @@ pub struct ComponentRule {
     pub history_id: Option<ComponentId>,
 }
 
+impl ComponentRule {
+    /// Creates a new instance with the default send rate.
+    pub fn new(id: ComponentId, fns_id: FnsId) -> Self {
+        Self {
+            id,
+            fns_id,
+            mode: Default::default(),
+            history_id: None,
+        }
+    }
+}
+
 /// Describes how component changes should be replicated.
 ///
 /// Used inside [`ComponentRule`].
