@@ -382,7 +382,7 @@ impl DiffEntityExt for EntityCommands<'_> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DiffFns {
     /// Component ID for `PatchHistory<C>` associated with the diff component.
-    history_component_id: Option<ComponentId>,
+    history_id: Option<ComponentId>,
     register: fn(&mut World, &mut ReplicationRegistry) -> ComponentId,
     serialize_mutation: unsafe fn(
         &SerializeCtx,
@@ -396,23 +396,19 @@ pub(crate) struct DiffFns {
 impl DiffFns {
     pub(crate) fn new<C: Diffable>() -> Self {
         Self {
-            history_component_id: None,
+            history_id: None,
             register: register_diff_state::<C>,
             serialize_mutation: serialize_mutation::<C>,
         }
     }
 
     pub(crate) fn register(&mut self, world: &mut World, registry: &mut ReplicationRegistry) {
-        debug_assert!(
-            self.history_component_id.is_none(),
-            "should be registered only once"
-        );
-        self.history_component_id = Some((self.register)(world, registry));
+        debug_assert!(self.history_id.is_none(), "should be registered only once");
+        self.history_id = Some((self.register)(world, registry));
     }
 
-    pub(crate) fn history_component_id(&self) -> ComponentId {
-        self.history_component_id
-            .expect("diff functions should be registered before use")
+    pub(crate) fn history_id(&self) -> ComponentId {
+        self.history_id.expect("should be registered before use")
     }
 
     /// Serializes patches after `base_cursor`, or a snapshot if required.

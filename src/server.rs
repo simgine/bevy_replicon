@@ -687,7 +687,7 @@ fn collect_changes(
                 };
 
                 let diff = if let Some(diff) = fns.diff() {
-                    let history_component_id = diff.history_component_id();
+                    let history_component_id = diff.history_id();
                     let storage = archetype
                         .get_storage_type(history_component_id)
                         .unwrap_or_else(|| {
