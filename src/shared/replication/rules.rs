@@ -38,15 +38,14 @@ pub trait AppRuleExt {
         self.replicate_once_filtered::<C, ()>()
     }
 
-    /// Defines a replication rule that sends the initial component state as a snapshot
-    /// and later mutations as logged patches.
+    /// Like [`Self::replicate`], but instead of re-sending the entire component
+    /// when it changes, this sends a list of patches.
     ///
-    /// The component itself remains the authoritative state. Mutations should be
-    /// performed through [`DiffEntityExt::apply_patch`](crate::shared::replication::diff::DiffEntityExt)
-    /// so Replicon can record patches for efficient per-client resending. Entities
-    /// with `C` are replicated only after sender-side [`PatchHistory`] is present.
+    /// All mutations should be performed through [`DiffEntityExt::apply_patch`],
+    /// which records the changes. Entities with `C` are replicated only after
+    /// sender-side [`PatchHistory`] is present.
     ///
-    /// For more details and an example, see [`Diffable`].
+    /// See [`Diffable`] for more details.
     fn replicate_diff<C>(&mut self) -> &mut Self
     where
         C: Diffable,
