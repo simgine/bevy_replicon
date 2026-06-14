@@ -7,7 +7,6 @@ use alloc::{
     format,
     vec::Vec,
 };
-use core::marker::PhantomData;
 
 use bevy::{
     ecs::{
@@ -141,7 +140,6 @@ pub struct PatchHistory<C: Diffable> {
     last_index: Option<PatchIndex>,
     batches: VecDeque<PatchBatch<C::Patch>>,
     pending: Vec<C::Patch>,
-    _marker: PhantomData<fn() -> C>,
 }
 
 impl<C: Diffable> PatchHistory<C> {
@@ -261,7 +259,6 @@ impl<C: Diffable> Default for PatchHistory<C> {
             last_index: None,
             batches: Default::default(),
             pending: Default::default(),
-            _marker: PhantomData,
         }
     }
 }
