@@ -178,7 +178,7 @@ impl<C: Diffable> PatchHistory<C> {
             return None;
         }
 
-        let first_index = self.first_index();
+        let first_index = last_index - (self.batches.len() as PatchIndex - 1);
         if first_index > 0 && cursor < first_index - 1 {
             // Cursor is outside of the history window.
             return None;
@@ -193,15 +193,6 @@ impl<C: Diffable> PatchHistory<C> {
             first_index: first_index + start as PatchIndex,
             batches: self.batches.range(start..),
         })
-    }
-
-    fn first_index(&self) -> PatchIndex {
-        let last_index = self
-            .last_index
-            .expect("patch index should only be requested when batches exist");
-        debug_assert!(!self.batches.is_empty());
-        debug_assert!(self.batches.len() as PatchIndex - 1 <= last_index);
-        last_index - (self.batches.len() as PatchIndex - 1)
     }
 
     fn prune_to_limit(&mut self) {
