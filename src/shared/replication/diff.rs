@@ -5,7 +5,7 @@
 use core::iter;
 
 use alloc::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, VecDeque, vec_deque},
     format,
     vec::Vec,
 };
@@ -178,15 +178,13 @@ impl<C: Diffable> PatchHistory<C> {
         let Some(last_index) = self.last_index else {
             return Some(BatchSlice {
                 first_index: 0,
-                batches: &self.batches,
-                start: 0,
+                batches: self.batches.iter(),
             });
         };
         if self.batches.is_empty() {
             return (cursor == last_index).then_some(BatchSlice {
                 first_index: last_index.saturating_add(1),
-                batches: &self.batches,
-                start: 0,
+                batches: self.batches.iter(),
             });
         }
 
@@ -202,8 +200,7 @@ impl<C: Diffable> PatchHistory<C> {
         };
         Some(BatchSlice {
             first_index: first_index + start as PatchIndex,
-            batches: &self.batches,
-            start,
+            batches: self.batches.range(start..),
         })
     }
 
@@ -228,18 +225,7 @@ pub type PatchBatch<Patch> = Vec<Patch>;
 
 pub(crate) struct BatchSlice<'a, Patch> {
     first_index: PatchIndex,
-    batches: &'a VecDeque<PatchBatch<Patch>>,
-    start: usize,
-}
-
-impl<Patch> BatchSlice<'_, Patch> {
-    fn is_empty(&self) -> bool {
-        self.start == self.batches.len()
-    }
-
-    fn first_index(&self) -> PatchIndex {
-        self.first_index
-    }
+    batches: vec_deque::Iter<'a, PatchBatch<Patch>>,
 }
 
 impl<Patch: Serialize> Serialize for BatchSlice<'_, Patch> {
@@ -247,8 +233,8 @@ impl<Patch: Serialize> Serialize for BatchSlice<'_, Patch> {
         &self,
         serializer: S,
     ) -> core::result::Result<S::Ok, S::Error> {
-        let mut seq = serializer.serialize_seq(Some(self.batches.len() - self.start))?;
-        for batch in self.batches.iter().skip(self.start) {
+        let mut seq = serializer.serialize_seq(Some(self.batches.len()))?;
+        for batch in self.batches.clone() {
             seq.serialize_element(batch)?;
         }
         seq.end()
@@ -466,9 +452,9 @@ unsafe fn serialize_mutation<C: Diffable>(
 
     let wire: DiffWireRef<'_, C, C::Patch> =
         match base_cursor.and_then(|cursor| history.batches_after(cursor)) {
-            Some(batches) if !batches.is_empty() => DiffWireRef::Patches {
-                first_patch_index: batches.first_index(),
-                patches: batches,
+            Some(slice) if slice.batches.len() != 0 => DiffWireRef::Patches {
+                first_patch_index: slice.first_index,
+                patches: slice,
             },
             _ => DiffWireRef::Snapshot {
                 cursor,
@@ -608,9 +594,9 @@ mod tests {
         history.record(2);
         history.finish_pending();
 
-        let batches = history.batches_after(0).unwrap();
-        assert_eq!(batches.first_index(), 1);
-        assert!(!batches.is_empty());
+        let slice = history.batches_after(0).unwrap();
+        assert_eq!(slice.first_index, 1);
+        assert_ne!(slice.batches.len(), 0);
     }
 
     #[test]
