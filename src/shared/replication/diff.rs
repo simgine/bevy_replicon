@@ -168,34 +168,27 @@ impl<C: Diffable> PatchHistory<C> {
         self.last_index
     }
 
-    /// Returns all retained patch batches after `cursor`.
+    /// Returns retained patch batches after `cursor`.
     ///
-    /// Returns `None` if batches needed to continue from `cursor` were already
-    /// pruned and the sender must fall back to a snapshot.
+    /// Returns `None` if patches can't be used and the sender should fall back
+    /// to a snapshot.
     pub(crate) fn batches_after(&self, cursor: PatchIndex) -> Option<BatchSlice<'_, C::Patch>> {
-        let Some(last_index) = self.last_index else {
-            return Some(BatchSlice {
-                first_index: 0,
-                batches: self.batches.iter(),
-            });
-        };
+        let last_index = self.last_index?;
         if self.batches.is_empty() {
-            return (cursor == last_index).then_some(BatchSlice {
-                first_index: last_index.saturating_add(1),
-                batches: self.batches.iter(),
-            });
+            return None;
         }
 
         let first_index = self.first_index();
         if first_index > 0 && cursor < first_index - 1 {
+            // Cursor is outside of the history window.
             return None;
         }
 
-        let start = if cursor >= last_index {
-            self.batches.len()
-        } else {
-            (cursor + 1 - first_index) as usize
-        };
+        if cursor >= last_index {
+            return None;
+        }
+
+        let start = (cursor + 1 - first_index) as usize;
         Some(BatchSlice {
             first_index: first_index + start as PatchIndex,
             batches: self.batches.range(start..),
@@ -444,11 +437,11 @@ unsafe fn serialize_mutation<C: Diffable>(
     let cursor = history.finish_pending();
 
     let wire = match base_cursor.and_then(|cursor| history.batches_after(cursor)) {
-        Some(slice) if slice.batches.len() != 0 => DiffWireRef::Patches {
+        Some(slice) => DiffWireRef::Patches {
             first_index: slice.first_index,
             patches: slice,
         },
-        _ => DiffWireRef::Snapshot {
+        None => DiffWireRef::Snapshot {
             cursor,
             value: component,
         },
