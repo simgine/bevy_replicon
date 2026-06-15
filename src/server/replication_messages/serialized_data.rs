@@ -6,7 +6,7 @@ use crate::{
     postcard_utils,
     prelude::*,
     shared::replication::{
-        diff::{DiffFns, PatchIndex},
+        diff::{DiffFns, patch_index::PatchIndex},
         registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
     },
 };

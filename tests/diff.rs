@@ -157,7 +157,7 @@ fn multiple_patches_in_same_send_share_patch_cursor() {
     replicate_and_ack(&mut server_app, &mut client_app);
 
     assert_client_point_values(&mut client_app, 0..=2);
-    assert_diff_cursor(&server_app, server_entity, Some(0));
+    assert_diff_cursor(&server_app, server_entity, Some(PatchIndex::new(0)));
 
     server_app
         .world_mut()
@@ -167,7 +167,7 @@ fn multiple_patches_in_same_send_share_patch_cursor() {
     replicate_and_ack(&mut server_app, &mut client_app);
 
     assert_client_point_values(&mut client_app, 0..=3);
-    assert_diff_cursor(&server_app, server_entity, Some(1));
+    assert_diff_cursor(&server_app, server_entity, Some(PatchIndex::new(1)));
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn duplicate_patches_are_ignored_by_receiver() {
     );
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_index: 0,
+            first_index: PatchIndex::new(0),
             patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
@@ -342,7 +342,7 @@ fn duplicate_patches_are_ignored_by_receiver() {
     );
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_index: 0,
+            first_index: PatchIndex::new(0),
             patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
@@ -368,7 +368,7 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
     );
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_index: 1,
+            first_index: PatchIndex::new(1),
             patches: vec![vec![PointPatch::PushBack(Vec2::new(3.0, 3.0))]],
         }),
         fns_id,
@@ -378,7 +378,7 @@ fn out_of_order_patches_wait_for_missing_predecessor() {
 
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_index: 0,
+            first_index: PatchIndex::new(0),
             patches: vec![vec![PointPatch::PushBack(Vec2::new(2.0, 2.0))]],
         }),
         fns_id,
@@ -396,7 +396,7 @@ fn patches_before_snapshot_are_rejected() {
 
     entity.apply_write(
         wire(DiffWire::Patches {
-            first_index: 0,
+            first_index: PatchIndex::new(0),
             patches: vec![vec![PointPatch::PushBack(Vec2::new(1.0, 1.0))]],
         }),
         fns_id,
@@ -520,8 +520,8 @@ fn write_point_history(
             // Batch N transforms state cursor N - 1 into cursor N. Batch 0
             // transforms the pre-patch base, represented by `None`, into
             // cursor `Some(0)`.
-            let base_cursor = first_index.checked_sub(1);
-            let cursor = Some(first_index + patches.len() as PatchIndex - 1);
+            let base_cursor = (first_index != PatchIndex::new(0)).then_some(first_index - 1);
+            let cursor = Some(first_index + patches.len() as u16 - 1);
             // The base must come from a confirmed value in the history: consumers
             // like prediction/interpolation may locally mutate the live component,
             // so it can never be used as a patch base.

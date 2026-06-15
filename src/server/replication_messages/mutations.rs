@@ -13,7 +13,7 @@ use crate::{
         backend::channels::ServerChannel,
         replication::{
             client_ticks::{ClientTicks, MutateInfo, MutatedEntityInfo, PatchCursors},
-            diff::PatchIndex,
+            diff::patch_index::PatchIndex,
             mutate_index::MutateIndex,
             registry::{ComponentIndex, component_mask::ComponentMask},
         },

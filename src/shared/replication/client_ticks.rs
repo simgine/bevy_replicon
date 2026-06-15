@@ -12,7 +12,7 @@ use super::mutate_index::MutateIndex;
 use crate::{
     prelude::*,
     shared::replication::{
-        diff::PatchIndex,
+        diff::patch_index::PatchIndex,
         registry::{ComponentIndex, component_mask::ComponentMask},
     },
 };
@@ -183,7 +183,7 @@ impl EntityTicks {
     /// Advances the acknowledged diff patch cursor for `component`.
     ///
     /// Mutation ACKs can arrive late relative to newer mutation ACKs. Keep the
-    /// greatest cursor so an older ACK cannot make the sender resend patches
+    /// newest cursor so an older ACK cannot make the sender resend patches
     /// already acknowledged by a newer packet.
     fn set_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
         if let Some((_, existing)) = self
@@ -191,7 +191,9 @@ impl EntityTicks {
             .iter_mut()
             .find(|(index, _)| *index == component)
         {
-            *existing = (*existing).max(cursor);
+            if cursor.is_newer_than(*existing) {
+                *existing = cursor;
+            }
         } else {
             self.patch_cursors.push((component, cursor));
         }

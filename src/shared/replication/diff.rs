@@ -2,10 +2,12 @@
 //!
 //! See [`Diffable`] for the main user-facing API and example.
 
+pub mod patch_index;
+
 use core::{iter, mem};
 
 use alloc::{
-    collections::{BTreeMap, VecDeque, vec_deque},
+    collections::{VecDeque, vec_deque},
     format,
     vec::Vec,
 };
@@ -16,6 +18,7 @@ use bevy::{
         system::EntityCommands,
         world::EntityWorldMut,
     },
+    platform::collections::HashMap,
     prelude::*,
     ptr::Ptr,
 };
@@ -33,9 +36,7 @@ use crate::{
         },
     },
 };
-
-/// Monotonic index assigned to a sent diff batch.
-pub type PatchIndex = u64;
+use patch_index::PatchIndex;
 
 /// Component whose mutations can be represented as an ordered history of patches.
 ///
@@ -159,9 +160,7 @@ impl<C: Diffable> PatchHistory<C> {
             return self.last_index;
         }
 
-        let index = self
-            .last_index
-            .map_or(0, |last_index| last_index.saturating_add(1));
+        let index = self.last_index.map_or(PatchIndex::new(0), |i| i + 1);
         self.last_index = Some(index);
         self.batches.push_back(mem::take(&mut self.pending));
         self.prune_to_limit();
@@ -178,20 +177,22 @@ impl<C: Diffable> PatchHistory<C> {
             return None;
         }
 
-        let first_index = last_index - (self.batches.len() as PatchIndex - 1);
-        let next_index = cursor + 1;
-        if next_index < first_index {
-            // Cursor is outside of the history window.
+        let missing_count = last_index.distance_after(cursor) as usize;
+        if missing_count == 0 {
+            // Client is already at the latest cursor.
+            // The component was mutated directly.
             return None;
         }
 
-        if cursor >= last_index {
+        if missing_count > self.batches.len() {
+            // Client cursor is outside the history window.
             return None;
         }
 
-        let start = (next_index - first_index) as usize;
+        let start = self.batches.len() - missing_count;
+
         Some(BatchSlice {
-            first_index: next_index,
+            first_index: cursor + 1,
             batches: self.batches.range(start..),
         })
     }
@@ -233,7 +234,7 @@ impl<C: Diffable> Default for PatchHistory<C> {
 #[derive(Component, Debug)]
 pub struct PatchBuffer<C: Diffable> {
     last_applied: Option<PatchIndex>,
-    pending: BTreeMap<PatchIndex, Vec<C::Patch>>,
+    pending: HashMap<PatchIndex, Vec<C::Patch>>,
 }
 
 impl<C: Diffable> PatchBuffer<C> {
@@ -260,28 +261,21 @@ impl<C: Diffable> PatchBuffer<C> {
         batches: Vec<Vec<C::Patch>>,
     ) -> impl Iterator<Item = Vec<C::Patch>> + '_ {
         for (offset, batch) in batches.into_iter().enumerate() {
-            let index = first_index + offset as PatchIndex;
+            let index = first_index + offset as u16;
             if self
                 .last_applied
-                .is_none_or(|last_applied| index > last_applied)
+                .is_none_or(|last_applied| index.is_newer_than(last_applied))
             {
                 self.pending.entry(index).or_insert(batch);
             }
         }
 
         iter::from_fn(move || {
-            let next_index = self.next_patch_index()?;
+            let next_index = self.last_applied.map_or(PatchIndex::new(0), |i| i + 1);
             let batch = self.pending.remove(&next_index)?;
             self.last_applied = Some(next_index);
             Some(batch)
         })
-    }
-
-    fn next_patch_index(&self) -> Option<PatchIndex> {
-        match self.last_applied {
-            Some(index) => index.checked_add(1),
-            None => Some(0),
-        }
     }
 }
 
@@ -569,8 +563,8 @@ mod tests {
         history.record(2);
         history.finish_pending();
 
-        let slice = history.batches_after(0).unwrap();
-        assert_eq!(slice.first_index, 1);
+        let slice = history.batches_after(PatchIndex::new(0)).unwrap();
+        assert_eq!(slice.first_index.get(), 1);
         assert_ne!(slice.batches.len(), 0);
     }
 }
