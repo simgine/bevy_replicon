@@ -781,9 +781,8 @@ fn collect_changes(
                                 .write_cached(&mut serialized, &mut entity_range)?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
-                        let component_range = component
-                            .write_mutation(&mut serialized, &mut component_range, diff, None)?
-                            .range;
+                        let component_range =
+                            component.write_cached(&mut serialized, &mut component_range)?;
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }
