@@ -2,7 +2,7 @@ use core::ops::{Add, Sub};
 
 use serde::{Deserialize, Serialize};
 
-/// Monotonic index assigned to a sent diff batch.
+/// Monotonic index assigned to a diff patch.
 ///
 /// All operations on it are wrapping.
 #[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq, Hash, Clone, Copy)]
