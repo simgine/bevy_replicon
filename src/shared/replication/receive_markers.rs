@@ -149,7 +149,7 @@ pub trait AppMarkerExt {
     struct Health(u32);
     ```
 
-    Don't remove the required components on removal:
+    Remove with required components:
 
     ```
     # use bevy::state::app::StatesPlugin;
@@ -161,7 +161,7 @@ pub trait AppMarkerExt {
     # app.add_plugins((StatesPlugin, RepliconPlugins));
     app.replicate::<Player>().set_receive_fns::<Player>(
         receive_fns::default_write,
-        receive_fns::remove_without_requires::<Player>,
+        receive_fns::remove_with_requires::<Player>,
     );
 
     #[derive(Component, Serialize, Deserialize)]

@@ -9,12 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
-
-### Changed
-
-- Replicated removals now also remove all required components. This may be unexpected if you set `Replicated` as a required component, because removing it also pauses replication. Use `remove_without_requires` with `AppMarkerExt::set_receive_fns` to restore the old behavior.
+- `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
+- `DeferredEntity::remove_with_requires` and `remove_with_requires` helper to customize the removal replication.
 
 ### Fixed
 
