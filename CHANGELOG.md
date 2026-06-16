@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Replicated removals now also remove all required components. This may be unexpected if you set `Replicated` as a required component, because removing it also pauses replication. Use `remove_without_requires` with `AppMarkerExt::set_receive_fns` to restore the old behavior.
 
+### Fixed
+
+- Visibility scope registration now allows up to `u32::BITS` scopes instead of incorrectly panicking after `u8::BITS` scopes.
+
 ## [0.40.3] - 2026-06-02
 
 ### Added
