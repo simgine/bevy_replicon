@@ -51,7 +51,7 @@ impl FilterRegistry {
         world: &mut World,
         registry: &mut ReplicationRegistry,
     ) -> FilterBit {
-        if self.scopes.len() >= u8::BITS as usize {
+        if self.scopes.len() >= u32::BITS as usize {
             panic!("number of visibility scopes can't exceed {}", u32::BITS);
         }
 
@@ -113,8 +113,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn max() {
+        let mut world = World::new();
+        let mut registry = ReplicationRegistry::default();
+        let mut filter_registry = FilterRegistry {
+            scopes: vec![VisibilityScope::Entity; 31],
+            ..Default::default()
+        };
+        filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
+    }
+
+    #[test]
+    #[should_panic]
+    fn beyond_max() {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
