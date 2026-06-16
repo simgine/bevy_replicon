@@ -54,7 +54,7 @@ impl ServerMessages {
             .map(|(entity, bytes)| (*entity, bytes))
     }
 
-    /// Removes and returns all messages received from clients on a channel.
+    /// Removes and returns all received messages on a channel.
     ///
     /// The consuming counterpart of [`Self::iter_received`], mirroring
     /// [`Self::drain_sent`]. Intended for the messaging backend and for tools

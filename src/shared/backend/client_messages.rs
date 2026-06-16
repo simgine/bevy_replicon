@@ -56,7 +56,7 @@ impl ClientMessages {
             .iter()
     }
 
-    /// Removes and returns all messages received from the server on a channel.
+    /// Removes and returns all received messages on a channel.
     ///
     /// The method is called by the Replicon on receive, but can also be used
     /// to filter the inbound traffic.
