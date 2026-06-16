@@ -1,4 +1,7 @@
-use bevy::{ecs::component::ComponentId, prelude::*};
+use bevy::{
+    ecs::{component::ComponentId, entity::EntityAllocator},
+    prelude::*,
+};
 
 use crate::{prelude::*, shared::server_entity_map::ServerEntityMap};
 
@@ -17,7 +20,7 @@ pub struct SerializeCtx<'a> {
 
 /// Replication context for writing and deserialization.
 #[non_exhaustive]
-pub struct WriteCtx<'a, 'w> {
+pub struct WriteCtx<'a> {
     /// Maps server entities to client entities and vice versa.
     pub entity_map: &'a mut ServerEntityMap,
 
@@ -31,13 +34,13 @@ pub struct WriteCtx<'a, 'w> {
     pub message_tick: RepliconTick,
 
     /// World's entities to reserve IDs on new entities inside components.
-    pub(crate) spawner: &'a mut EntitySpawner<'w>,
+    pub(crate) spawner: BufferedSpawner<'a>,
 
     /// Disables mapping logic to avoid spawning entities for consume functions.
     pub(crate) ignore_mapping: bool,
 }
 
-impl EntityMapper for WriteCtx<'_, '_> {
+impl EntityMapper for WriteCtx<'_> {
     fn get_mapped(&mut self, server_entity: Entity) -> Entity {
         if self.ignore_mapping {
             return server_entity;
@@ -70,17 +73,58 @@ pub struct DespawnCtx {
     pub message_tick: RepliconTick,
 }
 
-/// A wrapper around [`World`] for spawning empty entities.
-pub(crate) struct EntitySpawner<'a> {
-    world: &'a mut World,
+/// Buffers entity spawns.
+///
+/// Used during entity mapping to avoid borrowing the world mutably.
+pub(crate) struct BufferedSpawner<'a> {
+    allocator: &'a EntityAllocator,
+    spawn_buffer: &'a mut EntityBuffer,
 }
 
-impl<'a> EntitySpawner<'a> {
-    pub(crate) fn new(world: &'a mut World) -> Self {
-        Self { world }
+impl<'a> BufferedSpawner<'a> {
+    /// Creates a spawner with an empty buffer.
+    pub(crate) fn new(allocator: &'a EntityAllocator, spawn_buffer: &'a mut EntityBuffer) -> Self {
+        debug_assert!(spawn_buffer.is_empty(), "buffer should freed before reuse");
+        Self {
+            allocator,
+            spawn_buffer,
+        }
     }
 
+    /// Buffers an empty entity spawn.
     fn spawn_empty(&mut self) -> Entity {
-        self.world.spawn_empty().id()
+        let entity = self.allocator.alloc();
+        self.spawn_buffer.push(entity);
+        entity
+    }
+}
+
+/// Entities allocated by [`BufferedSpawner`] that have not been spawned yet.
+#[derive(Default, Deref)]
+pub(crate) struct EntityBuffer(Vec<Entity>);
+
+impl EntityBuffer {
+    /// Spawns all buffered entities and clears the buffer.
+    ///
+    /// Should be called before inserting any components that store these
+    /// entities, because hooks/observers may reference them during insertion.
+    pub(crate) fn spawn(&mut self, world: &mut World) {
+        for entity in self.0.drain(..) {
+            world
+                .spawn_empty_at(entity)
+                .expect("all buffered entities must be valid");
+        }
+    }
+
+    /// Frees all buffered entities without spawning them.
+    pub(crate) fn free(&mut self, world: &mut World) {
+        // TODO Bevy 0.19: user `free_many`.
+        for entity in self.0.drain(..) {
+            world.entities_allocator_mut().free(entity);
+        }
+    }
+
+    pub(crate) fn push(&mut self, entity: Entity) {
+        self.0.push(entity);
     }
 }

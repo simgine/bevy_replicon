@@ -20,7 +20,7 @@ use crate::{
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
                 ReplicationRegistry,
-                ctx::{DespawnCtx, EntitySpawner, RemoveCtx, WriteCtx},
+                ctx::{BufferedSpawner, DespawnCtx, EntityBuffer, RemoveCtx, WriteCtx},
             },
             signature::SignatureMap,
             track_mutate_messages::TrackMutateMessages,
@@ -129,6 +129,7 @@ pub(super) fn receive_replication(
     world: &mut World,
     mut changes: Local<DeferredChanges>,
     mut entity_markers: Local<EntityMarkers>,
+    mut entity_buffer: Local<EntityBuffer>,
 ) {
     world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
         world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
@@ -146,6 +147,7 @@ pub(super) fn receive_replication(
                                     let mut params = ReceiveParams {
                                         changes: &mut changes,
                                         entity_markers: &mut entity_markers,
+                                        entity_buffer: &mut entity_buffer,
                                         entity_map: &mut entity_map,
                                         signature_map: &mut signature_map,
                                         replicated: &mut replicated,
@@ -224,6 +226,7 @@ fn apply_replication(
     for mut message in messages.receive(ServerChannel::Updates) {
         if let Err(e) = apply_update_message(world, params, &mut message) {
             error!("unable to apply update message: {e}");
+            params.entity_buffer.free(world);
         }
     }
 
@@ -384,10 +387,13 @@ fn apply_mutate_messages(
                     stats.entities_changed += len;
                 }
             }
-            Err(e) => error!(
-                "unable to apply mutate message for tick `{:?}`: {e}",
-                mutate.message_tick
-            ),
+            Err(e) => {
+                error!(
+                    "unable to apply mutate message for tick `{:?}`: {e}",
+                    mutate.message_tick
+                );
+                params.entity_buffer.free(world);
+            }
         }
 
         if let Some(mutate_ticks) = &mut params.mutate_ticks
@@ -524,9 +530,8 @@ fn apply_changes(
     let data_size: usize = postcard_utils::from_buf(message)?;
 
     let world_cell = world.as_unsafe_world_cell();
-    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
-    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
+    let entity_allocator = world_cell.entities_allocator();
+    // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
     let world = unsafe { world_cell.world_mut() };
 
     let mut client_entity = match params.entity_map.server_entry(server_entity) {
@@ -562,6 +567,7 @@ fn apply_changes(
 
     let mut data = message.split_to(data_size);
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let spawner = BufferedSpawner::new(entity_allocator, params.entity_buffer);
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
@@ -569,7 +575,7 @@ fn apply_changes(
             type_registry: params.type_registry,
             component_id,
             message_tick,
-            spawner: &mut spawner,
+            spawner,
             ignore_mapping: false,
         };
         trace!(
@@ -586,6 +592,10 @@ fn apply_changes(
         stats.components_changed += len;
     }
 
+    // SAFETY: only used to spawn entities.
+    params
+        .entity_buffer
+        .spawn(unsafe { client_entity.world_mut() });
     client_entity.flush();
 
     Ok(())
@@ -660,9 +670,8 @@ fn apply_mutations(
     };
 
     let world_cell = world.as_unsafe_world_cell();
-    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
-    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
+    let entity_allocator = world_cell.entities_allocator();
+    // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
     let world = unsafe { world_cell.world_mut() };
 
     let Ok(mut client_entity) = world
@@ -716,6 +725,7 @@ fn apply_mutations(
 
     let mut data = message.split_to(data_size);
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let spawner = BufferedSpawner::new(entity_allocator, params.entity_buffer);
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
@@ -723,7 +733,7 @@ fn apply_mutations(
             type_registry: params.type_registry,
             component_id,
             message_tick,
-            spawner: &mut spawner,
+            spawner,
             ignore_mapping: false,
         };
         trace!(
@@ -750,6 +760,10 @@ fn apply_mutations(
         stats.components_changed += len;
     }
 
+    // SAFETY: only used to spawn entities.
+    params
+        .entity_buffer
+        .spawn(unsafe { client_entity.world_mut() });
     client_entity.flush();
 
     Ok(())
@@ -761,6 +775,7 @@ fn apply_mutations(
 struct ReceiveParams<'a> {
     changes: &'a mut DeferredChanges,
     entity_markers: &'a mut EntityMarkers,
+    entity_buffer: &'a mut EntityBuffer,
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,
     replicated: &'a mut Messages<EntityReplicated>,

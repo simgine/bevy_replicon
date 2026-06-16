@@ -11,7 +11,7 @@ use crate::{
         replication::{
             deferred_entity::{DeferredChanges, DeferredEntity},
             receive_markers::{EntityMarkers, ReceiveMarkers},
-            registry::ctx::EntitySpawner,
+            registry::ctx::BufferedSpawner,
         },
         server_entity_map::ServerEntityMap,
     },
@@ -138,10 +138,11 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
             world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
                 world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
                     let type_registry = world.resource::<AppTypeRegistry>().clone();
+                    let mut entity_buffer = Default::default();
                     let world_cell = world.as_unsafe_world_cell();
-                    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
-                    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
-                    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
+                    let spawner =
+                        BufferedSpawner::new(world_cell.entities_allocator(), &mut entity_buffer);
+                    // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
                     let world = unsafe { world_cell.world_mut() };
 
                     let mut changes = DeferredChanges::default();
@@ -153,13 +154,15 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                         type_registry: &type_registry,
                         component_id,
                         message_tick,
-                        spawner: &mut spawner,
+                        spawner,
                         ignore_mapping: false,
                     };
 
                     fns.write(&mut ctx, &entity_markers, &mut entity, &mut data.into())
                         .expect("writing data into an entity shouldn't fail");
 
+                    // SAFETY: only used to spawn entities.
+                    entity_buffer.spawn(unsafe { entity.world_mut() });
                     entity.flush();
                 })
             })

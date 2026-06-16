@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Visibility scope registration now allows up to `u32::BITS` scopes instead of incorrectly panicking after `u8::BITS` scopes.
+- Avoid potential UB from aliasing the world during entity spawning.
 
 ## [0.40.3] - 2026-06-02
 
