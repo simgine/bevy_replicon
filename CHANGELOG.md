@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.4] - 2026-06-16
+
 ### Added
 
 - `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
@@ -1102,7 +1104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...HEAD
+[0.40.4]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...v0.40.4
 [0.40.3]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...v0.40.3
 [0.40.2]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1
