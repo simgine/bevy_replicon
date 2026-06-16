@@ -48,7 +48,7 @@ fn single() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
-    assert_eq!(required.iter(client_app.world()).len(), 0);
+    assert_eq!(required.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn receive_fns() {
         .replicate::<A>()
         .set_receive_fns::<A>(
             receive_fns::default_write,
-            receive_fns::remove_without_requires::<A>,
+            receive_fns::remove_with_requires::<A>,
         )
         .finish();
     }
@@ -140,7 +140,7 @@ fn receive_fns() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
-    assert_eq!(required.iter(client_app.world()).len(), 1);
+    assert_eq!(required.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn marker() {
         .replicate::<A>()
         .set_marker_fns::<ReplaceMarker, A>(
             receive_fns::default_write,
-            receive_fns::remove_without_requires::<A>,
+            receive_fns::remove_with_requires::<A>,
         )
         .finish();
     }
@@ -190,7 +190,7 @@ fn marker() {
 
     let client_entity = client_app.world().entity(client_entity);
     assert!(!client_entity.contains::<A>());
-    assert!(client_entity.contains::<Required>());
+    assert!(!client_entity.contains::<Required>());
 }
 
 #[test]
