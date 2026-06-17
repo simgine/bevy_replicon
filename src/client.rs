@@ -183,7 +183,7 @@ pub(super) fn receive_replication(
     world.insert_resource(replicated);
 }
 
-fn cleanup_storage(remove: On<Remove, Remote>, mut storage: ResMut<ReplicationStorage>) {
+fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<ReplicationStorage>>) {
     storage.entities.remove(&remove.entity);
 }
 
@@ -455,6 +455,7 @@ fn apply_despawn(
         // The entity can also be despawned via a relationship when applying
         // despawn to another entity, so we always need to remove it from the map.
         params.signature_map.remove(client_entity);
+        params.storage.entities.remove(&client_entity);
         if let Ok(client_entity) = world.get_entity_mut(client_entity) {
             trace!("applying despawn for `{}`", client_entity.id());
             let ctx = DespawnCtx { message_tick };

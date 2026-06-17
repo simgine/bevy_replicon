@@ -887,7 +887,7 @@ fn send_messages(
     Ok(())
 }
 
-fn cleanup_storage(remove: On<Remove, Replicated>, mut storage: ResMut<ReplicationStorage>) {
+fn cleanup_storage(remove: On<Remove, Replicated>, mut storage: If<ResMut<ReplicationStorage>>) {
     storage.entities.remove(&remove.entity);
 }
 
