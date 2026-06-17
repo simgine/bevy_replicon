@@ -571,10 +571,10 @@ fn apply_changes(
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
-            entity_map: params.entity_map,
-            type_registry: params.type_registry,
             component_id,
             message_tick,
+            entity_map: params.entity_map,
+            type_registry: params.type_registry,
             spawner,
             ignore_mapping: false,
         };
@@ -729,10 +729,10 @@ fn apply_mutations(
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
-            entity_map: params.entity_map,
-            type_registry: params.type_registry,
             component_id,
             message_tick,
+            entity_map: params.entity_map,
+            type_registry: params.type_registry,
             spawner,
             ignore_mapping: false,
         };

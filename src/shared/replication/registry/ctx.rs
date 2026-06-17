@@ -21,17 +21,17 @@ pub struct SerializeCtx<'a> {
 /// Replication context for writing and deserialization.
 #[non_exhaustive]
 pub struct WriteCtx<'a> {
-    /// Maps server entities to client entities and vice versa.
-    pub entity_map: &'a mut ServerEntityMap,
-
-    /// Registry of reflected types.
-    pub type_registry: &'a AppTypeRegistry,
-
     /// ID of the writing component.
     pub component_id: ComponentId,
 
     /// Tick for the currently processing message.
     pub message_tick: RepliconTick,
+
+    /// Maps server entities to client entities and vice versa.
+    pub entity_map: &'a mut ServerEntityMap,
+
+    /// Registry of reflected types.
+    pub type_registry: &'a AppTypeRegistry,
 
     /// World's entities to reserve IDs on new entities inside components.
     pub(crate) spawner: BufferedSpawner<'a>,
