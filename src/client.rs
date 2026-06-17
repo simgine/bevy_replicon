@@ -131,54 +131,52 @@ pub(super) fn receive_replication(
     mut entity_markers: Local<EntityMarkers>,
     mut entity_buffer: Local<EntityBuffer>,
 ) {
-    world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
-        world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
-            world.resource_scope(|world, mut signature_map: Mut<SignatureMap>| {
-                world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
-                    world.resource_scope(|world, receive_markers: Mut<ReceiveMarkers>| {
-                        world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
-                            world.resource_scope(
-                                |world, mut replicated: Mut<Messages<EntityReplicated>>| {
-                                    let type_registry = world.resource::<AppTypeRegistry>().clone();
-                                    let mut stats =
-                                        world.remove_resource::<ClientReplicationStats>();
-                                    let mut mutate_ticks =
-                                        world.remove_resource::<ServerMutateTicks>();
-                                    let mut params = ReceiveParams {
-                                        changes: &mut changes,
-                                        entity_markers: &mut entity_markers,
-                                        entity_buffer: &mut entity_buffer,
-                                        entity_map: &mut entity_map,
-                                        signature_map: &mut signature_map,
-                                        replicated: &mut replicated,
-                                        mutate_ticks: mutate_ticks.as_mut(),
-                                        stats: stats.as_mut(),
-                                        receive_markers: &receive_markers,
-                                        registry: &registry,
-                                        type_registry: &type_registry,
-                                    };
+    // Too many nested `resource_scope` break rustfmt.
+    // Relevant issue to support multiple resources in a single scope: https://github.com/bevyengine/bevy/issues/23476
+    let mut messages = world.remove_resource::<ClientMessages>().unwrap();
+    let mut entity_map = world.remove_resource::<ServerEntityMap>().unwrap();
+    let mut signature_map = world.remove_resource::<SignatureMap>().unwrap();
+    let mut buffered_mutations = world.remove_resource::<BufferedMutations>().unwrap();
+    let receive_markers = world.remove_resource::<ReceiveMarkers>().unwrap();
+    let registry = world.remove_resource::<ReplicationRegistry>().unwrap();
+    let mut replicated = world
+        .remove_resource::<Messages<EntityReplicated>>()
+        .unwrap();
 
-                                    apply_replication(
-                                        world,
-                                        &mut params,
-                                        &mut messages,
-                                        &mut buffered_mutations,
-                                    );
+    let type_registry = world.resource::<AppTypeRegistry>().clone();
+    let mut stats = world.remove_resource::<ClientReplicationStats>();
+    let mut mutate_ticks = world.remove_resource::<ServerMutateTicks>();
 
-                                    if let Some(stats) = stats {
-                                        world.insert_resource(stats);
-                                    }
-                                    if let Some(mutate_ticks) = mutate_ticks {
-                                        world.insert_resource(mutate_ticks);
-                                    }
-                                },
-                            )
-                        })
-                    })
-                })
-            })
-        })
-    })
+    let mut params = ReceiveParams {
+        changes: &mut changes,
+        entity_markers: &mut entity_markers,
+        entity_buffer: &mut entity_buffer,
+        entity_map: &mut entity_map,
+        signature_map: &mut signature_map,
+        replicated: &mut replicated,
+        mutate_ticks: mutate_ticks.as_mut(),
+        stats: stats.as_mut(),
+        receive_markers: &receive_markers,
+        registry: &registry,
+        type_registry: &type_registry,
+    };
+
+    apply_replication(world, &mut params, &mut messages, &mut buffered_mutations);
+
+    if let Some(stats) = stats {
+        world.insert_resource(stats);
+    }
+    if let Some(mutate_ticks) = mutate_ticks {
+        world.insert_resource(mutate_ticks);
+    }
+
+    world.insert_resource(messages);
+    world.insert_resource(entity_map);
+    world.insert_resource(signature_map);
+    world.insert_resource(buffered_mutations);
+    world.insert_resource(receive_markers);
+    world.insert_resource(registry);
+    world.insert_resource(replicated);
 }
 
 fn reset(
