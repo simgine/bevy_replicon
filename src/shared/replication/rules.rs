@@ -372,7 +372,7 @@ pub trait AppRuleExt {
         let end = message.len();
 
         // Compress serialized slice.
-        // Could be `zstd`, for example.
+        // Could be zstd, for example.
         let compressed = compress(&mut message[start..end]);
 
         // Replace serialized slice with compressed data prepended by its size.
@@ -387,7 +387,7 @@ pub trait AppRuleExt {
         _ctx: &mut WriteCtx,
         message: &mut Bytes,
     ) -> Result<BigComponent> {
-        // Read size first to know how much data is encoded.
+        // Read size to know how much data is encoded.
         let size = postcard_utils::from_buf(message)?;
 
         // Apply decompression and advance the reading cursor.
