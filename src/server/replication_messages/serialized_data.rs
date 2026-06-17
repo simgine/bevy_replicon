@@ -143,10 +143,10 @@ impl SerializedData {
 }
 
 pub(crate) struct WritableComponent<'a> {
-    pub(crate) fns: SerdeFns<'a>,
-    pub(crate) ptr: Ptr<'a>,
-    pub(crate) fns_id: FnsId,
-    pub(crate) ctx: SerializeCtx<'a>,
+    fns: SerdeFns<'a>,
+    ptr: Ptr<'a>,
+    fns_id: FnsId,
+    ctx: SerializeCtx<'a>,
 }
 
 impl<'a> WritableComponent<'a> {
