@@ -31,10 +31,7 @@ use crate::{
     prelude::*,
     server::{
         replicated_archetypes::ReplicatedArchetypes,
-        replication_messages::{
-            mutations::MutationsSplit,
-            serialized_data::{EntityMapping, MessageWrite, WritableComponent},
-        },
+        replication_messages::{mutations::MutationsSplit, serialized_data::WritableComponent},
         visibility::registry::FilterRegistry,
     },
     shared::{
@@ -403,7 +400,6 @@ fn collect_mappings(
 ) -> Result<()> {
     for (entity, signature) in entities {
         let hash = signature.hash();
-        let mapping = EntityMapping { entity, hash };
         let mut mapping_range = None;
 
         if let Some(client) = signature.client() {
@@ -414,7 +410,8 @@ fn collect_mappings(
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client}`"
                 );
-                let mapping_range = mapping.write_cached(&mut serialized, &mut mapping_range)?;
+                let mapping_range =
+                    serialized.write_cached_mapping(&mut mapping_range, entity, hash)?;
                 message.add_mapping(mapping_range);
             }
         } else {
@@ -422,7 +419,7 @@ fn collect_mappings(
                 if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                     trace!("writing mapping `{entity}` to 0x{hash:016x} for client `{client}`");
                     let mapping_range =
-                        mapping.write_cached(&mut serialized, &mut mapping_range)?;
+                        serialized.write_cached_mapping(&mut mapping_range, entity, hash)?;
                     message.add_mapping(mapping_range);
                 }
             }
@@ -464,7 +461,7 @@ fn collect_despawns(
     )>,
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
-        let entity_range = entity.write(&mut serialized)?;
+        let entity_range = serialized.write_entity(entity)?;
         for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
             if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 // Write despawn only if the entity was previously sent because
@@ -487,7 +484,7 @@ fn collect_despawns(
 
             if let Some(entity_ticks) = ticks.entities.remove(&entity) {
                 trace!("writing visibility lost for `{entity}` for client `{client}`");
-                let entity_range = entity.write(&mut serialized)?;
+                let entity_range = serialized.write_entity(entity)?;
                 message.add_despawn(entity_range);
                 pools.recycle_components(entity_ticks.components);
             }
@@ -542,10 +539,10 @@ fn collect_removals(
 
                 trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client}`");
                 if !message.removals_entity_added() {
-                    let entity_range = entity.write_cached(&mut serialized, &mut entity_range)?;
+                    let entity_range = serialized.write_cached_entity(&mut entity_range, entity)?;
                     message.add_removals_entity(&mut pools, entity_range);
                 }
-                let fns_id_range = fns_id.write_cached(&mut serialized, &mut fns_id_range)?;
+                let fns_id_range = serialized.write_cached_fns_id(&mut fns_id_range, fns_id)?;
                 message.add_removal(fns_id_range);
                 entity_ticks.components.remove(component_index);
             }
@@ -594,10 +591,10 @@ fn collect_removals(
                     rule.fns_id
                 );
                 if !message.removals_entity_added() {
-                    let entity_range = entity.write_cached(&mut serialized, &mut entity_range)?;
+                    let entity_range = serialized.write_cached_entity(&mut entity_range, entity)?;
                     message.add_removals_entity(&mut pools, entity_range);
                 }
-                let fns_id_range = rule.fns_id.write(&mut serialized)?;
+                let fns_id_range = serialized.write_fns_id(rule.fns_id)?;
                 message.add_removal(fns_id_range);
                 entity_ticks.components.remove(component_index);
 
@@ -727,9 +724,8 @@ fn collect_changes(
 
                             if !mutations.entity_added() {
                                 let graph_index = related_entities.graph_index(entity.id());
-                                let entity_range = entity
-                                    .id()
-                                    .write_cached(&mut serialized, &mut entity_range)?;
+                                let entity_range = serialized
+                                    .write_cached_entity(&mut entity_range, entity.id())?;
                                 mutations.add_entity(
                                     &mut pools,
                                     entity.id(),
@@ -737,8 +733,8 @@ fn collect_changes(
                                     entity_range,
                                 );
                             }
-                            let component_range =
-                                component.write_cached(&mut serialized, &mut component_range)?;
+                            let component_range = serialized
+                                .write_cached_component(&mut component_range, &component)?;
                             mutations.add_component(component_range);
                         }
                     } else {
@@ -749,13 +745,12 @@ fn collect_changes(
                         );
 
                         if !updates.changed_entity_added() {
-                            let entity_range = entity
-                                .id()
-                                .write_cached(&mut serialized, &mut entity_range)?;
+                            let entity_range =
+                                serialized.write_cached_entity(&mut entity_range, entity.id())?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
                         let component_range =
-                            component.write_cached(&mut serialized, &mut component_range)?;
+                            serialized.write_cached_component(&mut component_range, &component)?;
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }
@@ -795,9 +790,8 @@ fn collect_changes(
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
                     // Force-write new entity even if it doesn't have any components.
-                    let entity_range = entity
-                        .id()
-                        .write_cached(&mut serialized, &mut entity_range)?;
+                    let entity_range =
+                        serialized.write_cached_entity(&mut entity_range, entity.id())?;
                     updates.add_changed_entity(&mut pools, entity_range);
                 }
             }
@@ -857,14 +851,14 @@ fn send_messages(
         if !updates.is_empty() {
             ticks.update_tick = **server_tick;
             let server_tick_range =
-                server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
+                serialized.write_cached_tick(&mut server_tick_range, **server_tick)?;
 
             updates.send(&mut messages, client, &serialized, server_tick_range)?;
         }
 
         if !mutations.is_empty() || **track_mutate_messages {
             let server_tick_range =
-                server_tick.write_cached(&mut serialized, &mut server_tick_range)?;
+                serialized.write_cached_tick(&mut server_tick_range, **server_tick)?;
 
             mutations.send(
                 &mut messages,
