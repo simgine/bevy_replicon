@@ -11,7 +11,7 @@ pub struct ClientSendCtx<'a> {
     /// Maps server entities to client entities and vice versa.
     pub entity_map: &'a ServerEntityMap,
 
-    /// Entities that couldn't be mapped by [`EntityMapper::map_entity`].
+    /// Entities that couldn't be mapped by [`EntityMapper::get_mapped`].
     ///
     /// We needed it because [`EntityMapper`] doesn't provide a way to handle errors.
     pub(crate) invalid_entities: Vec<Entity>,
