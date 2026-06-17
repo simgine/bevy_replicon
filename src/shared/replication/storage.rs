@@ -53,7 +53,7 @@ fn serialize_position(
     position: &Position,
     message: &mut Vec<u8>,
 ) -> Result<()> {
-    let precision = ctx.get::<Precision>().copied().unwrap_or_default();
+    let precision = ctx.get_mut::<Precision>().copied().unwrap_or_default();
     let scale = precision.scale();
 
     let quantized = QuantizedPosition {
