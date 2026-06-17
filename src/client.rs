@@ -63,6 +63,7 @@ impl Plugin for ClientPlugin {
                 PostUpdate,
                 (ClientSystems::Send, ClientSystems::SendPackets).chain(),
             )
+            .add_observer(cleanup_storage)
             .add_systems(
                 PreUpdate,
                 receive_replication
@@ -136,6 +137,7 @@ pub(super) fn receive_replication(
     let mut messages = world.remove_resource::<ClientMessages>().unwrap();
     let mut entity_map = world.remove_resource::<ServerEntityMap>().unwrap();
     let mut signature_map = world.remove_resource::<SignatureMap>().unwrap();
+    let mut storage = world.remove_resource::<ReplicationStorage>().unwrap();
     let mut buffered_mutations = world.remove_resource::<BufferedMutations>().unwrap();
     let receive_markers = world.remove_resource::<ReceiveMarkers>().unwrap();
     let registry = world.remove_resource::<ReplicationRegistry>().unwrap();
@@ -153,6 +155,7 @@ pub(super) fn receive_replication(
         entity_buffer: &mut entity_buffer,
         entity_map: &mut entity_map,
         signature_map: &mut signature_map,
+        storage: &mut storage,
         replicated: &mut replicated,
         mutate_ticks: mutate_ticks.as_mut(),
         stats: stats.as_mut(),
@@ -173,10 +176,15 @@ pub(super) fn receive_replication(
     world.insert_resource(messages);
     world.insert_resource(entity_map);
     world.insert_resource(signature_map);
+    world.insert_resource(storage);
     world.insert_resource(buffered_mutations);
     world.insert_resource(receive_markers);
     world.insert_resource(registry);
     world.insert_resource(replicated);
+}
+
+fn cleanup_storage(remove: On<Remove, Remote>, mut storage: ResMut<ReplicationStorage>) {
+    storage.entities.remove(&remove.entity);
 }
 
 fn reset(
@@ -569,9 +577,11 @@ fn apply_changes(
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
+            entity: client_entity.id(),
             component_id,
             message_tick,
             entity_map: params.entity_map,
+            storage: params.storage,
             type_registry: params.type_registry,
             spawner,
             ignore_mapping: false,
@@ -727,9 +737,11 @@ fn apply_mutations(
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
+            entity: client_entity.id(),
             component_id,
             message_tick,
             entity_map: params.entity_map,
+            storage: params.storage,
             type_registry: params.type_registry,
             spawner,
             ignore_mapping: false,
@@ -776,6 +788,7 @@ struct ReceiveParams<'a> {
     entity_buffer: &'a mut EntityBuffer,
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,
+    storage: &'a mut ReplicationStorage,
     replicated: &'a mut Messages<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,

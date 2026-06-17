@@ -8,19 +8,38 @@ use crate::{prelude::*, shared::server_entity_map::ServerEntityMap};
 /// Replication context for serialization function.
 #[non_exhaustive]
 pub struct SerializeCtx<'a> {
+    /// ID of the component entity.
+    pub entity: Entity,
+
     /// ID of the serializing component.
     pub component_id: ComponentId,
 
     /// Current tick.
     pub server_tick: RepliconTick,
 
+    /// Storage for serialization/deserialization state.
+    pub storage: &'a mut ReplicationStorage,
+
     /// Registry of reflected types.
     pub type_registry: &'a AppTypeRegistry,
+}
+
+impl EntityStorageCtx for SerializeCtx<'_> {
+    fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    fn storage(&mut self) -> &mut ReplicationStorage {
+        self.storage
+    }
 }
 
 /// Replication context for writing and deserialization.
 #[non_exhaustive]
 pub struct WriteCtx<'a> {
+    /// ID of the component entity.
+    pub entity: Entity,
+
     /// ID of the writing component.
     pub component_id: ComponentId,
 
@@ -30,6 +49,9 @@ pub struct WriteCtx<'a> {
     /// Maps server entities to client entities and vice versa.
     pub entity_map: &'a mut ServerEntityMap,
 
+    /// Storage for serialization/deserialization state.
+    pub storage: &'a mut ReplicationStorage,
+
     /// Registry of reflected types.
     pub type_registry: &'a AppTypeRegistry,
 
@@ -38,6 +60,16 @@ pub struct WriteCtx<'a> {
 
     /// Disables mapping logic to avoid spawning entities for consume functions.
     pub(crate) ignore_mapping: bool,
+}
+
+impl EntityStorageCtx for WriteCtx<'_> {
+    fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    fn storage(&mut self) -> &mut ReplicationStorage {
+        self.storage
+    }
 }
 
 impl EntityMapper for WriteCtx<'_> {

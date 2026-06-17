@@ -41,6 +41,7 @@ use crate::{
             client_ticks::{ClientTicks, EntityTicks},
             registry::{ComponentIndex, ReplicationRegistry, component_mask::ComponentMask},
             rules::ReplicationRules,
+            storage::ReplicationStorage,
             track_mutate_messages::TrackMutateMessages,
             visibility::VisibilityScope,
         },
@@ -141,6 +142,7 @@ impl Plugin for ServerPlugin {
             .add_observer(handle_disconnect)
             .add_observer(check_mutation_ticks)
             .add_observer(buffer_despawn)
+            .add_observer(cleanup_storage)
             .add_systems(
                 PreUpdate,
                 (
@@ -644,6 +646,7 @@ fn collect_changes(
     type_registry: Res<AppTypeRegistry>,
     related_entities: Res<RelatedEntities>,
     rules: Res<ReplicationRules>,
+    mut replication_storage: ResMut<ReplicationStorage>,
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
     mut pools: ResMut<ClientPools>,
@@ -684,14 +687,16 @@ fn collect_changes(
                 };
 
                 // SAFETY: `fns` and `ptr` were created for the same component type.
-                let component = unsafe {
+                let mut component = unsafe {
                     WritableComponent::new(
                         fns,
                         ptr,
                         rule.fns_id,
+                        entity.id(),
                         component_id,
                         **server_tick,
                         &type_registry,
+                        &mut replication_storage,
                     )
                 };
 
@@ -734,7 +739,7 @@ fn collect_changes(
                                 );
                             }
                             let component_range = serialized
-                                .write_cached_component(&mut component_range, &component)?;
+                                .write_cached_component(&mut component_range, &mut component)?;
                             mutations.add_component(component_range);
                         }
                     } else {
@@ -749,8 +754,8 @@ fn collect_changes(
                                 serialized.write_cached_entity(&mut entity_range, entity.id())?;
                             updates.add_changed_entity(&mut pools, entity_range);
                         }
-                        let component_range =
-                            serialized.write_cached_component(&mut component_range, &component)?;
+                        let component_range = serialized
+                            .write_cached_component(&mut component_range, &mut component)?;
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }
@@ -880,6 +885,10 @@ fn send_messages(
     serialized.clear();
 
     Ok(())
+}
+
+fn cleanup_storage(remove: On<Remove, Replicated>, mut storage: ResMut<ReplicationStorage>) {
+    storage.entities.remove(&remove.entity);
 }
 
 fn reset(

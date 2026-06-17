@@ -754,6 +754,7 @@ pub mod prelude {
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
+                storage::{EntityStorageCtx, ReplicationStorage},
                 visibility::{
                     AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
                     VisibilityFilter,
