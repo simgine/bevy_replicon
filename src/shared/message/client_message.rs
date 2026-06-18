@@ -301,7 +301,7 @@ impl ClientMessage {
         server_messages: &mut ServerMessages,
     ) {
         let from_messages: &mut Messages<FromClient<M>> = unsafe { from_messages.deref_mut() };
-        for (client, mut message) in server_messages.receive(self.channel_id) {
+        for (client, mut message) in server_messages.drain_received(self.channel_id) {
             match unsafe { self.deserialize::<M, I>(ctx, &mut message) } {
                 Ok(message) => {
                     debug!(

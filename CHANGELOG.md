@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ReplicationStorage` resource for storing arbitrary serialization/deserialization state.
 - `SerializeCtx::entity` and `WriteCtx::entity` with the current entity.
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
+- `ClientMessages::drain_received` and `ServerMessages::drain_received` to drain inbound messages on a channel.
 
 ## [0.40.4] - 2026-06-16
 

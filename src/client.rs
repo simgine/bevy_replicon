@@ -231,7 +231,7 @@ fn apply_replication(
     messages: &mut ClientMessages,
     buffered_mutations: &mut BufferedMutations,
 ) {
-    for mut message in messages.receive(ServerChannel::Updates) {
+    for mut message in messages.drain_received(ServerChannel::Updates) {
         if let Err(e) = apply_update_message(world, params, &mut message) {
             error!("unable to apply update message: {e}");
             params.entity_buffer.free(world);
@@ -248,7 +248,7 @@ fn apply_replication(
         MutateIndex::POSTCARD_MAX_SIZE * messages.received_count(ServerChannel::Mutations);
     if acks_size != 0 {
         let mut acks = Vec::with_capacity(acks_size);
-        for message in messages.receive(ServerChannel::Mutations) {
+        for message in messages.drain_received(ServerChannel::Mutations) {
             if let Err(e) = buffer_mutate_message(params, buffered_mutations, message, &mut acks) {
                 error!("unable to buffer mutate message: {e}");
             }

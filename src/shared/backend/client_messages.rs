@@ -56,10 +56,11 @@ impl ClientMessages {
             .iter()
     }
 
-    /// Receives all available messages from the server over a channel.
+    /// Removes and returns all received messages on a channel.
     ///
-    /// All messages will be drained.
-    pub(crate) fn receive<I: Into<usize>>(
+    /// The method is called by the Replicon on receive, but can also be used
+    /// to filter the inbound traffic.
+    pub fn drain_received<I: Into<usize>>(
         &mut self,
         channel_id: I,
     ) -> impl Iterator<Item = Bytes> + '_ {

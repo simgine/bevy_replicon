@@ -141,7 +141,7 @@ mod tests {
         }
 
         let messages: Vec<_> = server_messages
-            .receive(ClientChannel::MutationAcks)
+            .drain_received(ClientChannel::MutationAcks)
             .map(|(_, message)| message)
             .collect();
         assert_eq!(messages, MESSAGES);
@@ -165,7 +165,9 @@ mod tests {
             client_messages.insert_received(channel_id, message);
         }
 
-        let messages: Vec<_> = client_messages.receive(ServerChannel::Mutations).collect();
+        let messages: Vec<_> = client_messages
+            .drain_received(ServerChannel::Mutations)
+            .collect();
         assert_eq!(messages, MESSAGES);
     }
 }
