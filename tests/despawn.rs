@@ -137,10 +137,7 @@ fn signature() {
         .world_mut()
         .spawn((Replicated, Signature::from(0)))
         .id();
-    let client_entity = client_app
-        .world_mut()
-        .spawn((Replicated, Signature::from(0)))
-        .id();
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -172,13 +169,10 @@ fn signature_with_hierarchy() {
 
     server_app.connect_client(&mut client_app);
 
-    let client_parent = client_app
-        .world_mut()
-        .spawn((Replicated, Signature::from(0)))
-        .id();
+    let client_parent = client_app.world_mut().spawn(Signature::from(0)).id();
     let client_child = client_app
         .world_mut()
-        .spawn((Replicated, Signature::from(1), ChildOf(client_parent)))
+        .spawn((Signature::from(1), ChildOf(client_parent)))
         .id();
 
     let server_parent = server_app
