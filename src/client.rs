@@ -63,6 +63,7 @@ impl Plugin for ClientPlugin {
                 PostUpdate,
                 (ClientSystems::Send, ClientSystems::SendPackets).chain(),
             )
+            .add_observer(cleanup_storage)
             .add_systems(
                 PreUpdate,
                 receive_replication
@@ -136,6 +137,7 @@ pub(super) fn receive_replication(
     let mut messages = world.remove_resource::<ClientMessages>().unwrap();
     let mut entity_map = world.remove_resource::<ServerEntityMap>().unwrap();
     let mut signature_map = world.remove_resource::<SignatureMap>().unwrap();
+    let mut storage = world.remove_resource::<ReplicationStorage>().unwrap();
     let mut buffered_mutations = world.remove_resource::<BufferedMutations>().unwrap();
     let receive_markers = world.remove_resource::<ReceiveMarkers>().unwrap();
     let registry = world.remove_resource::<ReplicationRegistry>().unwrap();
@@ -153,6 +155,7 @@ pub(super) fn receive_replication(
         entity_buffer: &mut entity_buffer,
         entity_map: &mut entity_map,
         signature_map: &mut signature_map,
+        storage: &mut storage,
         replicated: &mut replicated,
         mutate_ticks: mutate_ticks.as_mut(),
         stats: stats.as_mut(),
@@ -173,10 +176,17 @@ pub(super) fn receive_replication(
     world.insert_resource(messages);
     world.insert_resource(entity_map);
     world.insert_resource(signature_map);
+    world.insert_resource(storage);
     world.insert_resource(buffered_mutations);
     world.insert_resource(receive_markers);
     world.insert_resource(registry);
     world.insert_resource(replicated);
+}
+
+// The storage resource may be unavailable while receiving replication.
+// Cleanup is handled manually in the receive logic.
+fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<ReplicationStorage>>) {
+    storage.entities.remove(&remove.entity);
 }
 
 fn reset(
@@ -443,10 +453,10 @@ fn apply_despawn(
     // from the client and could include the deletion in the this message.
     let server_entity = postcard_utils::entity_from_buf(message)?;
     if let Some(client_entity) = params.entity_map.server_entry(server_entity).remove() {
-        // Requires manual removal since the map is removed from the world and inaccessible to triggers.
-        // The entity can also be despawned via a relationship when applying
-        // despawn to another entity, so we always need to remove it from the map.
+        // Requires manual removal since these resources are removed from the world and inaccessible to observers.
         params.signature_map.remove(client_entity);
+        params.storage.entities.remove(&client_entity);
+
         if let Ok(client_entity) = world.get_entity_mut(client_entity) {
             trace!("applying despawn for `{}`", client_entity.id());
             let ctx = DespawnCtx { message_tick };
@@ -569,9 +579,11 @@ fn apply_changes(
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
+            entity: client_entity.id(),
             component_id,
             message_tick,
             entity_map: params.entity_map,
+            storage: params.storage,
             type_registry: params.type_registry,
             spawner,
             ignore_mapping: false,
@@ -727,9 +739,11 @@ fn apply_mutations(
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
+            entity: client_entity.id(),
             component_id,
             message_tick,
             entity_map: params.entity_map,
+            storage: params.storage,
             type_registry: params.type_registry,
             spawner,
             ignore_mapping: false,
@@ -776,6 +790,7 @@ struct ReceiveParams<'a> {
     entity_buffer: &'a mut EntityBuffer,
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,
+    storage: &'a mut ReplicationStorage,
     replicated: &'a mut Messages<EntityReplicated>,
     mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,

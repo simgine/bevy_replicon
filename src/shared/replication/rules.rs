@@ -362,7 +362,7 @@ pub trait AppRuleExt {
     ));
 
     fn serialize_big_component(
-        _ctx: &SerializeCtx,
+        _ctx: &mut SerializeCtx,
         component: &BigComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -430,7 +430,7 @@ pub trait AppRuleExt {
 
     /// Serializes [`MappedComponent`], but skips [`MappedComponent::unused_field`].
     fn serialize_mapped_component(
-        _ctx: &SerializeCtx,
+        _ctx: &mut SerializeCtx,
         component: &MappedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -485,7 +485,7 @@ pub trait AppRuleExt {
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &ReflectedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -549,7 +549,7 @@ pub trait AppRuleExt {
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &WithReflectComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -778,7 +778,7 @@ pub trait AppRuleExt {
         }
     }
 
-    # fn serialize_translation(_: &SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
+    # fn serialize_translation(_: &mut SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
     # fn deserialize_translation(_: &mut WriteCtx, _: &mut Bytes) -> Result<Transform> { unimplemented!() }
     ```
     **/

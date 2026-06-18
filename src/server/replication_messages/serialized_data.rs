@@ -34,7 +34,7 @@ impl SerializedData {
     pub(crate) fn write_cached_component(
         &mut self,
         cached_range: &mut Option<Range<usize>>,
-        component: &WritableComponent,
+        component: &mut WritableComponent,
     ) -> Result<Range<usize>> {
         self.write_cached(cached_range, |serialized| {
             serialized.write_component(component)
@@ -84,7 +84,7 @@ impl SerializedData {
         Ok(range)
     }
 
-    fn write_component(&mut self, component: &WritableComponent) -> Result<Range<usize>> {
+    fn write_component(&mut self, component: &mut WritableComponent) -> Result<Range<usize>> {
         self.write_with(|bytes| {
             postcard_utils::to_extend_mut(&component.fns_id, bytes)?;
 
@@ -92,7 +92,7 @@ impl SerializedData {
             unsafe {
                 component
                     .fns
-                    .serialize(&component.ctx, component.ptr, bytes)?;
+                    .serialize(&mut component.ctx, component.ptr, bytes)?;
             }
 
             Ok(())
@@ -159,18 +159,22 @@ impl<'a> WritableComponent<'a> {
         fns: SerdeFns<'a>,
         ptr: Ptr<'a>,
         fns_id: FnsId,
+        entity: Entity,
         component_id: ComponentId,
         server_tick: RepliconTick,
         type_registry: &'a AppTypeRegistry,
+        storage: &'a mut ReplicationStorage,
     ) -> Self {
         Self {
             fns,
             ptr,
             fns_id,
             ctx: SerializeCtx {
+                entity,
                 component_id,
                 server_tick,
                 type_registry,
+                storage,
             },
         }
     }
