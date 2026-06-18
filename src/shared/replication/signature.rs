@@ -318,9 +318,9 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
 }
 
 fn unregister_hash(mut world: DeferredWorld, ctx: HookContext) {
-    // The map will be unavailable during replication because the
-    // resource will be temporarily removed from the world,
-    // so it's handled manually there.
+    // The map will be unavailable while receiving replication because the
+    // resource is temporarily removed from the world, so cleanup is handled
+    // manually in the receive logic.
     if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
         map.remove(ctx.entity);
     }

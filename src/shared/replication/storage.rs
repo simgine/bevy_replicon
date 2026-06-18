@@ -164,6 +164,10 @@ from them.
 
 Values are keyed by their concrete type.
 
+This resource won't be available to observers or hooks that run while receiving replication,
+because it's temporarily removed from the world to make it accessible in
+[`WriteCtx`](crate::shared::replication::registry::ctx::WriteCtx).
+
 # Examples
 
 Changing compression at runtime:
@@ -266,7 +270,7 @@ enum CompressionAlgorithm {
 */
 #[derive(Resource, Default)]
 pub struct ReplicationStorage {
-    /// Storage for data associated with individual entities.
+    /// Storage for data associated with networked entities.
     ///
     /// Use [`EntityStorageCtx`] helper methods when working from a context
     /// that already knows the current entity.

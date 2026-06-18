@@ -887,6 +887,9 @@ fn send_messages(
     Ok(())
 }
 
+// The storage resource may be unavailable while receiving replication, and the
+// client may have marked `Replicated` as a required component for `Remote`.
+// Cleanup is handled manually in the receive logic.
 fn cleanup_storage(remove: On<Remove, Replicated>, mut storage: If<ResMut<ReplicationStorage>>) {
     storage.entities.remove(&remove.entity);
 }
