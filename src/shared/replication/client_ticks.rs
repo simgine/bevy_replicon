@@ -53,14 +53,10 @@ impl ClientTicks {
     /// Returns associated entities and their component IDs.
     ///
     /// Updates the tick and components of all entities from this mutation message if the tick is higher.
-    pub(crate) fn ack_mutate_message(
-        &mut self,
-        client: Entity,
-        mutate_index: MutateIndex,
-    ) -> Option<Vec<(Entity, ComponentMask)>> {
+    pub(crate) fn ack_mutate_message(&mut self, client: Entity, mutate_index: MutateIndex) {
         let Some(mutate_info) = self.mutations.remove(&mutate_index) else {
             debug!("received unknown `{mutate_index:?}` from client `{client}`");
-            return None;
+            return;
         };
 
         for (entity, components) in &mutate_info.entities {
@@ -81,26 +77,14 @@ impl ClientTicks {
             "acknowledged mutate message with `{:?}` from client `{client}`",
             mutate_info.server_tick,
         );
-
-        Some(mutate_info.entities)
     }
 
     /// Removes all mutate messages older then `min_timestamp`.
     ///
     /// Calls given function for each removed message.
-    pub(crate) fn cleanup_older_mutations(
-        &mut self,
-        min_timestamp: Duration,
-        mut f: impl FnMut(&mut MutateInfo),
-    ) {
-        self.mutations.retain(|_, mutate_info| {
-            if mutate_info.timestamp < min_timestamp {
-                (f)(mutate_info);
-                false
-            } else {
-                true
-            }
-        });
+    pub(crate) fn cleanup_older_mutations(&mut self, min_timestamp: Duration) {
+        self.mutations
+            .retain(|_, mutate_info| mutate_info.timestamp >= min_timestamp);
     }
 }
 
