@@ -3,6 +3,7 @@ use bevy::{
     prelude::*,
 };
 use log::trace;
+use smallvec::SmallVec;
 
 use crate::{
     server::replicated_archetypes::ReplicatedArchetype,
@@ -14,13 +15,7 @@ use crate::{
 pub(super) struct RemovalBuffer {
     /// Component removals grouped by entity.
     #[deref]
-    removals: EntityHashMap<Vec<(ComponentIndex, FnsId)>>,
-
-    /// [`Vec`]s from removals.
-    ///
-    /// All data is cleared before the insertion.
-    /// Stored to reuse allocated capacity.
-    pool: Vec<Vec<(ComponentIndex, FnsId)>>,
+    removals: EntityHashMap<SmallVec<[(ComponentIndex, FnsId); 4]>>,
 }
 
 impl RemovalBuffer {
@@ -31,10 +26,7 @@ impl RemovalBuffer {
         archetype: &ReplicatedArchetype,
         registry: &ReplicationRegistry,
     ) {
-        let entity_removals = self
-            .removals
-            .entry(entity)
-            .or_insert_with(|| self.pool.pop().unwrap_or_default());
+        let entity_removals = self.removals.entry(entity).or_default();
 
         for &id in components {
             let Some(rule) = archetype.find_rule(id) else {
@@ -52,11 +44,7 @@ impl RemovalBuffer {
     ///
     /// Keeps the allocated memory for reuse.
     pub(super) fn clear(&mut self) {
-        self.pool
-            .extend(self.removals.drain().map(|(_, mut components)| {
-                components.clear();
-                components
-            }));
+        self.removals.clear();
     }
 }
 
