@@ -29,7 +29,11 @@ impl EntityStorageCtx for SerializeCtx<'_> {
         self.entity
     }
 
-    fn storage(&mut self) -> &mut ReplicationStorage {
+    fn storage(&self) -> &ReplicationStorage {
+        self.storage
+    }
+
+    fn storage_mut(&mut self) -> &mut ReplicationStorage {
         self.storage
     }
 }
@@ -67,7 +71,11 @@ impl EntityStorageCtx for WriteCtx<'_> {
         self.entity
     }
 
-    fn storage(&mut self) -> &mut ReplicationStorage {
+    fn storage(&self) -> &ReplicationStorage {
+        self.storage
+    }
+
+    fn storage_mut(&mut self) -> &mut ReplicationStorage {
         self.storage
     }
 }

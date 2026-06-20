@@ -116,15 +116,18 @@ pub trait EntityStorageCtx {
     /// Returns the entity associated with this context.
     fn entity(&self) -> Entity;
 
-    /// Returns the replication storage resource.
-    fn storage(&mut self) -> &mut ReplicationStorage;
+    /// Returns a reference to the replication storage resource.
+    fn storage(&self) -> &ReplicationStorage;
+
+    /// Returns a mutable reference to the replication storage resource.
+    fn storage_mut(&mut self) -> &mut ReplicationStorage;
 
     /// Returns the value of type `T` from the entity storage.
     ///
     /// Initializes the value with `f` if it is not present yet.
     fn get_or_init<T: Send + Sync + 'static>(&mut self, f: impl FnOnce() -> T) -> &mut T {
         let entity = self.entity();
-        self.storage().get_or_init(entity, f)
+        self.storage_mut().get_or_init(entity, f)
     }
 
     /// Returns the value of type `T` from the entity storage.
@@ -132,7 +135,7 @@ pub trait EntityStorageCtx {
     /// Inserts its default value if it is not present yet.
     fn get_or_default<T: Send + Sync + Default + 'static>(&mut self) -> &mut T {
         let entity = self.entity();
-        self.storage().get_or_default(entity)
+        self.storage_mut().get_or_default(entity)
     }
 
     /// Inserts `value` into the entity storage.
@@ -140,19 +143,25 @@ pub trait EntityStorageCtx {
     /// Returns the previous value of the same type, if one was present.
     fn insert<T: Send + Sync + 'static>(&mut self, value: T) -> Option<T> {
         let entity = self.entity();
-        self.storage().insert(entity, value)
+        self.storage_mut().insert(entity, value)
+    }
+
+    /// Returns a reference to the value of type `T` from the entity storage.
+    fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        let entity = self.entity();
+        self.storage().get(entity)
     }
 
     /// Returns a mutable reference to the value of type `T` from the entity storage.
     fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
         let entity = self.entity();
-        self.storage().get_mut(entity)
+        self.storage_mut().get_mut(entity)
     }
 
     /// Removes and returns the value of type `T` from the entity storage.
     fn remove<T: Send + Sync + 'static>(&mut self) -> Option<T> {
         let entity = self.entity();
-        self.storage().remove(entity)
+        self.storage_mut().remove(entity)
     }
 }
 
