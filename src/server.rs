@@ -30,7 +30,7 @@ use crate::{
     prelude::*,
     server::{
         replicated_archetypes::ReplicatedArchetypes,
-        replication_messages::{mutations::MutationsSplit, serialized_data::WritableComponent},
+        replication_messages::{mutations::MutationsSplit, serialized_data::ErasedComponent},
         visibility::registry::FilterRegistry,
     },
     shared::{
@@ -38,7 +38,10 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
-            registry::{ComponentIndex, ReplicationRegistry, component_mask::ComponentMask},
+            registry::{
+                ComponentIndex, ReplicationRegistry, component_mask::ComponentMask,
+                ctx::SerializeCtx,
+            },
             rules::ReplicationRules,
             storage::ReplicationStorage,
             track_mutate_messages::TrackMutateMessages,
@@ -667,17 +670,14 @@ fn collect_changes(
                 };
 
                 // SAFETY: `fns` and `ptr` were created for the same component type.
-                let mut component = unsafe {
-                    WritableComponent::new(
-                        fns,
-                        ptr,
-                        rule.fns_id,
-                        entity.id(),
-                        component_id,
-                        **server_tick,
-                        &type_registry,
-                        &mut replication_storage,
-                    )
+                let mut component = unsafe { ErasedComponent::new(fns, ptr, rule.fns_id) };
+
+                let mut ctx = SerializeCtx {
+                    entity: entity.id(),
+                    component_id,
+                    server_tick: **server_tick,
+                    type_registry: &type_registry,
+                    storage: &mut replication_storage,
                 };
 
                 let mut component_range = None;
@@ -713,8 +713,11 @@ fn collect_changes(
                                     .write_cached_entity(&mut entity_range, entity.id())?;
                                 mutations.add_entity(entity.id(), graph_index, entity_range);
                             }
-                            let component_range = serialized
-                                .write_cached_component(&mut component_range, &mut component)?;
+                            let component_range = serialized.write_cached_component(
+                                &mut ctx,
+                                &mut component_range,
+                                &mut component,
+                            )?;
                             mutations.add_component(component_range);
                         }
                     } else {
@@ -729,8 +732,11 @@ fn collect_changes(
                                 serialized.write_cached_entity(&mut entity_range, entity.id())?;
                             updates.add_changed_entity(entity_range);
                         }
-                        let component_range = serialized
-                            .write_cached_component(&mut component_range, &mut component)?;
+                        let component_range = serialized.write_cached_component(
+                            &mut ctx,
+                            &mut component_range,
+                            &mut component,
+                        )?;
                         updates.add_inserted_component(component_range, component_index);
                     }
                 }

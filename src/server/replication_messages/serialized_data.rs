@@ -1,6 +1,6 @@
 use core::ops::Range;
 
-use bevy::{ecs::component::ComponentId, prelude::*, ptr::Ptr};
+use bevy::{prelude::*, ptr::Ptr};
 
 use crate::{
     postcard_utils,
@@ -33,11 +33,12 @@ impl SerializedData {
 
     pub(crate) fn write_cached_component(
         &mut self,
+        ctx: &mut SerializeCtx,
         cached_range: &mut Option<Range<usize>>,
-        component: &mut WritableComponent,
+        component: &mut ErasedComponent,
     ) -> Result<Range<usize>> {
         self.write_cached(cached_range, |serialized| {
-            serialized.write_component(component)
+            serialized.write_component(ctx, component)
         })
     }
 
@@ -84,15 +85,17 @@ impl SerializedData {
         Ok(range)
     }
 
-    fn write_component(&mut self, component: &mut WritableComponent) -> Result<Range<usize>> {
+    fn write_component(
+        &mut self,
+        ctx: &mut SerializeCtx,
+        component: &mut ErasedComponent,
+    ) -> Result<Range<usize>> {
         self.write_with(|bytes| {
             postcard_utils::to_extend_mut(&component.fns_id, bytes)?;
 
             // SAFETY: `fns` and `ptr` were created for the same component type.
             unsafe {
-                component
-                    .fns
-                    .serialize(&mut component.ctx, component.ptr, bytes)?;
+                component.fns.serialize(ctx, component.ptr, bytes)?;
             }
 
             Ok(())
@@ -142,40 +145,22 @@ impl SerializedData {
     }
 }
 
-pub(crate) struct WritableComponent<'a> {
+/// Wraps a component pointer and its associated functions.
+///
+/// Allows moving the unsafe precondition to construction.
+pub(crate) struct ErasedComponent<'a> {
     fns: SerdeFns<'a>,
     ptr: Ptr<'a>,
     fns_id: FnsId,
-    ctx: SerializeCtx<'a>,
 }
 
-impl<'a> WritableComponent<'a> {
+impl<'a> ErasedComponent<'a> {
     /// Creates a new instance for component data that can be written into a replication message.
     ///
     /// # Safety
     ///
     /// The caller must ensure that `fns` and `ptr` was created for the same type.
-    pub(crate) unsafe fn new(
-        fns: SerdeFns<'a>,
-        ptr: Ptr<'a>,
-        fns_id: FnsId,
-        entity: Entity,
-        component_id: ComponentId,
-        server_tick: RepliconTick,
-        type_registry: &'a AppTypeRegistry,
-        storage: &'a mut ReplicationStorage,
-    ) -> Self {
-        Self {
-            fns,
-            ptr,
-            fns_id,
-            ctx: SerializeCtx {
-                entity,
-                component_id,
-                server_tick,
-                type_registry,
-                storage,
-            },
-        }
+    pub(crate) unsafe fn new(fns: SerdeFns<'a>, ptr: Ptr<'a>, fns_id: FnsId) -> Self {
+        Self { fns, ptr, fns_id }
     }
 }
