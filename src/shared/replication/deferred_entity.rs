@@ -111,8 +111,10 @@ impl<'w> DeferredEntity<'w> {
     ///
     /// # Safety
     ///
-    /// Must only be used to make non-structural ECS changes,
-    /// similar to [`DeferredWorld`](bevy::ecs::world::DeferredWorld).
+    /// All safety requirements of [`EntityWorldMut::world_mut`] apply. In addition,
+    /// [`EntityAllocator`](bevy::ecs::entity::EntityAllocator) must not be mutably
+    /// borrowed, which means that no entities can be freed
+    /// (spawning new entities is safe).
     pub unsafe fn world_mut(&mut self) -> &mut World {
         unsafe { self.entity.world_mut() }
     }

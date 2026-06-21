@@ -11,7 +11,7 @@ use crate::{
         replication::{
             deferred_entity::{DeferredChanges, DeferredEntity},
             receive_markers::{EntityMarkers, ReceiveMarkers},
-            registry::ctx::EntitySpawner,
+            registry::ctx::BufferedSpawner,
         },
         server_entity_map::ServerEntityMap,
     },
@@ -98,29 +98,33 @@ pub trait TestFnsEntityExt {
 
 impl TestFnsEntityExt for EntityWorldMut<'_> {
     fn serialize(&mut self, fns_id: FnsId, server_tick: RepliconTick) -> Vec<u8> {
-        let type_registry = self.world().resource::<AppTypeRegistry>();
-        let registry = self.world().resource::<ReplicationRegistry>();
-        let (_, component_id, fns) = registry.get(fns_id);
-        let mut message = Vec::new();
-        let ctx = SerializeCtx {
-            server_tick,
-            component_id,
-            type_registry,
-        };
-        let ptr = self.get_by_id(component_id).unwrap_or_else(|_| {
-            let components = self.world().components();
-            let component_name = components
-                .get_name(component_id)
-                .expect("function should require valid component ID");
-            panic!("serialization function require entity to have {component_name}");
-        });
+        self.resource_scope(|entity, mut storage: Mut<ReplicationStorage>| {
+            let type_registry = entity.resource::<AppTypeRegistry>();
+            let registry = entity.resource::<ReplicationRegistry>();
+            let (_, component_id, fns) = registry.get(fns_id);
+            let mut message = Vec::new();
+            let mut ctx = SerializeCtx {
+                entity: entity.id(),
+                server_tick,
+                component_id,
+                type_registry,
+                storage: &mut storage,
+            };
+            let ptr = entity.get_by_id(component_id).unwrap_or_else(|_| {
+                let components = entity.world().components();
+                let component_name = components
+                    .get_name(component_id)
+                    .expect("function should require valid component ID");
+                panic!("serialization function require entity to have {component_name}");
+            });
 
-        unsafe {
-            fns.serialize(&ctx, ptr, &mut message)
-                .expect("serialization into memory should never fail");
-        }
+            unsafe {
+                fns.serialize(&mut ctx, ptr, &mut message)
+                    .expect("serialization into memory should never fail");
+            }
 
-        message
+            message
+        })
     }
 
     fn apply_write(
@@ -136,31 +140,41 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
         let entity = self.id();
         self.world_scope(|world| {
             world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
-                world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
-                    let type_registry = world.resource::<AppTypeRegistry>().clone();
-                    let world_cell = world.as_unsafe_world_cell();
-                    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
-                    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
-                    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
-                    let world = unsafe { world_cell.world_mut() };
+                world.resource_scope(|world, mut storage: Mut<ReplicationStorage>| {
+                    world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
+                        let type_registry = world.resource::<AppTypeRegistry>().clone();
+                        let mut entity_buffer = Default::default();
+                        let world_cell = world.as_unsafe_world_cell();
+                        let spawner = BufferedSpawner::new(
+                            world_cell.entities_allocator(),
+                            &mut entity_buffer,
+                        );
+                        // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
+                        let world = unsafe { world_cell.world_mut() };
 
-                    let mut changes = DeferredChanges::default();
-                    let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
+                        let mut changes = DeferredChanges::default();
+                        let mut entity =
+                            DeferredEntity::new(world.entity_mut(entity), &mut changes);
 
-                    let (_, component_id, fns) = registry.get(fns_id);
-                    let mut ctx = WriteCtx {
-                        entity_map: &mut entity_map,
-                        type_registry: &type_registry,
-                        component_id,
-                        message_tick,
-                        spawner: &mut spawner,
-                        ignore_mapping: false,
-                    };
+                        let (_, component_id, fns) = registry.get(fns_id);
+                        let mut ctx = WriteCtx {
+                            entity: entity.id(),
+                            entity_map: &mut entity_map,
+                            storage: &mut storage,
+                            type_registry: &type_registry,
+                            component_id,
+                            message_tick,
+                            spawner,
+                            ignore_mapping: false,
+                        };
 
-                    fns.write(&mut ctx, &entity_markers, &mut entity, &mut data.into())
-                        .expect("writing data into an entity shouldn't fail");
+                        fns.write(&mut ctx, &entity_markers, &mut entity, &mut data.into())
+                            .expect("writing data into an entity shouldn't fail");
 
-                    entity.flush();
+                        // SAFETY: only used to spawn entities.
+                        entity_buffer.spawn(unsafe { entity.world_mut() });
+                        entity.flush();
+                    })
                 })
             })
         });

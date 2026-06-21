@@ -9,13 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
 - Patch-based diff replication for components via `replicate_diff`.
+- `ReplicationStorage` resource for storing arbitrary serialization/deserialization state.
+- `SerializeCtx::entity` and `WriteCtx::entity` with the current entity.
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
 
-### Changed
+## [0.40.4] - 2026-06-16
 
-- Replicated removals now also remove all required components. This may be unexpected if you set `Replicated` as a required component, because removing it also pauses replication. Use `remove_without_requires` with `AppMarkerExt::set_receive_fns` to restore the old behavior.
+### Added
+
+- `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
+- `DeferredEntity::remove_with_requires` and `remove_with_requires` helper to customize the removal replication.
+
+### Fixed
+
+- Visibility scope registration now allows up to `u32::BITS` scopes instead of incorrectly panicking after `u8::BITS` scopes.
+- Avoid potential UB from aliasing the world during entity spawning.
 
 ## [0.40.3] - 2026-06-02
 
@@ -1102,7 +1111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...HEAD
+[0.40.4]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...v0.40.4
 [0.40.3]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...v0.40.3
 [0.40.2]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1

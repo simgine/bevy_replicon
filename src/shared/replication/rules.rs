@@ -384,7 +384,7 @@ pub trait AppRuleExt {
     ));
 
     fn serialize_big_component(
-        _ctx: &SerializeCtx,
+        _ctx: &mut SerializeCtx,
         component: &BigComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -394,7 +394,7 @@ pub trait AppRuleExt {
         let end = message.len();
 
         // Compress serialized slice.
-        // Could be `zstd`, for example.
+        // Could be zstd, for example.
         let compressed = compress(&mut message[start..end]);
 
         // Replace serialized slice with compressed data prepended by its size.
@@ -409,7 +409,7 @@ pub trait AppRuleExt {
         _ctx: &mut WriteCtx,
         message: &mut Bytes,
     ) -> Result<BigComponent> {
-        // Read size first to know how much data is encoded.
+        // Read size to know how much data is encoded.
         let size = postcard_utils::from_buf(message)?;
 
         // Apply decompression and advance the reading cursor.
@@ -452,7 +452,7 @@ pub trait AppRuleExt {
 
     /// Serializes [`MappedComponent`], but skips [`MappedComponent::unused_field`].
     fn serialize_mapped_component(
-        _ctx: &SerializeCtx,
+        _ctx: &mut SerializeCtx,
         component: &MappedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -507,7 +507,7 @@ pub trait AppRuleExt {
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &ReflectedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -571,7 +571,7 @@ pub trait AppRuleExt {
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &WithReflectComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -796,15 +796,11 @@ pub trait AppRuleExt {
             let (player_id, player_fns_id) = registry.register_rule_fns(world, RuleFns::<Player>::default());
             let player = ComponentRule::new(player_id, player_fns_id);
 
-            // We skip `replication` registration since it's a special component.
-            // It's automatically inserted on clients after replication and
-            // deserialization from scenes.
-
             vec![transform, player]
         }
     }
 
-    # fn serialize_translation(_: &SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
+    # fn serialize_translation(_: &mut SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
     # fn deserialize_translation(_: &mut WriteCtx, _: &mut Bytes) -> Result<Transform> { unimplemented!() }
     ```
     **/

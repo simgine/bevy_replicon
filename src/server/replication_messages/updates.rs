@@ -1,4 +1,4 @@
-use core::{iter, mem, ops::Range};
+use core::{mem, ops::Range};
 
 use bevy::prelude::*;
 use postcard::experimental::serialized_size;
@@ -7,7 +7,6 @@ use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
-    server::ClientPools,
     shared::{
         backend::channels::ServerChannel,
         replication::{
@@ -116,10 +115,10 @@ impl Updates {
     }
 
     /// Adds an entity chunk for removals.
-    pub(crate) fn add_removals_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
+    pub(crate) fn add_removals_entity(&mut self, entity: Range<usize>) {
         self.removals.push(EntityRanges {
             entity,
-            data: pools.take_ranges(),
+            data: Default::default(),
         });
         self.removals_entity_added = true;
     }
@@ -154,10 +153,10 @@ impl Updates {
     }
 
     /// Adds an entity chunk for insertions and mutations.
-    pub(crate) fn add_changed_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
+    pub(crate) fn add_changed_entity(&mut self, entity: Range<usize>) {
         self.changes.push(EntityRanges {
             entity,
-            data: pools.take_ranges(),
+            data: Default::default(),
         });
         self.changed_entity_added = true;
     }
@@ -179,7 +178,7 @@ impl Updates {
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.
-    pub(crate) fn take_added_entity(&mut self, pools: &mut ClientPools, mutations: &mut Mutations) {
+    pub(crate) fn take_added_entity(&mut self, mutations: &mut Mutations) {
         debug_assert!(mutations.entity_added());
         let entity_mutations = mutations.pop().expect("entity should be written");
 
@@ -189,10 +188,7 @@ impl Updates {
             let changes = self.changes.last_mut().expect("entity should be written");
             debug_assert_eq!(entity_mutations.ranges.entity, changes.entity);
             changes.extend(&entity_mutations.ranges);
-            pools.recycle_ranges(iter::once(entity_mutations.ranges.data));
-
             self.changed_components |= &entity_mutations.components;
-            pools.recycle_components(entity_mutations.components);
         }
     }
 
@@ -349,13 +345,12 @@ impl Updates {
     /// Clears all chunks.
     ///
     /// Keeps allocated memory for reuse.
-    pub(crate) fn clear(&mut self, pools: &mut ClientPools) {
+    pub(crate) fn clear(&mut self) {
         self.mappings = Default::default();
         self.mappings_len = 0;
         self.despawns.clear();
         self.despawns_len = 0;
-
-        pools.recycle_ranges(self.changes.drain(..).map(|c| c.data));
-        pools.recycle_ranges(self.removals.drain(..).map(|c| c.data));
+        self.changes.clear();
+        self.removals.clear();
     }
 }

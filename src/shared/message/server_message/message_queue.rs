@@ -3,6 +3,7 @@ use core::marker::PhantomData;
 
 use bevy::prelude::*;
 use bytes::Bytes;
+use smallvec::SmallVec;
 
 use crate::prelude::*;
 
@@ -12,37 +13,26 @@ use crate::prelude::*;
 /// Needed to ensure that when an message is triggered, all the data that it affects or references already exists.
 #[derive(Resource)]
 pub(super) struct MessageQueue<M> {
-    map: BTreeMap<RepliconTick, Vec<Bytes>>,
-    /// [`Vec`]s from removals.
-    ///
-    /// All data is drained before the insertion.
-    /// Stored to reuse allocated capacity.
-    pool: Vec<Vec<Bytes>>,
+    map: BTreeMap<RepliconTick, SmallVec<[Bytes; 4]>>,
     marker: PhantomData<M>,
 }
 
 impl<M> MessageQueue<M> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
-        self.map
-            .entry(tick)
-            .or_insert_with(|| self.pool.pop().unwrap_or_default())
-            .push(message);
+        self.map.entry(tick).or_default().push(message);
     }
 
     /// Pops the next message that is at least as old as the specified replicon tick.
     pub(super) fn pop_if_le(
         &mut self,
         update_tick: RepliconTick,
-    ) -> Option<(RepliconTick, impl IntoIterator<Item = Bytes>)> {
+    ) -> Option<(RepliconTick, SmallVec<[Bytes; 4]>)> {
         let entry = self.map.first_entry()?;
         if *entry.key() > update_tick {
             return None;
         }
 
-        let (tick, messages) = entry.remove_entry();
-        self.pool.push(messages);
-        let messages = self.pool.last_mut().unwrap();
-        Some((tick, messages.drain(..)))
+        Some(entry.remove_entry())
     }
 
     pub(super) fn len(&self) -> usize {
@@ -54,9 +44,7 @@ impl<M> MessageQueue<M> {
     }
 
     pub(super) fn clear(&mut self) {
-        while let Some((_, messages)) = self.map.pop_first() {
-            self.pool.push(messages);
-        }
+        self.map.clear();
     }
 }
 
@@ -64,7 +52,6 @@ impl<M> Default for MessageQueue<M> {
     fn default() -> Self {
         Self {
             map: Default::default(),
-            pool: Default::default(),
             marker: PhantomData,
         }
     }

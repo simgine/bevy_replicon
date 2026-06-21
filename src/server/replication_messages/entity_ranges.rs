@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use core::ops::Range;
+use smallvec::SmallVec;
 
 use bevy::prelude::*;
 use postcard::experimental::serialized_size;
@@ -15,7 +15,8 @@ use postcard::experimental::serialized_size;
 /// might be outdated, or the entity might have been despawned via client-side prediction.
 pub(super) struct EntityRanges {
     pub(super) entity: Range<usize>,
-    pub(super) data: Vec<Range<usize>>,
+    // Entities usually don't have a lot of changed components at the same time.
+    pub(super) data: SmallVec<[Range<usize>; 4]>,
 }
 
 impl EntityRanges {

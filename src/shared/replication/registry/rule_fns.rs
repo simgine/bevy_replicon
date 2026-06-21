@@ -146,7 +146,7 @@ impl<C: Component> RuleFns<C> {
     /// Serializes a component into a message.
     pub(super) fn serialize(
         &self,
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &C,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -209,7 +209,7 @@ impl<C: Component + Serialize + DeserializeOwned> Default for RuleFns<C> {
 }
 
 /// Signature of component serialization functions.
-pub type SerializeFn<C> = fn(&SerializeCtx, &C, &mut Vec<u8>) -> Result<()>;
+pub type SerializeFn<C> = fn(&mut SerializeCtx, &C, &mut Vec<u8>) -> Result<()>;
 
 /// Signature of component deserialization functions.
 pub type DeserializeFn<C> = fn(&mut WriteCtx, &mut Bytes) -> Result<C>;
@@ -223,7 +223,7 @@ pub type ConsumeFn<C> = fn(DeserializeFn<C>, &mut WriteCtx, &mut Bytes) -> Resul
 
 /// Default component serialization function.
 pub fn default_serialize<C: Component + Serialize>(
-    _ctx: &SerializeCtx,
+    _ctx: &mut SerializeCtx,
     component: &C,
     message: &mut Vec<u8>,
 ) -> Result<()> {
@@ -270,7 +270,7 @@ pub fn consume_as_deserialize<C: Component>(
 
 /// Converts `C` into `T` and serializes it.
 pub fn serialize_as<C: Component + Clone + Into<T>, T: Serialize>(
-    _ctx: &SerializeCtx,
+    _ctx: &mut SerializeCtx,
     component: &C,
     message: &mut Vec<u8>,
 ) -> Result<()> {

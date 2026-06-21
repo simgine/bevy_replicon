@@ -244,8 +244,8 @@ the desired components. See [receive markers](#receive-markers) for more details
 ### Removals
 
 In Bevy, a component can be removed either alone or together with its required components. However, there is no way to
-distinguish between these two cases, so we always remove its required components as well. While this is a sensible default,
-you can override it using [receive markers](#receive-markers).
+distinguish between these two cases, so we don't don't remove required components by default. You can override it using
+[receive markers](#receive-markers).
 
 #### Component relations
 
@@ -755,6 +755,7 @@ pub mod prelude {
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
+                storage::{EntityStorageCtx, ReplicationStorage},
                 visibility::{
                     AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
                     VisibilityFilter,

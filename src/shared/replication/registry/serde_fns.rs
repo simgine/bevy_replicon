@@ -52,7 +52,7 @@ impl<'a> SerdeFns<'a> {
     /// The caller must ensure that `ptr` was created for the same type as this instance.
     pub(crate) unsafe fn serialize(
         &self,
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         ptr: Ptr,
         message: &mut Vec<u8>,
     ) -> Result<()> {

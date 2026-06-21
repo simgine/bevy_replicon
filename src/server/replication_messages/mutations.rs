@@ -1,4 +1,4 @@
-use core::{cmp::Ordering, iter, mem, ops::Range, time::Duration};
+use core::{mem, ops::Range, time::Duration};
 
 use bevy::{ecs::change_detection::Tick, prelude::*};
 use log::trace;
@@ -8,7 +8,6 @@ use super::{entity_ranges::EntityRanges, serialized_data::SerializedData};
 use crate::{
     postcard_utils,
     prelude::*,
-    server::ClientPools,
     shared::{
         backend::channels::ServerChannel,
         replication::{
@@ -61,7 +60,6 @@ impl Mutations {
     /// Adds an entity chunk.
     pub(crate) fn add_entity(
         &mut self,
-        pools: &mut ClientPools,
         entity: Entity,
         graph_index: Option<usize>,
         entity_range: Range<usize>,
@@ -70,10 +68,9 @@ impl Mutations {
             entity,
             ranges: EntityRanges {
                 entity: entity_range,
-                data: pools.take_ranges(),
+                data: Default::default(),
             },
-            components: pools.take_components(),
-            patch_cursors: Default::default(),
+            components: Default::default(),
         };
 
         match graph_index {
@@ -151,7 +148,6 @@ impl Mutations {
         client: Entity,
         ticks: &mut ClientTicks,
         split_buffer: &mut Vec<MutationsSplit>,
-        pools: &mut ClientPools,
         serialized: &SerializedData,
         track_mutate_messages: bool,
         server_tick_range: Range<usize>,
@@ -172,7 +168,7 @@ impl Mutations {
             server_tick,
             system_tick,
             timestamp,
-            entities: pools.take_entities(),
+            entities: Default::default(),
         };
         let mut mutate_index = ticks.next_mutate_index();
         let mut chunks = EntityChunks::new(&mut self.related, &mut self.standalone);
@@ -202,7 +198,7 @@ impl Mutations {
                     server_tick,
                     system_tick,
                     timestamp,
-                    entities: pools.take_entities(),
+                    entities: Default::default(),
                 };
                 chunks_range.start = chunks_range.end;
                 header_size = metadata_size + serialized_size(&mutate_index)?; // Recalculate since the mutate index changed.
@@ -269,35 +265,17 @@ impl Mutations {
         Ok(len)
     }
 
-    /// Clears all entity mutations.
+    /// Clears all entity mutations and updates size of [`Self::related`]
+    /// to split related entities by graph index.
     ///
     /// Keeps allocated memory for reuse.
-    ///
-    /// The outer array of [`Self::related`] is not cleared.
-    /// It should be resized via [`Self::resize_related`] before
-    /// collecting new changes.
-    pub(crate) fn clear(&mut self, pools: &mut ClientPools) {
-        for entities in self
-            .related
-            .iter_mut()
-            .chain(iter::once(&mut self.standalone))
-        {
-            pools.recycle_ranges(entities.drain(..).map(|m| m.ranges.data));
-            // We don't take component masks because they are moved to `MutateInfo` during sending.
+    pub(crate) fn reset(&mut self, graphs_count: usize) {
+        let old_len = self.related.len();
+        self.related.resize_with(graphs_count, Default::default);
+        for entities in &mut self.related[..old_len.min(graphs_count)] {
+            entities.clear();
         }
-    }
-
-    /// Updates size of [`Self::related`] to split related entities by graph index.
-    ///
-    /// Keeps allocated memory for reuse.
-    pub(crate) fn resize_related(&mut self, pools: &mut ClientPools, graphs_count: usize) {
-        match self.related.len().cmp(&graphs_count) {
-            Ordering::Less => self
-                .related
-                .resize_with(graphs_count, || pools.take_mutations()),
-            Ordering::Greater => pools.recycle_mutations(self.related.drain(graphs_count..)),
-            Ordering::Equal => (),
-        }
+        self.standalone.clear();
     }
 }
 
@@ -474,37 +452,23 @@ mod tests {
         let mut serialized = SerializedData::default();
         let mut messages = ServerMessages::default();
         let mut mutations = Mutations::default();
-        let mut pools = ClientPools::default();
 
-        mutations.resize_related(&mut pools, related.len());
+        mutations.reset(related.len());
 
         for (index, &entities) in related.iter().enumerate() {
             for &mutations_size in entities {
-                write_entity(
-                    &mut mutations,
-                    &mut serialized,
-                    &mut pools,
-                    Some(index),
-                    mutations_size,
-                );
+                write_entity(&mut mutations, &mut serialized, Some(index), mutations_size);
             }
         }
 
         for &mutations_size in &standalone {
-            write_entity(
-                &mut mutations,
-                &mut serialized,
-                &mut pools,
-                None,
-                mutations_size,
-            );
+            write_entity(&mut mutations, &mut serialized, None, mutations_size);
         }
 
         mutations
             .send(
                 &mut messages,
                 Entity::PLACEHOLDER,
-                &mut Default::default(),
                 &mut Default::default(),
                 &mut Default::default(),
                 &serialized,
@@ -525,7 +489,6 @@ mod tests {
     fn write_entity(
         mutations: &mut Mutations,
         serialized: &mut SerializedData,
-        pools: &mut ClientPools,
         graph_index: Option<usize>,
         mutations_size: usize,
     ) {
@@ -535,7 +498,7 @@ mod tests {
 
         let entity_size = start + 4;
         mutations.start_entity();
-        mutations.add_entity(pools, Entity::PLACEHOLDER, graph_index, start..entity_size);
+        mutations.add_entity(Entity::PLACEHOLDER, graph_index, start..entity_size);
         mutations.add_component(entity_size..serialized.len());
     }
 }
