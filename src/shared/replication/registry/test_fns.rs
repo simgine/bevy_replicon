@@ -76,6 +76,15 @@ pub trait TestFnsEntityExt {
     #[must_use]
     fn serialize(&mut self, fns_id: FnsId, server_tick: RepliconTick) -> Vec<u8>;
 
+    /// Like [`Self::serialize`], but allows to specify patch cursor.
+    #[must_use]
+    fn serialize_with_patch(
+        &mut self,
+        fns_id: FnsId,
+        server_tick: RepliconTick,
+        cursor: Option<PatchIndex>,
+    ) -> Vec<u8>;
+
     /// Deserializes a component using a registered function for it and
     /// writes it into an entity using a write function based on markers.
     ///
@@ -98,26 +107,41 @@ pub trait TestFnsEntityExt {
 
 impl TestFnsEntityExt for EntityWorldMut<'_> {
     fn serialize(&mut self, fns_id: FnsId, server_tick: RepliconTick) -> Vec<u8> {
+        self.serialize_with_patch(fns_id, server_tick, None)
+    }
+
+    fn serialize_with_patch(
+        &mut self,
+        fns_id: FnsId,
+        server_tick: RepliconTick,
+        patch_cursor: Option<PatchIndex>,
+    ) -> Vec<u8> {
         self.resource_scope(|entity, mut storage: Mut<ReplicationStorage>| {
-            let type_registry = entity.resource::<AppTypeRegistry>();
             let registry = entity.resource::<ReplicationRegistry>();
             let (_, component_id, fns) = registry.get(fns_id);
-            let mut message = Vec::new();
-            let mut ctx = SerializeCtx {
-                entity: entity.id(),
-                server_tick,
-                component_id,
-                type_registry,
-                storage: &mut storage,
-            };
-            let ptr = entity.get_by_id(component_id).unwrap_or_else(|_| {
+            let (Ok(ptr), Some(ticks)) = (
+                entity.get_by_id(component_id),
+                entity.get_change_ticks_by_id(component_id),
+            ) else {
                 let components = entity.world().components();
                 let component_name = components
                     .get_name(component_id)
                     .expect("function should require valid component ID");
                 panic!("serialization function require entity to have {component_name}");
-            });
+            };
 
+            let type_registry = entity.resource::<AppTypeRegistry>();
+            let mut ctx = SerializeCtx {
+                entity: entity.id(),
+                server_tick,
+                component_id,
+                type_registry,
+                patch_cursor,
+                last_changed: ticks.changed,
+                storage: &mut storage,
+            };
+
+            let mut message = Vec::new();
             unsafe {
                 fns.serialize(&mut ctx, ptr, &mut message)
                     .expect("serialization into memory should never fail");

@@ -1,22 +1,24 @@
-use core::ops::{Add, Sub};
+use core::ops::{Add, AddAssign, Sub};
 
 use serde::{Deserialize, Serialize};
 
 /// Monotonic index assigned to a diff patch.
 ///
 /// All operations on it are wrapping.
-#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PatchIndex(#[serde(with = "postcard::fixint::le")] u16);
 
 impl PatchIndex {
     /// The maximum wrapping distance at which an index is considered newer.
     pub const MAX_NEWER_DISTANCE: u16 = u16::MAX / 2;
 
+    /// Creates a new instance wrapping the given value.
     #[inline]
     pub fn new(value: u16) -> Self {
         Self(value)
     }
 
+    /// Gets the value of this tick.
     #[inline]
     pub fn get(self) -> u16 {
         self.0
@@ -25,7 +27,7 @@ impl PatchIndex {
     /// Returns `true` if `self` is newer than `other`.
     ///
     /// The value is considered newer if it is ahead of the other value
-    /// by less than [`PatchIndex::MAX_NEWER_DISTANCE`].
+    /// by at most [`PatchIndex::MAX_NEWER_DISTANCE`].
     pub fn is_newer_than(self, other: Self) -> bool {
         let distance = self.distance_after(other);
         distance != 0 && distance <= Self::MAX_NEWER_DISTANCE
@@ -47,6 +49,12 @@ impl Add<u16> for PatchIndex {
     }
 }
 
+impl AddAssign<u16> for PatchIndex {
+    fn add_assign(&mut self, rhs: u16) {
+        *self = *self + rhs;
+    }
+}
+
 impl Sub<u16> for PatchIndex {
     type Output = Self;
 
@@ -56,11 +64,14 @@ impl Sub<u16> for PatchIndex {
     }
 }
 
-impl Sub for PatchIndex {
-    type Output = u16;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    #[inline]
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.0.wrapping_sub(rhs.0)
+    #[test]
+    fn comparison() {
+        assert_eq!(PatchIndex::new(0), PatchIndex::new(0));
+        assert!(PatchIndex::new(1).is_newer_than(PatchIndex::new(0)));
+        assert!(PatchIndex::new(0).is_newer_than(PatchIndex::new(u16::MAX)));
     }
 }

@@ -5,10 +5,7 @@ use bevy::{prelude::*, ptr::Ptr};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::{
-        diff::{DiffFns, patch_index::PatchIndex},
-        registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
-    },
+    shared::replication::registry::{FnsId, ctx::SerializeCtx, serde_fns::SerdeFns},
 };
 
 /// Single continuous buffer that stores serialized data for messages.
@@ -88,7 +85,7 @@ impl SerializedData {
         Ok(range)
     }
 
-    fn write_component(
+    pub(crate) fn write_component(
         &mut self,
         ctx: &mut SerializeCtx,
         component: &mut ErasedComponent,

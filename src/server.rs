@@ -13,7 +13,6 @@ use bevy::{
     ecs::{
         archetype::Archetypes,
         change_detection::{CheckChangeTicks, Tick},
-        component::StorageType,
         entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -670,31 +669,15 @@ fn collect_changes(
                     )
                 };
 
-                let diff = if let Some(diff) = fns.diff() {
-                    let history_id = rule
-                        .history_id
-                        .expect("rules with diff should register history component");
-                    // SAFETY: history component is registered as required and always has table storage.
-                    let (history, _) = unsafe {
-                        query.get_component_unchecked(
-                            entity,
-                            archetype.table_id(),
-                            StorageType::Table,
-                            history_id,
-                        )
-                    };
-                    Some(WritableDiff { fns: diff, history })
-                } else {
-                    None
-                };
-
                 // SAFETY: `fns` and `ptr` were created for the same component type.
                 let mut component = unsafe { ErasedComponent::new(fns, ptr, rule.fns_id) };
 
                 let mut ctx = SerializeCtx {
                     entity: entity.id(),
                     component_id,
+                    last_changed: ticks.changed,
                     server_tick: **server_tick,
+                    patch_cursor: None,
                     type_registry: &type_registry,
                     storage: &mut replication_storage,
                 };
@@ -732,11 +715,23 @@ fn collect_changes(
                                     .write_cached_entity(&mut entity_range, entity.id())?;
                                 mutations.add_entity(entity.id(), graph_index, entity_range);
                             }
-                            let component_range = serialized.write_cached_component(
-                                &mut ctx,
-                                &mut component_range,
-                                &mut component,
-                            )?;
+
+                            let patch_cursor = entity_ticks.patch_cursor(component_index);
+                            let component_range = if patch_cursor.is_none() {
+                                // Cache only full component snapshots.
+                                serialized.write_cached_component(
+                                    &mut ctx,
+                                    &mut component_range,
+                                    &mut component,
+                                )?
+                            } else {
+                                ctx.patch_cursor = patch_cursor;
+                                let range = serialized.write_component(&mut ctx, &mut component)?;
+                                if let Some(cursor) = ctx.patch_cursor.take() {
+                                    mutations.add_patch_cursor(component_index, cursor);
+                                }
+                                range
+                            };
                             mutations.add_component(component_range);
                         }
                     } else {

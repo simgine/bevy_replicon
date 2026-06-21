@@ -12,7 +12,6 @@ use crate::{
         backend::channels::ServerChannel,
         replication::{
             client_ticks::{ClientTicks, MutateInfo, MutatedEntityInfo, PatchCursors},
-            diff::patch_index::PatchIndex,
             mutate_index::MutateIndex,
             registry::{ComponentIndex, component_mask::ComponentMask},
         },
@@ -71,6 +70,7 @@ impl Mutations {
                 data: Default::default(),
             },
             components: Default::default(),
+            patch_cursors: Default::default(),
         };
 
         match graph_index {
@@ -98,11 +98,7 @@ impl Mutations {
         mutations.ranges.add_data(component);
     }
 
-    /// Tracks the patch index serialized for a diff component.
-    ///
-    /// When the client ACKs this mutation message, this index becomes the last
-    /// ACKed patch index for the component. Future mutations can then resend all
-    /// delta patches after that index.
+    /// Adds the patch cursor serialized for component.
     pub(crate) fn add_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
         let mutations = self
             .entity_location
@@ -301,7 +297,9 @@ pub(crate) struct EntityMutations {
 
     /// Diff patch cursors represented by the serialized component ranges.
     ///
-    /// These are ACK bookkeeping metadata, paired with [`Self::components`].
+    /// When the client ACKs this mutation message, these cursors become the last
+    /// acknowledged patch indices for their components. Future mutations can then
+    /// include only patches after these indices.
     pub(super) patch_cursors: PatchCursors,
 }
 

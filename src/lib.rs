@@ -750,7 +750,7 @@ pub mod prelude {
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
                 Replicated,
-                diff::{DiffEntityExt, Diffable, PatchHistory, patch_index::PatchIndex},
+                diff::{Diffable, EntityCommandsPatchExt, EntityPatchExt, patch_index::PatchIndex},
                 receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},

@@ -11,12 +11,13 @@ use smallvec::SmallVec;
 use super::mutate_index::MutateIndex;
 use crate::{
     prelude::*,
-    shared::replication::{
-        diff::patch_index::PatchIndex,
-        registry::{ComponentIndex, component_mask::ComponentMask},
-    },
+    shared::replication::registry::{ComponentIndex, component_mask::ComponentMask},
 };
 
+/// Alias for cursors associated with components.
+///
+/// We use a [`SmallVec`] because entities usually don't have more than a few
+/// components with diff replication enabled.
 pub(crate) type PatchCursors = SmallVec<[(ComponentIndex, PatchIndex); 3]>;
 
 /// Tracks replication ticks for a client.
@@ -68,7 +69,7 @@ impl ClientTicks {
             return;
         };
 
-        for info in &mutate_info.entities {
+        for info in mutate_info.entities {
             let Some(entity_ticks) = self.entities.get_mut(&info.entity) else {
                 // We ignore missing entities, since they were probably despawned.
                 continue;
@@ -76,23 +77,12 @@ impl ClientTicks {
 
             // Received tick could be outdated because we bump it
             // if we detect any insertion on the entity in `collect_changes`.
-            let is_stale_mutation = mutate_info.server_tick < entity_ticks.server_tick;
             if entity_ticks.server_tick < mutate_info.server_tick {
                 entity_ticks.server_tick = mutate_info.server_tick;
                 entity_ticks.system_tick = mutate_info.system_tick;
                 entity_ticks.components |= &info.components;
-            }
 
-            // Diff ACKs are tracked per component because the next mutation
-            // should contain only patches after the last ACKed patch index.
-            //
-            // If this ACK is older than `entity_ticks.server_tick`, the entity
-            // already moved to a newer state. For example, a component could
-            // have been removed and inserted again, clearing its patch cursor. In
-            // that case an old ACK must not seed a cursor for the current
-            // component lifetime.
-            if !is_stale_mutation {
-                for &(component, cursor) in &info.patch_cursors {
+                for (component, cursor) in info.patch_cursors {
                     if entity_ticks.components.contains(component) {
                         entity_ticks.set_patch_cursor(component, cursor);
                     }
@@ -129,18 +119,17 @@ pub(crate) struct EntityTicks {
     /// The list of components that were replicated on this tick.
     pub(crate) components: ComponentMask,
 
-    /// Last acknowledged diff patch cursor for each component.
+    /// Last acknowledged diff patch cursor for components.
     ///
     /// This is separate from [`Self::server_tick`]: the server tick controls change
-    /// detection for the component as a whole, while this cursor controls the patch-log
-    /// base used to serialize only patches the client has not acknowledged yet.
+    /// detection for the component as a whole, while the cursor controls the
+    /// acknowledged base used to serialize only patches that the client has not yet
+    /// acknowledged.
     ///
-    /// This stores cursors, not patches. Absence means we don't know a diff
-    /// base cursor for this component. It contains at most one entry per
-    /// tracked diff component and is pruned when that component is removed.
+    /// Absence means the client has never acknowledged the base value, or
+    /// diff replication is not enabled for it.
     ///
-    /// We use a smallvec because we don't expect to have more than a few components
-    /// with diff replication on an entity.
+    /// Cursors are pruned when the component is removed.
     patch_cursors: PatchCursors,
 }
 
@@ -164,20 +153,16 @@ impl EntityTicks {
             .find_map(|&(index, cursor)| (index == component).then_some(cursor))
     }
 
-    /// Advances the acknowledged diff patch cursor for `component`.
+    /// Sets the acknowledged diff patch cursor for a component.
     ///
-    /// Mutation ACKs can arrive late relative to newer mutation ACKs. Keep the
-    /// newest cursor so an older ACK cannot make the sender resend patches
-    /// already acknowledged by a newer packet.
+    /// If ACKs arrive out of order, older ACKs must be filtered out by the caller.
     fn set_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
         if let Some((_, existing)) = self
             .patch_cursors
             .iter_mut()
             .find(|(index, _)| *index == component)
         {
-            if cursor.is_newer_than(*existing) {
-                *existing = cursor;
-            }
+            *existing = cursor;
         } else {
             self.patch_cursors.push((component, cursor));
         }
@@ -185,9 +170,15 @@ impl EntityTicks {
 
     pub(crate) fn remove_component(&mut self, component: ComponentIndex) {
         self.components.remove(component);
-        // Component removal resets the entity's state for this component on
-        // the client, so any per-component patch-log cursor becomes stale too.
-        self.patch_cursors.retain(|(index, _)| *index != component);
+        // Component removal resets the entity's state for this component, so
+        // its patch cursor becomes stale too.
+        if let Some(index) = self
+            .patch_cursors
+            .iter()
+            .position(|(index, _)| *index == component)
+        {
+            self.patch_cursors.remove(index);
+        }
     }
 }
 

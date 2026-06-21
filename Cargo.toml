@@ -98,10 +98,6 @@ name = "mutations"
 required-features = ["client", "server"]
 
 [[test]]
-name = "diff"
-required-features = ["client", "server"]
-
-[[test]]
 name = "client_message"
 required-features = ["client", "server"]
 
@@ -115,6 +111,10 @@ required-features = ["client", "server"]
 
 [[test]]
 name = "despawn"
+required-features = ["client", "server"]
+
+[[test]]
+name = "diff"
 required-features = ["client", "server"]
 
 [[test]]

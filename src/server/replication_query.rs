@@ -82,14 +82,9 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
 
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
-        if !rules.is_empty() {
-            for rule in rules.iter() {
-                for component in &rule.components {
-                    component_access.add_component_read(component.id);
-                    if let Some(history_id) = component.history_id {
-                        component_access.add_component_read(history_id);
-                    }
-                }
+        for rule in rules.iter() {
+            for component in &rule.components {
+                component_access.add_component_read(component.id);
             }
         }
 

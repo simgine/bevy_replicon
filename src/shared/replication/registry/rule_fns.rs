@@ -7,7 +7,8 @@ use serde::{Serialize, de::DeserializeOwned};
 use super::ctx::{SerializeCtx, WriteCtx};
 use crate::{
     postcard_utils,
-    shared::replication::diff::{self, DiffFns, Diffable},
+    prelude::*,
+    shared::replication::diff::{ClientDiff, ClientDiffRef, PatchBuffer, PatchHistory},
 };
 
 /// Type-erased version of [`RuleFns`].
@@ -21,7 +22,6 @@ pub(crate) struct UntypedRuleFns {
     deserialize: unsafe fn(),
     deserialize_in_place: unsafe fn(),
     consume: unsafe fn(),
-    diff: Option<DiffFns>,
 }
 
 impl UntypedRuleFns {
@@ -48,13 +48,7 @@ impl UntypedRuleFns {
                 mem::transmute::<unsafe fn(), DeserializeInPlaceFn<C>>(self.deserialize_in_place)
             },
             consume: unsafe { mem::transmute::<unsafe fn(), ConsumeFn<C>>(self.consume) },
-            diff: self.diff,
         }
-    }
-
-    /// Returns diff serialization functions, if enabled for this rule.
-    pub(crate) fn diff(&self) -> Option<DiffFns> {
-        self.diff
     }
 }
 
@@ -72,42 +66,38 @@ impl<C: Component> From<RuleFns<C>> for UntypedRuleFns {
                 mem::transmute::<DeserializeInPlaceFn<C>, unsafe fn()>(value.deserialize_in_place)
             },
             consume: unsafe { mem::transmute::<ConsumeFn<C>, unsafe fn()>(value.consume) },
-            diff: value.diff,
         }
     }
 }
 
 /// Serialization and deserialization functions for a component.
 ///
-/// See also [`AppRuleExt`](crate::shared::replication::rules::AppRuleExt)
+/// See also [`AppRuleExt`]
 /// and [`ReplicationRule`](crate::shared::replication::rules::ReplicationRule).
 pub struct RuleFns<C> {
     serialize: SerializeFn<C>,
     deserialize: DeserializeFn<C>,
     deserialize_in_place: DeserializeInPlaceFn<C>,
     consume: ConsumeFn<C>,
-    /// Sender-side diff functions, if this rule uses patch-based diff replication.
-    diff: Option<DiffFns>,
 }
 
 impl<C: Component> RuleFns<C> {
     /// Creates a new instance.
     ///
-    /// For more details see [`AppRuleExt::replicate_with`](crate::prelude::AppRuleExt::replicate_with).
+    /// For more details see [`AppRuleExt::replicate_with`].
     pub fn new(serialize: SerializeFn<C>, deserialize: DeserializeFn<C>) -> Self {
         Self {
             serialize,
             deserialize,
             deserialize_in_place: in_place_as_deserialize::<C>,
             consume: consume_as_deserialize,
-            diff: None,
         }
     }
 
     /// Like [`Self::default`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
     ///
-    /// For more details see [`AppRuleExt::replicate_as`](crate::prelude::AppRuleExt::replicate_as).
+    /// For more details see [`AppRuleExt::replicate_as`].
     pub fn new_as<T>() -> Self
     where
         T: Serialize + DeserializeOwned,
@@ -176,26 +166,13 @@ impl<C: Component> RuleFns<C> {
     pub(super) fn consume(&self, ctx: &mut WriteCtx, message: &mut Bytes) -> Result<()> {
         (self.consume)(self.deserialize, ctx, message)
     }
-
-    pub(crate) fn diff(&mut self) -> Option<DiffFns> {
-        self.diff
-    }
 }
 
 impl<C: Diffable> RuleFns<C> {
     /// Creates a new instance for patch-based diff replication.
-    ///
-    /// The regular [`RuleFns`] serializer/deserializer handles snapshot
-    /// payloads. Live receive uses a custom write function registered during
-    /// registry setup so it can handle both snapshots and patches.
     pub fn new_diff() -> Self {
-        let mut rule_fns = Self::new(
-            diff::serialize_snapshot_without_history::<C>,
-            diff::deserialize_snapshot::<C>,
-        );
-        rule_fns.consume = diff::consume::<C>;
-        rule_fns.diff = Some(DiffFns::new::<C>());
-        rule_fns
+        Self::new(serialize_diff::<C>, deserialize_diff::<C>)
+            .with_in_place(deserialize_diff_in_place)
     }
 }
 
@@ -288,4 +265,84 @@ pub fn deserialize_as<C: Component + From<T>, T: DeserializeOwned>(
     let mut component = deserialized.into();
     C::map_entities(&mut component, ctx);
     Ok(component)
+}
+
+/// Serializes a component diff.
+pub fn serialize_diff<C: Diffable>(
+    ctx: &mut SerializeCtx,
+    component: &C,
+    message: &mut Vec<u8>,
+) -> Result<()> {
+    let last_changed = ctx.last_changed;
+    let patch_cursor = ctx.patch_cursor;
+    let history = ctx.get_or_default::<PatchHistory<C>>();
+
+    let (index, patches) = history.patches_after(patch_cursor, last_changed);
+    let diff = if patches.len() == 0 {
+        ClientDiffRef::Snapshot { index, component }
+    } else {
+        ClientDiffRef::Patches { index, patches }
+    };
+
+    postcard_utils::to_extend_mut(&diff, message)?;
+
+    ctx.patch_cursor = Some(index);
+
+    Ok(())
+}
+
+/// Deserializes a component diff.
+///
+/// Deserializes only snapshots because it's called only when the component is missing.
+pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) -> Result<C> {
+    match postcard_utils::from_buf(message)? {
+        ClientDiff::Snapshot {
+            index,
+            mut component,
+        } => {
+            let buffer = ctx.get_or_default::<PatchBuffer<C>>();
+            buffer.set_last_applied(index);
+
+            C::map_entities(&mut component, ctx);
+            Ok(component)
+        }
+        ClientDiff::Patches { .. } => Err(format!(
+            "cannot apply patches to `{}` that is not present on the entity",
+            ShortName::of::<C>()
+        )
+        .into()),
+    }
+}
+/// Deserializes a component diff and applies it to the passed component.
+///
+/// Snapshots replace the current component value and reset the patch buffer to
+/// the snapshot's patch cursor. Patch batches are buffered and applied only when
+/// all preceding patches have been received, ensuring patches are applied once
+/// and in order.
+pub fn deserialize_diff_in_place<C: Diffable>(
+    _deserialize: DeserializeFn<C>,
+    ctx: &mut WriteCtx,
+    component: &mut C,
+    message: &mut Bytes,
+) -> Result<()> {
+    match postcard_utils::from_buf(message)? {
+        ClientDiff::<C>::Snapshot {
+            index,
+            component: new_component,
+        } => {
+            let buffer = ctx.get_or_default::<PatchBuffer<C>>();
+            buffer.set_last_applied(index);
+
+            *component = new_component;
+            C::map_entities(component, ctx);
+        }
+        ClientDiff::<C>::Patches { index, patches } => {
+            let buffer = ctx.get_or_default::<PatchBuffer<C>>();
+            buffer.push(index, patches);
+            for patch in buffer.drain_ready() {
+                component.apply_patch(&patch)?;
+            }
+        }
+    }
+    Ok(())
 }

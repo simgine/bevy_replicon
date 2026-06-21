@@ -7,7 +7,7 @@ use bevy::{ecs::archetype::Archetype, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
-use crate::{prelude::*, shared::replication::diff::Diffable};
+use crate::prelude::*;
 use component::{BundleRules, ComponentRule, IntoComponentRules};
 use filter::{FilterRule, FilterRules};
 
@@ -35,11 +35,11 @@ pub trait AppRuleExt {
         self.replicate_once_filtered::<C, ()>()
     }
 
-    /// Like [`Self::replicate`], but instead of re-sending the entire component
-    /// when it changes, this sends a list of patches.
+    /// Like [`Self::replicate`], but sends recorded patches instead of re-sending
+    /// the entire component when it changes.
     ///
-    /// All mutations should be performed through [`DiffEntityExt::apply_patch`],
-    /// which records the changes.
+    /// Mutations should be performed through [`EntityCommandsPatchExt::apply_patch`]
+    /// or [`EntityPatchExt::apply_patch`].
     ///
     /// See [`Diffable`] for more details.
     fn replicate_diff<C>(&mut self) -> &mut Self
