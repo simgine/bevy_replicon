@@ -8,7 +8,7 @@ use super::ctx::{SerializeCtx, WriteCtx};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::diff::{ClientDiff, ClientDiffRef, PatchBuffer, PatchHistory},
+    shared::replication::diff::{PatchBuffer, PatchHistory, WireDiff, WireDiffRef},
 };
 
 /// Type-erased version of [`RuleFns`].
@@ -279,9 +279,9 @@ pub fn serialize_diff<C: Diffable>(
 
     let (index, patches) = history.patches_after(patch_cursor, last_changed);
     let diff = if patches.len() == 0 {
-        ClientDiffRef::Snapshot { index, component }
+        WireDiffRef::Snapshot { index, component }
     } else {
-        ClientDiffRef::Patches { index, patches }
+        WireDiffRef::Patches { index, patches }
     };
 
     postcard_utils::to_extend_mut(&diff, message)?;
@@ -296,7 +296,7 @@ pub fn serialize_diff<C: Diffable>(
 /// Deserializes only snapshots because it's called only when the component is missing.
 pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) -> Result<C> {
     match postcard_utils::from_buf(message)? {
-        ClientDiff::Snapshot {
+        WireDiff::Snapshot {
             index,
             mut component,
         } => {
@@ -306,7 +306,7 @@ pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) ->
             C::map_entities(&mut component, ctx);
             Ok(component)
         }
-        ClientDiff::Patches { .. } => Err(format!(
+        WireDiff::Patches { .. } => Err(format!(
             "cannot apply patches to `{}` that is not present on the entity",
             ShortName::of::<C>()
         )
@@ -326,7 +326,7 @@ pub fn deserialize_diff_in_place<C: Diffable>(
     message: &mut Bytes,
 ) -> Result<()> {
     match postcard_utils::from_buf(message)? {
-        ClientDiff::<C>::Snapshot {
+        WireDiff::<C>::Snapshot {
             index,
             component: new_component,
         } => {
@@ -336,7 +336,7 @@ pub fn deserialize_diff_in_place<C: Diffable>(
             *component = new_component;
             C::map_entities(component, ctx);
         }
-        ClientDiff::<C>::Patches { index, patches } => {
+        WireDiff::<C>::Patches { index, patches } => {
             let buffer = ctx.get_or_default::<PatchBuffer<C>>();
             buffer.push(index, patches);
             for patch in buffer.drain_ready() {

@@ -258,10 +258,10 @@ impl<C: Diffable> Default for PatchHistory<C> {
 
 /// A deserializable component diff.
 ///
-/// See also [`ClientDiffRef`].
+/// See also [`WireDiffRef`].
 #[derive(Deserialize)]
 #[serde(bound(deserialize = "C: Diffable"))]
-pub enum ClientDiff<C: Diffable> {
+pub enum WireDiff<C: Diffable> {
     Snapshot {
         /// Patch cursor established by this snapshot.
         index: PatchIndex,
@@ -278,9 +278,9 @@ pub enum ClientDiff<C: Diffable> {
 
 /// A serializable component diff.
 ///
-/// Separate from [`ClientDiff`] to avoid heap allocation.
+/// Separate from [`WireDiff`] to avoid heap allocation.
 #[derive(Serialize)]
-pub enum ClientDiffRef<'a, C: Diffable> {
+pub enum WireDiffRef<'a, C: Diffable> {
     Snapshot {
         /// Patch cursor established by this snapshot.
         index: PatchIndex,
