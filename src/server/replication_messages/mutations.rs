@@ -11,7 +11,7 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
-            client_ticks::{ClientTicks, MutateInfo, MutatedEntityInfo, PatchCursors},
+            client_ticks::{ClientTicks, DiffCursors, MutateInfo, MutatedEntityInfo},
             mutate_index::MutateIndex,
             registry::{ComponentIndex, component_mask::ComponentMask},
         },
@@ -70,7 +70,7 @@ impl Mutations {
                 data: Default::default(),
             },
             components: Default::default(),
-            patch_cursors: Default::default(),
+            diff_cursors: Default::default(),
         };
 
         match graph_index {
@@ -98,8 +98,8 @@ impl Mutations {
         mutations.ranges.add_data(component);
     }
 
-    /// Adds the patch cursor serialized for component.
-    pub(crate) fn add_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
+    /// Adds the diff cursor serialized for component.
+    pub(crate) fn add_diff_cursor(&mut self, component: ComponentIndex, cursor: DiffIndex) {
         let mutations = self
             .entity_location
             .and_then(|location| match location {
@@ -108,7 +108,7 @@ impl Mutations {
             })
             .expect("entity should be written before adding diff cursors");
 
-        mutations.patch_cursors.push((component, cursor));
+        mutations.diff_cursors.push((component, cursor));
     }
 
     /// Removes last added entity from [`Self::add_entity`] and returns it.
@@ -206,7 +206,7 @@ impl Mutations {
                 .extend(chunk.iter_mut().map(|mutations| MutatedEntityInfo {
                     entity: mutations.entity,
                     components: mem::take(&mut mutations.components),
-                    patch_cursors: mem::take(&mut mutations.patch_cursors),
+                    diff_cursors: mem::take(&mut mutations.diff_cursors),
                 }));
             chunks_range.end += 1;
             body_size += mutations_size;
@@ -295,12 +295,12 @@ pub(crate) struct EntityMutations {
     /// Like [`Self::entity`], used for later component acknowledgement.
     pub(super) components: ComponentMask,
 
-    /// Diff patch cursors represented by the serialized component ranges.
+    /// Diff cursors represented by the serialized component ranges.
     ///
     /// When the client ACKs this mutation message, these cursors become the last
-    /// acknowledged patch indices for their components. Future mutations can then
-    /// include only patches after these indices.
-    pub(super) patch_cursors: PatchCursors,
+    /// acknowledged diff indices for their components. Future mutations can then
+    /// include only diffs after these indices.
+    pub(super) diff_cursors: DiffCursors,
 }
 
 #[derive(Clone, Copy)]

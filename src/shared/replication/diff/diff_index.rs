@@ -2,13 +2,13 @@ use core::ops::{Add, AddAssign, Sub};
 
 use serde::{Deserialize, Serialize};
 
-/// Monotonic index assigned to a diff patch.
+/// Monotonic index assigned to a diff.
 ///
 /// All operations on it are wrapping.
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct PatchIndex(#[serde(with = "postcard::fixint::le")] u16);
+pub struct DiffIndex(#[serde(with = "postcard::fixint::le")] u16);
 
-impl PatchIndex {
+impl DiffIndex {
     /// The maximum wrapping distance at which an index is considered newer.
     pub const MAX_NEWER_DISTANCE: u16 = u16::MAX / 2;
 
@@ -27,7 +27,7 @@ impl PatchIndex {
     /// Returns `true` if `self` is newer than `other`.
     ///
     /// The value is considered newer if it is ahead of the other value
-    /// by at most [`PatchIndex::MAX_NEWER_DISTANCE`].
+    /// by at most [`DiffIndex::MAX_NEWER_DISTANCE`].
     pub fn is_newer_than(self, other: Self) -> bool {
         let distance = self.distance_after(other);
         distance != 0 && distance <= Self::MAX_NEWER_DISTANCE
@@ -40,7 +40,7 @@ impl PatchIndex {
     }
 }
 
-impl Add<u16> for PatchIndex {
+impl Add<u16> for DiffIndex {
     type Output = Self;
 
     #[inline]
@@ -49,13 +49,13 @@ impl Add<u16> for PatchIndex {
     }
 }
 
-impl AddAssign<u16> for PatchIndex {
+impl AddAssign<u16> for DiffIndex {
     fn add_assign(&mut self, rhs: u16) {
         *self = *self + rhs;
     }
 }
 
-impl Sub<u16> for PatchIndex {
+impl Sub<u16> for DiffIndex {
     type Output = Self;
 
     #[inline]
@@ -70,8 +70,8 @@ mod tests {
 
     #[test]
     fn comparison() {
-        assert_eq!(PatchIndex::new(0), PatchIndex::new(0));
-        assert!(PatchIndex::new(1).is_newer_than(PatchIndex::new(0)));
-        assert!(PatchIndex::new(0).is_newer_than(PatchIndex::new(u16::MAX)));
+        assert_eq!(DiffIndex::new(0), DiffIndex::new(0));
+        assert!(DiffIndex::new(1).is_newer_than(DiffIndex::new(0)));
+        assert!(DiffIndex::new(0).is_newer_than(DiffIndex::new(u16::MAX)));
     }
 }

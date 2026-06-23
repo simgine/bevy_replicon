@@ -20,8 +20,8 @@ pub struct SerializeCtx<'a> {
     /// Current tick.
     pub server_tick: RepliconTick,
 
-    /// Last patch index acknowledged by this client.
-    pub patch_cursor: Option<PatchIndex>,
+    /// Last diff index acknowledged by this client.
+    pub diff_cursor: Option<DiffIndex>,
 
     /// Storage for serialization/deserialization state.
     pub storage: &'a mut ReplicationStorage,

@@ -56,7 +56,7 @@ fn write() {
 }
 
 #[test]
-fn write_patch() {
+fn write_diff() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
         .replicate_diff::<DiffComponent>();
@@ -74,7 +74,7 @@ fn write_patch() {
     let component = entity.get::<DiffComponent>().unwrap();
     assert_eq!(component.0, 3);
 
-    let data = entity.serialize_with_patch(fns_id, tick, Some(PatchIndex::new(0)));
+    let data = entity.serialize_with_diff(fns_id, tick, Some(DiffIndex::new(0)));
 
     // Reset the component
     entity.insert(DiffComponent(0));
@@ -416,8 +416,8 @@ struct AddValue(u8);
 impl Diffable for DiffComponent {
     type Diff = AddValue;
 
-    fn apply_diff(&mut self, patch: &Self::Diff) -> Result<()> {
-        self.0 += patch.0;
+    fn apply_diff(&mut self, diff: &Self::Diff) -> Result<()> {
+        self.0 += diff.0;
         Ok(())
     }
 }

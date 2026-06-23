@@ -8,7 +8,7 @@ use super::ctx::{SerializeCtx, WriteCtx};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::diff::{PatchBuffer, PatchHistory, WireDiff, WireDiffRef},
+    shared::replication::diff::{DiffBuffer, DiffHistory, WireDiff, WireDiffRef},
 };
 
 /// Type-erased version of [`RuleFns`].
@@ -169,7 +169,7 @@ impl<C: Component> RuleFns<C> {
 }
 
 impl<C: Diffable> RuleFns<C> {
-    /// Creates a new instance for patch-based diff replication.
+    /// Creates a new instance for diff-based replication.
     pub fn new_diff() -> Self {
         Self::new(serialize_diff::<C>, deserialize_diff::<C>)
             .with_in_place(deserialize_diff_in_place)
@@ -274,19 +274,19 @@ pub fn serialize_diff<C: Diffable>(
     message: &mut Vec<u8>,
 ) -> Result<()> {
     let last_changed = ctx.last_changed;
-    let patch_cursor = ctx.patch_cursor;
-    let history = ctx.get_or_default::<PatchHistory<C>>();
+    let diff_cursor = ctx.diff_cursor;
+    let history = ctx.get_or_default::<DiffHistory<C>>();
 
-    let (index, patches) = history.patches_after(patch_cursor, last_changed);
-    let diff = if patches.len() == 0 {
+    let (index, diffs) = history.diffs_after(diff_cursor, last_changed);
+    let diff = if diffs.len() == 0 {
         WireDiffRef::Snapshot { index, component }
     } else {
-        WireDiffRef::Patches { index, patches }
+        WireDiffRef::Diffs { index, diffs }
     };
 
     postcard_utils::to_extend_mut(&diff, message)?;
 
-    ctx.patch_cursor = Some(index);
+    ctx.diff_cursor = Some(index);
 
     Ok(())
 }
@@ -300,14 +300,14 @@ pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) ->
             index,
             mut component,
         } => {
-            let buffer = ctx.get_or_default::<PatchBuffer<C>>();
+            let buffer = ctx.get_or_default::<DiffBuffer<C>>();
             buffer.set_last_applied(index);
 
             C::map_entities(&mut component, ctx);
             Ok(component)
         }
-        WireDiff::Patches { .. } => Err(format!(
-            "cannot apply patches to `{}` that is not present on the entity",
+        WireDiff::Diffs { .. } => Err(format!(
+            "cannot apply diffs to `{}` that is not present on the entity",
             ShortName::of::<C>()
         )
         .into()),
@@ -315,9 +315,9 @@ pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) ->
 }
 /// Deserializes a component diff and applies it to the passed component.
 ///
-/// Snapshots replace the current component value and reset the patch buffer to
-/// the snapshot's patch cursor. Patch batches are buffered and applied only when
-/// all preceding patches have been received, ensuring patches are applied once
+/// Snapshots replace the current component value and reset the diff buffer to
+/// the snapshot's diff cursor. Diffs are buffered and applied only when
+/// all preceding diffs have been received, ensuring diffs are applied once
 /// and in order.
 pub fn deserialize_diff_in_place<C: Diffable>(
     _deserialize: DeserializeFn<C>,
@@ -330,17 +330,17 @@ pub fn deserialize_diff_in_place<C: Diffable>(
             index,
             component: new_component,
         } => {
-            let buffer = ctx.get_or_default::<PatchBuffer<C>>();
+            let buffer = ctx.get_or_default::<DiffBuffer<C>>();
             buffer.set_last_applied(index);
 
             *component = new_component;
             C::map_entities(component, ctx);
         }
-        WireDiff::<C>::Patches { index, patches } => {
-            let buffer = ctx.get_or_default::<PatchBuffer<C>>();
-            buffer.push(index, patches);
-            for patch in buffer.drain_ready() {
-                component.apply_diff(&patch)?;
+        WireDiff::<C>::Diffs { index, diffs } => {
+            let buffer = ctx.get_or_default::<DiffBuffer<C>>();
+            buffer.push(index, diffs);
+            for diff in buffer.drain_ready() {
+                component.apply_diff(&diff)?;
             }
         }
     }

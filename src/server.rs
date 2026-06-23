@@ -677,7 +677,7 @@ fn collect_changes(
                     component_id,
                     last_changed: ticks.changed,
                     server_tick: **server_tick,
-                    patch_cursor: None,
+                    diff_cursor: None,
                     type_registry: &type_registry,
                     storage: &mut replication_storage,
                 };
@@ -716,8 +716,8 @@ fn collect_changes(
                                 mutations.add_entity(entity.id(), graph_index, entity_range);
                             }
 
-                            let patch_cursor = entity_ticks.patch_cursor(component_index);
-                            let component_range = if patch_cursor.is_none() {
+                            let diff_cursor = entity_ticks.diff_cursor(component_index);
+                            let component_range = if diff_cursor.is_none() {
                                 // Cache only full component snapshots.
                                 serialized.write_cached_component(
                                     &mut ctx,
@@ -725,10 +725,10 @@ fn collect_changes(
                                     &mut component,
                                 )?
                             } else {
-                                ctx.patch_cursor = patch_cursor;
+                                ctx.diff_cursor = diff_cursor;
                                 let range = serialized.write_component(&mut ctx, &mut component)?;
-                                if let Some(cursor) = ctx.patch_cursor.take() {
-                                    mutations.add_patch_cursor(component_index, cursor);
+                                if let Some(cursor) = ctx.diff_cursor.take() {
+                                    mutations.add_diff_cursor(component_index, cursor);
                                 }
                                 range
                             };

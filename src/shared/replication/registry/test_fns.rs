@@ -76,13 +76,13 @@ pub trait TestFnsEntityExt {
     #[must_use]
     fn serialize(&mut self, fns_id: FnsId, server_tick: RepliconTick) -> Vec<u8>;
 
-    /// Like [`Self::serialize`], but allows to specify patch cursor.
+    /// Like [`Self::serialize`], but allows to specify diff cursor.
     #[must_use]
-    fn serialize_with_patch(
+    fn serialize_with_diff(
         &mut self,
         fns_id: FnsId,
         server_tick: RepliconTick,
-        cursor: Option<PatchIndex>,
+        cursor: Option<DiffIndex>,
     ) -> Vec<u8>;
 
     /// Deserializes a component using a registered function for it and
@@ -107,14 +107,14 @@ pub trait TestFnsEntityExt {
 
 impl TestFnsEntityExt for EntityWorldMut<'_> {
     fn serialize(&mut self, fns_id: FnsId, server_tick: RepliconTick) -> Vec<u8> {
-        self.serialize_with_patch(fns_id, server_tick, None)
+        self.serialize_with_diff(fns_id, server_tick, None)
     }
 
-    fn serialize_with_patch(
+    fn serialize_with_diff(
         &mut self,
         fns_id: FnsId,
         server_tick: RepliconTick,
-        patch_cursor: Option<PatchIndex>,
+        diff_cursor: Option<DiffIndex>,
     ) -> Vec<u8> {
         self.resource_scope(|entity, mut storage: Mut<ReplicationStorage>| {
             let registry = entity.resource::<ReplicationRegistry>();
@@ -136,7 +136,7 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                 server_tick,
                 component_id,
                 type_registry,
-                patch_cursor,
+                diff_cursor,
                 last_changed: ticks.changed,
                 storage: &mut storage,
             };

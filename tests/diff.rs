@@ -3,7 +3,7 @@ use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use serde::{Deserialize, Serialize};
 
 #[test]
-fn patching() {
+fn apply() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -206,8 +206,8 @@ impl Diffable for Points {
     type Diff = AddPoint;
     const HISTORY_LEN: usize = 5;
 
-    fn apply_diff(&mut self, patch: &Self::Diff) -> Result<()> {
-        self.0.push(patch.0);
+    fn apply_diff(&mut self, diff: &Self::Diff) -> Result<()> {
+        self.0.push(diff.0);
         Ok(())
     }
 }

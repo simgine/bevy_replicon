@@ -18,7 +18,7 @@ use crate::{
 ///
 /// We use a [`SmallVec`] because entities usually don't have more than a few
 /// components with diff replication enabled.
-pub(crate) type PatchCursors = SmallVec<[(ComponentIndex, PatchIndex); 3]>;
+pub(crate) type DiffCursors = SmallVec<[(ComponentIndex, DiffIndex); 3]>;
 
 /// Tracks replication ticks for a client.
 #[derive(Component, Default)]
@@ -82,9 +82,9 @@ impl ClientTicks {
                 entity_ticks.system_tick = mutate_info.system_tick;
                 entity_ticks.components |= &info.components;
 
-                for (component, cursor) in info.patch_cursors {
+                for (component, cursor) in info.diff_cursors {
                     if entity_ticks.components.contains(component) {
-                        entity_ticks.set_patch_cursor(component, cursor);
+                        entity_ticks.set_diff_cursor(component, cursor);
                     }
                 }
             }
@@ -119,18 +119,18 @@ pub(crate) struct EntityTicks {
     /// The list of components that were replicated on this tick.
     pub(crate) components: ComponentMask,
 
-    /// Last acknowledged diff patch cursor for components.
+    /// Last acknowledged diff cursor for components.
     ///
     /// This is separate from [`Self::server_tick`]: the server tick controls change
     /// detection for the component as a whole, while the cursor controls the
-    /// acknowledged base used to serialize only patches that the client has not yet
+    /// acknowledged base used to serialize only diffs that the client has not yet
     /// acknowledged.
     ///
     /// Absence means the client has never acknowledged the base value, or
     /// diff replication is not enabled for it.
     ///
     /// Cursors are pruned when the component is removed.
-    patch_cursors: PatchCursors,
+    diff_cursors: DiffCursors,
 }
 
 impl EntityTicks {
@@ -143,41 +143,41 @@ impl EntityTicks {
             server_tick,
             system_tick,
             components,
-            patch_cursors: Default::default(),
+            diff_cursors: Default::default(),
         }
     }
 
-    pub(crate) fn patch_cursor(&self, component: ComponentIndex) -> Option<PatchIndex> {
-        self.patch_cursors
+    pub(crate) fn diff_cursor(&self, component: ComponentIndex) -> Option<DiffIndex> {
+        self.diff_cursors
             .iter()
             .find_map(|&(index, cursor)| (index == component).then_some(cursor))
     }
 
-    /// Sets the acknowledged diff patch cursor for a component.
+    /// Sets the acknowledged diff cursor for a component.
     ///
     /// If ACKs arrive out of order, older ACKs must be filtered out by the caller.
-    fn set_patch_cursor(&mut self, component: ComponentIndex, cursor: PatchIndex) {
+    fn set_diff_cursor(&mut self, component: ComponentIndex, cursor: DiffIndex) {
         if let Some((_, existing)) = self
-            .patch_cursors
+            .diff_cursors
             .iter_mut()
             .find(|(index, _)| *index == component)
         {
             *existing = cursor;
         } else {
-            self.patch_cursors.push((component, cursor));
+            self.diff_cursors.push((component, cursor));
         }
     }
 
     pub(crate) fn remove_component(&mut self, component: ComponentIndex) {
         self.components.remove(component);
         // Component removal resets the entity's state for this component, so
-        // its patch cursor becomes stale too.
+        // its diff cursor becomes stale too.
         if let Some(index) = self
-            .patch_cursors
+            .diff_cursors
             .iter()
             .position(|(index, _)| *index == component)
         {
-            self.patch_cursors.remove(index);
+            self.diff_cursors.remove(index);
         }
     }
 }
@@ -194,5 +194,5 @@ pub(crate) struct MutateInfo {
 pub(crate) struct MutatedEntityInfo {
     pub(crate) entity: Entity,
     pub(crate) components: ComponentMask,
-    pub(crate) patch_cursors: PatchCursors,
+    pub(crate) diff_cursors: DiffCursors,
 }
