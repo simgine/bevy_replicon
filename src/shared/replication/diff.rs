@@ -448,34 +448,30 @@ mod tests {
         history.record(ValueDiff::Add(0), Tick::new(0), Tick::new(1));
         history.record(ValueDiff::Add(1), Tick::new(1), Tick::new(2));
         history.record(ValueDiff::Add(2), Tick::new(2), Tick::new(3));
+        history.record(ValueDiff::Add(3), Tick::new(3), Tick::new(4));
 
-        let (index, diffs) = history.diffs_after(None, Tick::new(3));
-        assert_eq!(index.get(), 2);
-        assert_eq!(diffs.len(), 0);
-
-        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(1)), Tick::new(3));
-        assert_eq!(index.get(), 2);
-        assert_eq!(diffs.0.copied().collect::<Vec<_>>(), [ValueDiff::Add(2)]);
-
-        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(2)), Tick::new(3));
-        assert_eq!(index.get(), 2);
-        assert_eq!(diffs.len(), 0);
-
-        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(1)), Tick::new(4));
+        let (index, diffs) = history.diffs_after(None, Tick::new(4));
         assert_eq!(index.get(), 3);
         assert_eq!(diffs.len(), 0);
-        assert!(
-            history.diffs.is_empty(),
-            "should reset if the recorded tick differs"
-        );
 
-        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(2)), Tick::new(4));
+        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(0)), Tick::new(4));
         assert_eq!(index.get(), 3);
         assert_eq!(
             diffs.len(),
             0,
-            "shouldn't return any diffs since the history is now empty"
+            "shouldn't return diffs for indices outside of the history"
         );
+
+        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(1)), Tick::new(4));
+        assert_eq!(index.get(), 3);
+        assert_eq!(
+            diffs.0.copied().collect::<Vec<_>>(),
+            [ValueDiff::Add(2), ValueDiff::Add(3)]
+        );
+
+        let (index, diffs) = history.diffs_after(Some(DiffIndex::new(3)), Tick::new(4));
+        assert_eq!(index.get(), 3);
+        assert_eq!(diffs.len(), 0);
     }
 
     #[test]
