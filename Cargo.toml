@@ -106,10 +106,6 @@ name = "client_event"
 required-features = ["client", "server"]
 
 [[test]]
-name = "client_visibility"
-required-features = ["client", "server"]
-
-[[test]]
 name = "connection"
 required-features = ["client", "server"]
 

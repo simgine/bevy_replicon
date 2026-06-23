@@ -394,6 +394,52 @@ mod tests {
         assert!(!visibility2.get(entity).is_hidden(registry));
     }
 
+    #[test]
+    fn client_replicates_even_with_entity_filter() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<EntityFilter>();
+
+        let client = app.world_mut().spawn(ClientVisibility::default()).id();
+
+        app.world_mut().entity_mut(client).insert(EntityFilter);
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client).unwrap();
+        assert!(visibility.get(client).is_empty());
+        assert!(!visibility.get(client).is_hidden(registry));
+    }
+
+    #[test]
+    fn component_replicates_even_with_component_filter() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<ComponentVisibility>();
+
+        let client = app.world_mut().spawn(ClientVisibility::default()).id();
+
+        app.world_mut()
+            .entity_mut(client)
+            .insert(ComponentVisibility);
+
+        let (a_index, _) =
+            app.world_mut()
+                .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                    registry.init_component_fns::<ClientFilter>(world)
+                });
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client).unwrap();
+        assert!(visibility.get(client).is_empty());
+        assert!(
+            !visibility
+                .get(client)
+                .is_component_hidden(registry, a_index)
+        );
+    }
+
     #[derive(Component)]
     #[component(immutable)]
     struct SelfFilter;
@@ -423,4 +469,17 @@ mod tests {
     #[derive(Component)]
     #[component(immutable)]
     struct ClientFilter;
+
+    #[derive(Component, Default)]
+    #[component(immutable)]
+    struct ComponentVisibility;
+
+    impl VisibilityFilter for ComponentVisibility {
+        type ClientComponent = ClientFilter;
+        type Scope = crate::prelude::SingleComponent<ClientFilter>;
+
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some()
+        }
+    }
 }
