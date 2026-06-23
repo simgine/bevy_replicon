@@ -300,19 +300,19 @@ pub enum ComponentDeltaRef<'a, C: Diffable> {
 /// We can't use a slice because [`VecDeque`] is not contiguous.
 #[must_use]
 #[derive(Deref)]
-pub struct DiffIter<'a, P>(vec_deque::Iter<'a, P>);
+pub struct DiffIter<'a, T>(vec_deque::Iter<'a, T>);
 
-impl<'a, P> DiffIter<'a, P> {
-    fn new(diffs: &'a VecDeque<P>, start: usize) -> Self {
+impl<'a, T> DiffIter<'a, T> {
+    fn new(diffs: &'a VecDeque<T>, start: usize) -> Self {
         Self(diffs.range(start..))
     }
 
-    fn empty(diffs: &'a VecDeque<P>) -> Self {
+    fn empty(diffs: &'a VecDeque<T>) -> Self {
         Self(diffs.range(diffs.len()..))
     }
 }
 
-impl<P: Serialize> Serialize for DiffIter<'_, P> {
+impl<T: Serialize> Serialize for DiffIter<'_, T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq(Some(self.len()))?;
         for diff in self.0.clone() {
