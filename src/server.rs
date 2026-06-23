@@ -530,7 +530,7 @@ fn collect_removals(
                 }
                 let fns_id_range = serialized.write_cached_fns_id(&mut fns_id_range, fns_id)?;
                 message.add_removal(fns_id_range);
-                entity_ticks.components.remove(component_index);
+                entity_ticks.remove_component(component_index);
             }
         }
     }
@@ -582,7 +582,7 @@ fn collect_removals(
                 }
                 let fns_id_range = serialized.write_fns_id(rule.fns_id)?;
                 message.add_removal(fns_id_range);
-                entity_ticks.components.remove(component_index);
+                entity_ticks.remove_component(component_index);
 
                 Ok(())
             };
@@ -675,7 +675,9 @@ fn collect_changes(
                 let mut ctx = SerializeCtx {
                     entity: entity.id(),
                     component_id,
+                    last_changed: ticks.changed,
                     server_tick: **server_tick,
+                    diff_cursor: None,
                     type_registry: &type_registry,
                     storage: &mut replication_storage,
                 };
@@ -713,11 +715,23 @@ fn collect_changes(
                                     .write_cached_entity(&mut entity_range, entity.id())?;
                                 mutations.add_entity(entity.id(), graph_index, entity_range);
                             }
-                            let component_range = serialized.write_cached_component(
-                                &mut ctx,
-                                &mut component_range,
-                                &mut component,
-                            )?;
+
+                            let diff_cursor = entity_ticks.diff_cursor(component_index);
+                            let component_range = if diff_cursor.is_none() {
+                                // Cache only full component snapshots.
+                                serialized.write_cached_component(
+                                    &mut ctx,
+                                    &mut component_range,
+                                    &mut component,
+                                )?
+                            } else {
+                                ctx.diff_cursor = diff_cursor;
+                                let range = serialized.write_component(&mut ctx, &mut component)?;
+                                if let Some(cursor) = ctx.diff_cursor.take() {
+                                    mutations.add_diff_cursor(component_index, cursor);
+                                }
+                                range
+                            };
                             mutations.add_component(component_range);
                         }
                     } else {
@@ -802,11 +816,7 @@ fn update_ticks(
             entity_ticks.components |= &components;
         }
         Entry::Vacant(entry) => {
-            entry.insert(EntityTicks {
-                server_tick,
-                system_tick,
-                components,
-            });
+            entry.insert(EntityTicks::new(server_tick, system_tick, components));
         }
     }
 }

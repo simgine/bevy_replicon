@@ -11,9 +11,9 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
-            client_ticks::{ClientTicks, MutateInfo},
+            client_ticks::{ClientTicks, DiffCursors, MutateInfo, MutatedEntityInfo},
             mutate_index::MutateIndex,
-            registry::component_mask::ComponentMask,
+            registry::{ComponentIndex, component_mask::ComponentMask},
         },
     },
 };
@@ -70,6 +70,7 @@ impl Mutations {
                 data: Default::default(),
             },
             components: Default::default(),
+            diff_cursors: Default::default(),
         };
 
         match graph_index {
@@ -95,6 +96,19 @@ impl Mutations {
             .expect("entity should be written before adding components");
 
         mutations.ranges.add_data(component);
+    }
+
+    /// Adds the diff cursor serialized for component.
+    pub(crate) fn add_diff_cursor(&mut self, component: ComponentIndex, cursor: DiffIndex) {
+        let mutations = self
+            .entity_location
+            .and_then(|location| match location {
+                EntityLocation::Related { index } => self.related[index].last_mut(),
+                EntityLocation::Standalone => self.standalone.last_mut(),
+            })
+            .expect("entity should be written before adding diff cursors");
+
+        mutations.diff_cursors.push((component, cursor));
     }
 
     /// Removes last added entity from [`Self::add_entity`] and returns it.
@@ -187,11 +201,13 @@ impl Mutations {
                 body_size = 0;
             }
 
-            mutate_info.entities.extend(
-                chunk
-                    .iter_mut()
-                    .map(|mutations| (mutations.entity, mem::take(&mut mutations.components))),
-            );
+            mutate_info
+                .entities
+                .extend(chunk.iter_mut().map(|mutations| MutatedEntityInfo {
+                    entity: mutations.entity,
+                    components: mem::take(&mut mutations.components),
+                    diff_cursors: mem::take(&mut mutations.diff_cursors),
+                }));
             chunks_range.end += 1;
             body_size += mutations_size;
         }
@@ -278,6 +294,13 @@ pub(crate) struct EntityMutations {
     ///
     /// Like [`Self::entity`], used for later component acknowledgement.
     pub(super) components: ComponentMask,
+
+    /// Diff cursors represented by the serialized component ranges.
+    ///
+    /// When the client ACKs this mutation message, these cursors become the last
+    /// acknowledged diff indices for their components. Future mutations can then
+    /// include only diffs after these indices.
+    pub(super) diff_cursors: DiffCursors,
 }
 
 #[derive(Clone, Copy)]

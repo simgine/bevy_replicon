@@ -85,7 +85,7 @@ impl SerializedData {
         Ok(range)
     }
 
-    fn write_component(
+    pub(crate) fn write_component(
         &mut self,
         ctx: &mut SerializeCtx,
         component: &mut ErasedComponent,

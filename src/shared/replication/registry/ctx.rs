@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::{component::ComponentId, entity::EntityAllocator},
+    ecs::{change_detection::Tick, component::ComponentId, entity::EntityAllocator},
     prelude::*,
 };
 
@@ -14,8 +14,14 @@ pub struct SerializeCtx<'a> {
     /// ID of the serializing component.
     pub component_id: ComponentId,
 
+    /// Last changed tick of the component.
+    pub last_changed: Tick,
+
     /// Current tick.
     pub server_tick: RepliconTick,
+
+    /// Last diff index acknowledged by this client.
+    pub diff_cursor: Option<DiffIndex>,
 
     /// Storage for serialization/deserialization state.
     pub storage: &'a mut ReplicationStorage,

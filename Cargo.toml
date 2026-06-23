@@ -114,6 +114,10 @@ name = "despawn"
 required-features = ["client", "server"]
 
 [[test]]
+name = "diff"
+required-features = ["client", "server"]
+
+[[test]]
 name = "fns"
 required-features = ["client"]
 

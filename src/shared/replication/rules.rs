@@ -35,6 +35,28 @@ pub trait AppRuleExt {
         self.replicate_once_filtered::<C, ()>()
     }
 
+    /// Like [`Self::replicate`], but sends recorded diffs instead of re-sending
+    /// the entire component when it changes.
+    ///
+    /// Mutations should be performed through [`EntityCommandsDiffExt::apply_diff`]
+    /// or [`EntityDiffExt::apply_diff`].
+    ///
+    /// See [`Diffable`] for more details.
+    fn replicate_diff<C>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        self.replicate_diff_filtered::<C, ()>()
+    }
+
+    /// Like [`Self::replicate_diff`], but also adds filters like [`Self::replicate_filtered`].
+    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        self.replicate_with_filtered::<_, F>(RuleFns::<C>::new_diff())
+    }
+
     /// Like [`Self::replicate`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
     ///
