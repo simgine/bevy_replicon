@@ -340,7 +340,7 @@ pub fn deserialize_diff_in_place<C: Diffable>(
             let buffer = ctx.get_or_default::<PatchBuffer<C>>();
             buffer.push(index, patches);
             for patch in buffer.drain_ready() {
-                component.apply_patch(&patch)?;
+                component.apply_diff(&patch)?;
             }
         }
     }

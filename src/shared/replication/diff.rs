@@ -25,10 +25,10 @@ Bevy change detection works at component granularity, so it cannot tell which
 field or collection element changed. Computing a diff would also be expensive,
 especially for collections with many elements. To avoid this, we require users
 to define a [`Self::Patch`] which describes a possible change and
-[`Self::apply_patch`] which applies the change to the component.
+[`Self::apply_diff`] which applies the change to the component.
 
-To record changes, apply them via [`EntityCommandsPatchExt::apply_patch`]
-or [`EntityPatchExt::apply_patch`]. Internally, patches are recorded in [`PatchHistory`].
+To record changes, apply them via [`EntityCommandsPatchExt::apply_diff`]
+or [`EntityPatchExt::apply_diff`]. Internally, patches are recorded in [`PatchHistory`].
 For each client, the server sends either the patches after that client's latest
 acknowledged patch cursor, or a full snapshot if the needed patches are no longer
 retained. On the receiver, patches are deduplicated, buffered until they can be
@@ -57,7 +57,7 @@ let mut entity = app.world_mut().spawn((Replicated, Trail(VecDeque::new())));
 
 let point = Point { x: 1.0, y: 2.0 };
 entity
-    .apply_patch::<Trail>(TrailChange::PushBack(point))
+    .apply_diff::<Trail>(TrailDiff::PushBack(point))
     .unwrap();
 
 let trail = entity.get::<Trail>().unwrap();
@@ -67,19 +67,19 @@ assert_eq!(trail.0, [point]);
 struct Trail(VecDeque<Point>);
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
-enum TrailChange {
+enum TrailDiff {
     PushBack(Point),
     PopFront(usize),
 }
 
 impl Diffable for Trail {
-    type Patch = TrailChange;
+    type Patch = TrailDiff;
     const HISTORY_LEN: usize = 256;
 
-    fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()> {
+    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
         match *patch {
-            TrailChange::PushBack(point) => self.0.push_back(point),
-            TrailChange::PopFront(count) => {
+            TrailDiff::PushBack(point) => self.0.push_back(point),
+            TrailDiff::PopFront(count) => {
                 for _ in 0..count {
                     self.0.pop_front();
                 }
@@ -112,7 +112,7 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
     const HISTORY_LEN: usize = 64;
 
     /// Applies a patch to the component.
-    fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()>;
+    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()>;
 }
 
 /// Extension trait for [`EntityWorldMut`] to apply patches.
@@ -120,18 +120,18 @@ pub trait EntityPatchExt {
     /// Applies patch to component `C` and records it in the entity's [`PatchHistory`].
     ///
     /// Returns an error if the entity does not have a component of type `C`.
-    fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()>;
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> Result<()>;
 }
 
 impl EntityPatchExt for EntityWorldMut<'_> {
-    fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
         let entity = self.id();
         let mut component = self
             .get_mut::<C>()
             .ok_or_else(|| format!("`{entity}` doesn't have `{}`", ShortName::of::<C>()))?;
 
         let before_patch = component.last_changed();
-        component.apply_patch(&patch)?;
+        component.apply_diff(&patch)?;
         let after_patch = component.last_changed();
 
         let mut storage = self.resource_mut::<ReplicationStorage>();
@@ -145,12 +145,12 @@ impl EntityPatchExt for EntityWorldMut<'_> {
 /// Extension trait for [`EntityCommands`] to apply patches.
 pub trait EntityCommandsPatchExt {
     /// Queues patch application to component `C` and records it in the entity's [`PatchHistory`].
-    fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> &mut Self;
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> &mut Self;
 }
 
 impl EntityCommandsPatchExt for EntityCommands<'_> {
-    fn apply_patch<C: Diffable>(&mut self, patch: C::Patch) -> &mut Self {
-        self.queue(move |mut entity: EntityWorldMut| entity.apply_patch::<C>(patch))
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> &mut Self {
+        self.queue(move |mut entity: EntityWorldMut| entity.apply_diff::<C>(patch))
     }
 }
 
@@ -609,8 +609,8 @@ mod tests {
         world.init_resource::<ReplicationStorage>();
 
         let mut entity = world.spawn(Value::default());
-        entity.apply_patch::<Value>(ValueChange::Add(10)).unwrap();
-        entity.apply_patch::<Value>(ValueChange::Sub(3)).unwrap();
+        entity.apply_diff::<Value>(ValueChange::Add(10)).unwrap();
+        entity.apply_diff::<Value>(ValueChange::Sub(3)).unwrap();
         assert_eq!(entity.get::<Value>().copied(), Some(Value(7)));
 
         let entity = entity.id();
@@ -625,7 +625,7 @@ mod tests {
         world.init_resource::<ReplicationStorage>();
 
         let mut entity = world.spawn_empty();
-        assert!(entity.apply_patch::<Value>(ValueChange::Add(10)).is_err());
+        assert!(entity.apply_diff::<Value>(ValueChange::Add(10)).is_err());
         assert!(entity.get::<Value>().is_none());
     }
 
@@ -635,7 +635,7 @@ mod tests {
         world.init_resource::<ReplicationStorage>();
 
         let mut entity = world.spawn(Value::default());
-        entity.apply_patch::<Value>(ValueChange::Add(10)).unwrap();
+        entity.apply_diff::<Value>(ValueChange::Add(10)).unwrap();
         let entity_id = entity.id();
 
         world.increment_change_tick();
@@ -645,7 +645,7 @@ mod tests {
         value.set_changed(); // Mock external change after patch application.
 
         let mut entity = world.entity_mut(entity_id);
-        entity.apply_patch::<Value>(ValueChange::Sub(3)).unwrap();
+        entity.apply_diff::<Value>(ValueChange::Sub(3)).unwrap();
         assert_eq!(entity.get::<Value>().copied(), Some(Value(7)));
 
         let storage = world.resource::<ReplicationStorage>();
@@ -665,8 +665,8 @@ mod tests {
         let mut commands = world.commands();
         commands
             .entity(entity)
-            .apply_patch::<Value>(ValueChange::Add(10))
-            .apply_patch::<Value>(ValueChange::Sub(3));
+            .apply_diff::<Value>(ValueChange::Add(10))
+            .apply_diff::<Value>(ValueChange::Sub(3));
 
         world.flush();
 
@@ -684,7 +684,7 @@ mod tests {
         const HISTORY_LEN: usize = u16::MAX as usize;
         type Patch = ();
 
-        fn apply_patch(&mut self, _patch: &Self::Patch) -> Result<()> {
+        fn apply_diff(&mut self, _patch: &Self::Patch) -> Result<()> {
             Ok(())
         }
     }
@@ -696,7 +696,7 @@ mod tests {
         const HISTORY_LEN: usize = 3;
         type Patch = ValueChange;
 
-        fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()> {
+        fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
             match *patch {
                 ValueChange::Add(value) => self.0 += value,
                 ValueChange::Sub(value) => self.0 -= value,

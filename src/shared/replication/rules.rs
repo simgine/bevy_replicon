@@ -38,8 +38,8 @@ pub trait AppRuleExt {
     /// Like [`Self::replicate`], but sends recorded patches instead of re-sending
     /// the entire component when it changes.
     ///
-    /// Mutations should be performed through [`EntityCommandsPatchExt::apply_patch`]
-    /// or [`EntityPatchExt::apply_patch`].
+    /// Mutations should be performed through [`EntityCommandsPatchExt::apply_diff`]
+    /// or [`EntityPatchExt::apply_diff`].
     ///
     /// See [`Diffable`] for more details.
     fn replicate_diff<C>(&mut self) -> &mut Self

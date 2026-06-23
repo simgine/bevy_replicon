@@ -34,7 +34,7 @@ fn patching() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_patch::<Points>(AddPoint(1))
+        .apply_diff::<Points>(AddPoint(1))
         .unwrap();
 
     server_app.update();
@@ -76,7 +76,7 @@ fn message_loss() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_patch::<Points>(AddPoint(1))
+        .apply_diff::<Points>(AddPoint(1))
         .unwrap();
 
     server_app.update();
@@ -87,7 +87,7 @@ fn message_loss() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_patch::<Points>(AddPoint(2))
+        .apply_diff::<Points>(AddPoint(2))
         .unwrap();
 
     server_app.update();
@@ -130,7 +130,7 @@ fn outside_of_history_window() {
         server_app
             .world_mut()
             .entity_mut(server_entity)
-            .apply_patch::<Points>(AddPoint(index as u8))
+            .apply_diff::<Points>(AddPoint(index as u8))
             .unwrap();
     }
 
@@ -142,7 +142,7 @@ fn outside_of_history_window() {
     server_app
         .world_mut()
         .entity_mut(server_entity)
-        .apply_patch::<Points>(AddPoint(100))
+        .apply_diff::<Points>(AddPoint(100))
         .unwrap();
 
     server_app.update();
@@ -206,7 +206,7 @@ impl Diffable for Points {
     type Patch = AddPoint;
     const HISTORY_LEN: usize = 5;
 
-    fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()> {
+    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
         self.0.push(patch.0);
         Ok(())
     }

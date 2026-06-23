@@ -69,8 +69,8 @@ fn write_patch() {
             });
 
     let mut entity = app.world_mut().spawn(DiffComponent(0));
-    entity.apply_patch::<DiffComponent>(AddValue(1)).unwrap();
-    entity.apply_patch::<DiffComponent>(AddValue(2)).unwrap();
+    entity.apply_diff::<DiffComponent>(AddValue(1)).unwrap();
+    entity.apply_diff::<DiffComponent>(AddValue(2)).unwrap();
     let component = entity.get::<DiffComponent>().unwrap();
     assert_eq!(component.0, 3);
 
@@ -416,7 +416,7 @@ struct AddValue(u8);
 impl Diffable for DiffComponent {
     type Patch = AddValue;
 
-    fn apply_patch(&mut self, patch: &Self::Patch) -> Result<()> {
+    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
         self.0 += patch.0;
         Ok(())
     }
