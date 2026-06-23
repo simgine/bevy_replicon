@@ -183,6 +183,20 @@ pub trait AppRuleExt {
         self.replicate_resource_with(RuleFns::<R>::default())
     }
 
+    /// Like [`Self::replicate_resource`], but sends recorded diffs instead of re-sending
+    /// the entire resource when it changes.
+    ///
+    /// Mutations should be performed through [`CommandsDiffExt::apply_resource_diff`]
+    /// or [`WorldDiffExt::apply_resource_diff`].
+    ///
+    /// See [`Diffable`] for more details.
+    fn replicate_resource_diff<R>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Diffable,
+    {
+        self.replicate_resource_with(RuleFns::<R>::new_diff())
+    }
+
     /// Like [`Self::replicate_resource`], but uses [`ReplicationMode::Once`].
     fn replicate_resource_once<R>(&mut self) -> &mut Self
     where

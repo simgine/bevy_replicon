@@ -158,6 +158,49 @@ impl EntityCommandsDiffExt for EntityCommands<'_> {
     }
 }
 
+/// Extension trait for [`EntityCommands`] to apply diffs to resources.
+///
+/// See also [`CommandsDiffExt`].
+pub trait WorldDiffExt {
+    /// Applies a diff to resource `R` and records it in the global [`DiffHistory`].
+    ///
+    /// Returns an error if resource `R` does not exist.
+    fn apply_resource_diff<R: Resource + Diffable>(&mut self, diff: R::Diff) -> Result<()>;
+}
+
+impl WorldDiffExt for World {
+    fn apply_resource_diff<R: Resource + Diffable>(&mut self, diff: R::Diff) -> Result<()> {
+        let mut resource = self
+            .get_resource_mut::<R>()
+            .ok_or_else(|| format!("missing resource `{}`", ShortName::of::<R>()))?;
+
+        let before_diff = resource.last_changed();
+        resource.apply_diff(&diff)?;
+        let after_diff = resource.last_changed();
+
+        let mut storage = self.resource_mut::<ReplicationStorage>();
+        let history = storage.global.get_or_default::<DiffHistory<R>>();
+        history.record(diff, before_diff, after_diff);
+
+        Ok(())
+    }
+}
+
+/// Extension trait for [`Commands`] to apply diffs to resources.
+///
+/// See also [`WorldDiffExt`].
+pub trait CommandsDiffExt {
+    /// Queues application of a diff to resource `R` and records it in the global [`DiffHistory`].
+    fn apply_resource_diff<R: Resource + Diffable>(&mut self, diff: R::Diff) -> &mut Self;
+}
+
+impl CommandsDiffExt for Commands<'_, '_> {
+    fn apply_resource_diff<R: Resource + Diffable>(&mut self, diff: R::Diff) -> &mut Self {
+        self.queue(move |entity: &mut World| entity.apply_resource_diff::<R>(diff));
+        self
+    }
+}
+
 /// Diff history associated with a component.
 ///
 /// Stored inside [`ReplicationStorage`].
@@ -666,6 +709,87 @@ mod tests {
         assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
     }
 
+    #[test]
+    fn resource_apply() {
+        let mut world = World::new();
+        world.init_resource::<ReplicationStorage>();
+        world.init_resource::<Value>();
+
+        world
+            .apply_resource_diff::<Value>(ValueDiff::Add(10))
+            .unwrap();
+        world
+            .apply_resource_diff::<Value>(ValueDiff::Sub(3))
+            .unwrap();
+        assert_eq!(*world.resource::<Value>(), Value(7));
+
+        let storage = world.resource::<ReplicationStorage>();
+        let history = storage.global.get::<DiffHistory<Value>>().unwrap();
+        assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
+    }
+
+    #[test]
+    fn resource_apply_on_missing() {
+        let mut world = World::new();
+        world.init_resource::<ReplicationStorage>();
+
+        assert!(
+            world
+                .apply_resource_diff::<Value>(ValueDiff::Add(10))
+                .is_err()
+        );
+        assert!(!world.contains_resource::<Value>());
+    }
+
+    #[test]
+    fn resource_apply_with_external_mutation() {
+        let mut world = World::new();
+        world.init_resource::<ReplicationStorage>();
+        world.init_resource::<Value>();
+
+        world
+            .apply_resource_diff::<Value>(ValueDiff::Add(10))
+            .unwrap();
+
+        world.increment_change_tick();
+
+        let mut value = world.resource_mut::<Value>();
+        assert_eq!(*value, Value(10));
+        value.set_changed(); // Mock external change after diff application.
+
+        world
+            .apply_resource_diff::<Value>(ValueDiff::Sub(3))
+            .unwrap();
+        assert_eq!(*world.resource::<Value>(), Value(7));
+
+        let storage = world.resource::<ReplicationStorage>();
+        let history = storage.global.get::<DiffHistory<Value>>().unwrap();
+        assert!(
+            history.diffs.is_empty(),
+            "history should be cleared on external mutation"
+        );
+    }
+
+    #[test]
+    fn resource_apply_commands() {
+        let mut world = World::new();
+        world.init_resource::<ReplicationStorage>();
+        world.init_resource::<Value>();
+
+        let mut commands = world.commands();
+        commands
+            .apply_resource_diff::<Value>(ValueDiff::Add(10))
+            .apply_resource_diff::<Value>(ValueDiff::Sub(3));
+
+        world.flush();
+
+        assert_eq!(*world.resource::<Value>(), Value(7));
+
+        let storage = world.resource::<ReplicationStorage>();
+        let history = storage.global.get::<DiffHistory<Value>>().unwrap();
+        assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
+    }
+
     #[derive(Component, Serialize, Deserialize)]
     struct TooLongHistory;
 
@@ -678,7 +802,7 @@ mod tests {
         }
     }
 
-    #[derive(Component, Default, Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
+    #[derive(Resource, Default, Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
     struct Value(u8);
 
     impl Diffable for Value {
