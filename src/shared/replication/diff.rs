@@ -256,12 +256,12 @@ impl<C: Diffable> Default for DiffHistory<C> {
     }
 }
 
-/// A deserializable component diff.
+/// A deserializable component delta.
 ///
-/// See also [`WireDiffRef`].
+/// See also [`ComponentDeltaRef`].
 #[derive(Deserialize)]
 #[serde(bound(deserialize = "C: Diffable"))]
-pub enum WireDiff<C: Diffable> {
+pub enum ComponentDelta<C: Diffable> {
     Snapshot {
         /// Diff cursor established by this snapshot.
         index: DiffIndex,
@@ -276,11 +276,11 @@ pub enum WireDiff<C: Diffable> {
     },
 }
 
-/// A serializable component diff.
+/// A serializable component delta.
 ///
-/// Separate from [`WireDiff`] to avoid heap allocation.
+/// Separate from [`ComponentDelta`] to avoid heap allocation.
 #[derive(Serialize)]
-pub enum WireDiffRef<'a, C: Diffable> {
+pub enum ComponentDeltaRef<'a, C: Diffable> {
     Snapshot {
         /// Diff cursor established by this snapshot.
         index: DiffIndex,

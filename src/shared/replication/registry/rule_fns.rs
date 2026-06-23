@@ -8,7 +8,7 @@ use super::ctx::{SerializeCtx, WriteCtx};
 use crate::{
     postcard_utils,
     prelude::*,
-    shared::replication::diff::{DiffBuffer, DiffHistory, WireDiff, WireDiffRef},
+    shared::replication::diff::{ComponentDelta, ComponentDeltaRef, DiffBuffer, DiffHistory},
 };
 
 /// Type-erased version of [`RuleFns`].
@@ -278,13 +278,13 @@ pub fn serialize_diff<C: Diffable>(
     let history = ctx.get_or_default::<DiffHistory<C>>();
 
     let (index, diffs) = history.diffs_after(diff_cursor, last_changed);
-    let diff = if diffs.len() == 0 {
-        WireDiffRef::Snapshot { index, component }
+    let delta = if diffs.len() == 0 {
+        ComponentDeltaRef::Snapshot { index, component }
     } else {
-        WireDiffRef::Diffs { index, diffs }
+        ComponentDeltaRef::Diffs { index, diffs }
     };
 
-    postcard_utils::to_extend_mut(&diff, message)?;
+    postcard_utils::to_extend_mut(&delta, message)?;
 
     ctx.diff_cursor = Some(index);
 
@@ -296,7 +296,7 @@ pub fn serialize_diff<C: Diffable>(
 /// Deserializes only snapshots because it's called only when the component is missing.
 pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) -> Result<C> {
     match postcard_utils::from_buf(message)? {
-        WireDiff::Snapshot {
+        ComponentDelta::Snapshot {
             index,
             mut component,
         } => {
@@ -306,7 +306,7 @@ pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) ->
             C::map_entities(&mut component, ctx);
             Ok(component)
         }
-        WireDiff::Diffs { .. } => Err(format!(
+        ComponentDelta::Diffs { .. } => Err(format!(
             "cannot apply diffs to `{}` that is not present on the entity",
             ShortName::of::<C>()
         )
@@ -326,7 +326,7 @@ pub fn deserialize_diff_in_place<C: Diffable>(
     message: &mut Bytes,
 ) -> Result<()> {
     match postcard_utils::from_buf(message)? {
-        WireDiff::<C>::Snapshot {
+        ComponentDelta::<C>::Snapshot {
             index,
             component: new_component,
         } => {
@@ -336,7 +336,7 @@ pub fn deserialize_diff_in_place<C: Diffable>(
             *component = new_component;
             C::map_entities(component, ctx);
         }
-        WireDiff::<C>::Diffs { index, diffs } => {
+        ComponentDelta::<C>::Diffs { index, diffs } => {
             let buffer = ctx.get_or_default::<DiffBuffer<C>>();
             buffer.push(index, diffs);
             for diff in buffer.drain_ready() {
