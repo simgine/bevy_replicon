@@ -171,6 +171,11 @@ pub trait AppRuleExt {
     ///
     /// The only difference from the component version is that it makes [`Replicated`] a
     /// required component for `R`, so you don't need to insert it manually to enable replication.
+    ///
+    /// To spawn a replicated resource ahead of the server, use [`Signature`] to
+    /// map the local resource entity to the corresponding server entity. Otherwise,
+    /// when the server later replicates that resource, Bevy will reject spawning
+    /// the entity because the resource already exists in the world.
     fn replicate_resource<R>(&mut self) -> &mut Self
     where
         R: Resource<Mutability: MutWrite<R>> + Serialize + DeserializeOwned,
