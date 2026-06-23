@@ -1,7 +1,7 @@
 use bevy::{
     ecs::{
         bundle::{BundleScratch, BundleWriter},
-        component::{ComponentId, Components, ComponentsRegistrator, Mutable},
+        component::{ComponentId, Components, Mutable},
         query::{QueryAccessError, ReleaseStateQueryData, SingleEntityQueryData},
     },
     prelude::*,
@@ -44,7 +44,9 @@ impl<'w> DeferredEntity<'w> {
         // from the world, and it is from the same world as the entity.
         unsafe {
             let mut registrator = self.entity.world_mut().components_registrator();
-            self.buffer.push_component(&mut registrator, component);
+            self.buffer
+                .insertions
+                .push_component(&mut registrator, component);
         }
         self
     }
@@ -53,9 +55,8 @@ impl<'w> DeferredEntity<'w> {
     ///
     /// Calling this function multiple times for different components is equivalent to removing a bundle with them.
     pub fn remove<C: Component>(&mut self) -> &mut Self {
-        // SAFETY: no location update is needed because we only access the registrator.
-        let mut registrator = unsafe { self.entity.world_mut().components_registrator() };
-        self.buffer.push_removal::<C>(&mut registrator);
+        let component_id = self.register_component::<C>();
+        self.buffer.removals.push(component_id);
         self
     }
 
@@ -168,19 +169,12 @@ impl EntityScratch {
 }
 
 /// Borrowed buffer used by [`DeferredEntity`] to stage structural changes.
-#[derive(Deref, DerefMut)]
 struct EntityBuffer<'a> {
-    #[deref]
     insertions: BundleWriter<'a>,
     removals: &'a mut Vec<ComponentId>,
 }
 
 impl EntityBuffer<'_> {
-    fn push_removal<C: Component>(&mut self, registrator: &mut ComponentsRegistrator) {
-        let id = registrator.register_component::<C>();
-        self.removals.push(id);
-    }
-
     /// Writes all buffered changes to the entity.
     ///
     /// # Safety
