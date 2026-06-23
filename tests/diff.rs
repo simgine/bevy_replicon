@@ -203,10 +203,10 @@ struct Points(Vec<u8>);
 struct AddPoint(u8);
 
 impl Diffable for Points {
-    type Patch = AddPoint;
+    type Diff = AddPoint;
     const HISTORY_LEN: usize = 5;
 
-    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
+    fn apply_diff(&mut self, patch: &Self::Diff) -> Result<()> {
         self.0.push(patch.0);
         Ok(())
     }

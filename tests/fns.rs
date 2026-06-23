@@ -414,9 +414,9 @@ struct DiffComponent(u8);
 struct AddValue(u8);
 
 impl Diffable for DiffComponent {
-    type Patch = AddValue;
+    type Diff = AddValue;
 
-    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
+    fn apply_diff(&mut self, patch: &Self::Diff) -> Result<()> {
         self.0 += patch.0;
         Ok(())
     }

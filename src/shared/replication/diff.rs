@@ -99,7 +99,7 @@ struct Point {
 */
 pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwned + Sized {
     /// A recordable change that transforms this component.
-    type Patch: Serialize + DeserializeOwned + Send + Sync + 'static;
+    type Diff: Serialize + DeserializeOwned + Send + Sync + 'static;
 
     /// Maximum number of patches retained for diff serialization.
     ///
@@ -112,7 +112,7 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
     const HISTORY_LEN: usize = 64;
 
     /// Applies a patch to the component.
-    fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()>;
+    fn apply_diff(&mut self, patch: &Self::Diff) -> Result<()>;
 }
 
 /// Extension trait for [`EntityWorldMut`] to apply patches.
@@ -120,11 +120,11 @@ pub trait EntityPatchExt {
     /// Applies patch to component `C` and records it in the entity's [`PatchHistory`].
     ///
     /// Returns an error if the entity does not have a component of type `C`.
-    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> Result<()>;
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Diff) -> Result<()>;
 }
 
 impl EntityPatchExt for EntityWorldMut<'_> {
-    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> Result<()> {
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Diff) -> Result<()> {
         let entity = self.id();
         let mut component = self
             .get_mut::<C>()
@@ -145,11 +145,11 @@ impl EntityPatchExt for EntityWorldMut<'_> {
 /// Extension trait for [`EntityCommands`] to apply patches.
 pub trait EntityCommandsPatchExt {
     /// Queues patch application to component `C` and records it in the entity's [`PatchHistory`].
-    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> &mut Self;
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Diff) -> &mut Self;
 }
 
 impl EntityCommandsPatchExt for EntityCommands<'_> {
-    fn apply_diff<C: Diffable>(&mut self, patch: C::Patch) -> &mut Self {
+    fn apply_diff<C: Diffable>(&mut self, patch: C::Diff) -> &mut Self {
         self.queue(move |mut entity: EntityWorldMut| entity.apply_diff::<C>(patch))
     }
 }
@@ -161,7 +161,7 @@ impl EntityCommandsPatchExt for EntityCommands<'_> {
 pub struct PatchHistory<C: Diffable> {
     next_index: PatchIndex,
     last_changed: Option<Tick>,
-    patches: VecDeque<C::Patch>,
+    patches: VecDeque<C::Diff>,
 }
 
 impl<C: Diffable> PatchHistory<C> {
@@ -173,7 +173,7 @@ impl<C: Diffable> PatchHistory<C> {
     /// If an external mutation is detected, the patch history is cleared,
     /// forcing snapshot serialization. The patch will be dropped since no
     /// client could've seen the base value.
-    fn record(&mut self, patch: C::Patch, before_patch: Tick, after_patch: Tick) {
+    fn record(&mut self, patch: C::Diff, before_patch: Tick, after_patch: Tick) {
         debug_assert!(
             C::HISTORY_LEN <= PatchIndex::MAX_NEWER_DISTANCE as usize,
             "`{}::HISTORY_LEN` cannot exceed {}",
@@ -214,7 +214,7 @@ impl<C: Diffable> PatchHistory<C> {
         &mut self,
         cursor: Option<PatchIndex>,
         last_changed: Tick,
-    ) -> (PatchIndex, PatchesIter<'_, C::Patch>) {
+    ) -> (PatchIndex, PatchesIter<'_, C::Diff>) {
         if self.last_changed.is_none_or(|tick| tick != last_changed) {
             // The component was mutated externally.
             self.patches.clear();
@@ -272,7 +272,7 @@ pub enum WireDiff<C: Diffable> {
         /// Patch cursor after applying all patches.
         index: PatchIndex,
         /// Patches to apply, in order, to advance to `index`.
-        patches: Vec<C::Patch>,
+        patches: Vec<C::Diff>,
     },
 }
 
@@ -291,7 +291,7 @@ pub enum WireDiffRef<'a, C: Diffable> {
         /// Patch cursor after applying all patches.
         index: PatchIndex,
         /// Patches to apply, in order, to advance to `index`.
-        patches: PatchesIter<'a, C::Patch>,
+        patches: PatchesIter<'a, C::Diff>,
     },
 }
 
@@ -338,7 +338,7 @@ impl<P: Serialize> Serialize for PatchesIter<'_, P> {
 #[derive(Component, Debug)]
 pub struct PatchBuffer<C: Diffable> {
     last_applied: Option<PatchIndex>,
-    pending: HashMap<PatchIndex, C::Patch>,
+    pending: HashMap<PatchIndex, C::Diff>,
 }
 
 impl<C: Diffable> PatchBuffer<C> {
@@ -355,7 +355,7 @@ impl<C: Diffable> PatchBuffer<C> {
     /// If a patch arrives ahead of a missing predecessor, it will stay pending
     /// until the missing patch is received. Duplicate or already applied
     /// patches are ignored.
-    pub fn push(&mut self, last_index: PatchIndex, patches: Vec<C::Patch>) {
+    pub fn push(&mut self, last_index: PatchIndex, patches: Vec<C::Diff>) {
         for (offset, patch) in patches.into_iter().rev().enumerate() {
             let index = last_index - offset as u16;
             if self
@@ -368,7 +368,7 @@ impl<C: Diffable> PatchBuffer<C> {
     }
 
     /// Returns patches that can be applied.
-    pub fn drain_ready(&mut self) -> impl Iterator<Item = C::Patch> + '_ {
+    pub fn drain_ready(&mut self) -> impl Iterator<Item = C::Diff> + '_ {
         iter::from_fn(move || {
             let index = self.last_applied.map_or(PatchIndex::new(0), |i| i + 1);
             let patch = self.pending.remove(&index)?;
@@ -682,9 +682,9 @@ mod tests {
 
     impl Diffable for TooLongHistory {
         const HISTORY_LEN: usize = u16::MAX as usize;
-        type Patch = ();
+        type Diff = ();
 
-        fn apply_diff(&mut self, _patch: &Self::Patch) -> Result<()> {
+        fn apply_diff(&mut self, _patch: &Self::Diff) -> Result<()> {
             Ok(())
         }
     }
@@ -694,9 +694,9 @@ mod tests {
 
     impl Diffable for Value {
         const HISTORY_LEN: usize = 3;
-        type Patch = ValueChange;
+        type Diff = ValueChange;
 
-        fn apply_diff(&mut self, patch: &Self::Patch) -> Result<()> {
+        fn apply_diff(&mut self, patch: &Self::Diff) -> Result<()> {
             match *patch {
                 ValueChange::Add(value) => self.0 += value,
                 ValueChange::Sub(value) => self.0 -= value,
