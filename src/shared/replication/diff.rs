@@ -362,7 +362,7 @@ impl<C: Diffable> DiffBuffer<C> {
                 .last_applied
                 .is_none_or(|last_applied| index.is_newer_than(last_applied))
             {
-                self.pending.entry(index).or_insert(diff);
+                self.pending.insert(index, diff);
             }
         }
     }
