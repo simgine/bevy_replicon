@@ -116,10 +116,12 @@ pub trait Diffable: Component<Mutability = Mutable> + Serialize + DeserializeOwn
 }
 
 /// Extension trait for [`EntityWorldMut`] to apply diffs.
+///
+/// See also [`EntityCommandsDiffExt`].
 pub trait EntityDiffExt {
-    /// Applies diff to component `C` and records it in the entity's [`DiffHistory`].
+    /// Applies a diff to component `C` and records it in the entity's [`DiffHistory`].
     ///
-    /// Returns an error if the entity does not have a component of type `C`.
+    /// Returns an error if the entity does not have component `C`.
     fn apply_diff<C: Diffable>(&mut self, diff: C::Diff) -> Result<()>;
 }
 
@@ -143,8 +145,10 @@ impl EntityDiffExt for EntityWorldMut<'_> {
 }
 
 /// Extension trait for [`EntityCommands`] to apply diffs.
+///
+/// See also [`EntityDiffExt`].
 pub trait EntityCommandsDiffExt {
-    /// Queues diff application to component `C` and records it in the entity's [`DiffHistory`].
+    /// Queues application of a diff to component `C` and records it in the entity's [`DiffHistory`].
     fn apply_diff<C: Diffable>(&mut self, diff: C::Diff) -> &mut Self;
 }
 
