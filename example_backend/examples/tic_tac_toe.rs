@@ -75,7 +75,7 @@ fn main() {
         .add_systems(
             Update,
             update_buttons_background
-                .run_if(in_state(GameState::Winner).or(in_state(GameState::Tie))),
+                .run_if(in_state(GameState::Winner).or_else(in_state(GameState::Tie))),
         )
         .run();
 }
