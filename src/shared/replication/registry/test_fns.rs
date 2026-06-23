@@ -9,7 +9,7 @@ use crate::{
     prelude::*,
     shared::{
         replication::{
-            deferred_entity::{DeferredChanges, DeferredEntity},
+            deferred_entity::{DeferredEntity, EntityScratch},
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::ctx::BufferedSpawner,
         },
@@ -169,16 +169,14 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
                         let type_registry = world.resource::<AppTypeRegistry>().clone();
                         let mut entity_buffer = Default::default();
                         let world_cell = world.as_unsafe_world_cell();
-                        let spawner = BufferedSpawner::new(
-                            world_cell.entities_allocator(),
-                            &mut entity_buffer,
-                        );
+                        let spawner =
+                            BufferedSpawner::new(world_cell.entity_allocator(), &mut entity_buffer);
                         // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
                         let world = unsafe { world_cell.world_mut() };
 
-                        let mut changes = DeferredChanges::default();
+                        let mut scratch = EntityScratch::default();
                         let mut entity =
-                            DeferredEntity::new(world.entity_mut(entity), &mut changes);
+                            DeferredEntity::new(world.entity_mut(entity), &mut scratch);
 
                         let (_, component_id, fns) = registry.get(fns_id);
                         let mut ctx = WriteCtx {
@@ -214,8 +212,8 @@ impl TestFnsEntityExt for EntityWorldMut<'_> {
         let entity = self.id();
         self.world_scope(|world| {
             world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
-                let mut changes = DeferredChanges::default();
-                let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut changes);
+                let mut scratch = EntityScratch::default();
+                let mut entity = DeferredEntity::new(world.entity_mut(entity), &mut scratch);
 
                 let (_, component_id, fns) = registry.get(fns_id);
                 let mut ctx = RemoveCtx {

@@ -164,10 +164,8 @@ impl EntityBuffer {
 
     /// Frees all buffered entities without spawning them.
     pub(crate) fn free(&mut self, world: &mut World) {
-        // TODO Bevy 0.19: user `free_many`.
-        for entity in self.0.drain(..) {
-            world.entities_allocator_mut().free(entity);
-        }
+        world.entity_allocator_mut().free_many(&self.0);
+        self.0.clear();
     }
 
     pub(crate) fn push(&mut self, entity: Entity) {

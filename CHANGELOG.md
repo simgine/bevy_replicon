@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-05-17
+
 ### Added
 
 - Diff-based replication for components via `replicate_diff`.
 - `ReplicationStorage` resource for storing arbitrary serialization/deserialization state.
 - `SerializeCtx::entity` and `WriteCtx::entity` with the current entity.
 - `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
+
+### Changed
+
+- Update to Bevy 0.19.0.1.
+- `DeferredEntity::flush` now consumes the entity.
+- Rename `scene` module and feature into `world_serialization`.
+- Rename `DeferredChanges` into `EntityScratch`.
 
 ## [0.40.4] - 2026-06-16
 
@@ -1111,7 +1120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.41.0..HEAD
+[0.41.0]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...v0.41.0
 [0.40.4]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...v0.40.4
 [0.40.3]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...v0.40.3
 [0.40.2]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...v0.40.2

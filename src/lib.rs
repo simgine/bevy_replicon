@@ -208,7 +208,7 @@ struct Player;
 ```
 
 This pairs nicely with server state serialization and keeps saves clean.
-You can use [`scene::replicate_into`] to fill [`DynamicScene`] with replicated entities and their components.
+You can use [`scene::replicate_into`] to fill [`DynamicWorld`] with replicated entities and their components.
 On deserialization all missing required components will be inserted, and initialization
 systems will restore the correct game state.
 
@@ -256,9 +256,6 @@ Related entities replicate like any others, so children should also have [`Repli
 In other words, replicating [`ChildOf`] allows you to replicate entities relationships.
 You can also pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] to replicate only
 part of hierarchy.
-
-Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
-See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
 
 You can also ensure that their mutations arrive in sync by using [`SyncRelatedAppExt::sync_related_entities`].
 
@@ -717,13 +714,15 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
-#[cfg(feature = "scene")]
+#[cfg(any(feature = "scene", feature = "world_serialization"))]
 pub mod scene;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;
 #[cfg(all(feature = "server", feature = "client"))]
 pub mod test_app;
+#[cfg(any(feature = "scene", feature = "world_serialization"))]
+pub mod world_serialization;
 
 pub mod prelude {
     #[expect(deprecated, reason = "Re-export of deprecated aliases")]
