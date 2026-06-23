@@ -108,6 +108,7 @@ impl Plugin for RepliconSharedPlugin {
             .init_resource::<RepliconChannels>()
             .init_resource::<ReplicationRegistry>()
             .init_resource::<ReplicationRules>()
+            .init_resource::<ReplicationStorage>()
             .init_resource::<SignatureMap>()
             .init_resource::<ReceiveMarkers>()
             .init_resource::<RemoteMessageRegistry>()

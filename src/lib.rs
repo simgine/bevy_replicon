@@ -138,7 +138,7 @@ resource.
 
 ### Components
 
-Components will be replicated only on entities marked for replication.
+Components will be replicated only on entities marked for replication with [`Replicated`] component.
 By default no components are replicated, you need to define rules for it.
 
 Use [`AppRuleExt::replicate`] to create a replication rule for a single component:
@@ -180,8 +180,7 @@ for functions. For more details, see [`AppRuleExt::replicate_filtered`].
 
 You don't want to replicate all components because not all of them are
 necessary to send over the network. Components that can be calculated on the client can
-be inserted using Bevy's required components feature. You can also mark [`Replicated`]
-as required to automatically replicate all entities with this component.
+be inserted using Bevy's required components feature.
 
 ```
 # use bevy::{prelude::*, state::app::StatesPlugin};
@@ -204,7 +203,7 @@ fn init_player_mesh(
 }
 
 #[derive(Component, Deserialize, Serialize)]
-#[require(Replicated, Mesh2d)]
+#[require(Mesh2d)]
 struct Player;
 ```
 
@@ -242,11 +241,21 @@ client will write the component again, even if it is the same. If your game logi
 [`write_if_neq`](shared::replication::registry::receive_fns::write_if_neq) as your writing function for
 the desired components. See [receive markers](#receive-markers) for more details.
 
+### Removals
+
+In Bevy, a component can be removed either alone or together with its required components. However, there is no way to
+distinguish between these two cases, so we don't don't remove required components by default. You can override it using
+[receive markers](#receive-markers).
+
 #### Component relations
 
 Some components depend on each other. For example, [`ChildOf`] and [`Children`]. You can enable
 replication only for [`ChildOf`] so that [`Children`] will be updated automatically on insertion.
 Related entities replicate like any others, so children should also have [`Replicated`].
+
+In other words, replicating [`ChildOf`] allows you to replicate entities relationships.
+You can also pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] to replicate only
+part of hierarchy.
 
 You can also ensure that their mutations arrive in sync by using [`SyncRelatedAppExt::sync_related_entities`].
 
@@ -740,11 +749,16 @@ pub mod prelude {
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
                 Replicated,
+                diff::{Diffable, EntityCommandsDiffExt, EntityDiffExt, diff_index::DiffIndex},
                 receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
-                visibility::{ComponentScope, FilterScope, SingleComponent, VisibilityFilter},
+                storage::{EntityStorageCtx, ReplicationStorage},
+                visibility::{
+                    AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
+                    VisibilityFilter,
+                },
             },
             replicon_tick::RepliconTick,
         },

@@ -3,10 +3,7 @@ use core::iter;
 use bevy::prelude::*;
 
 use super::registry::FilterRegistry;
-use crate::shared::replication::{
-    registry::{ComponentIndex, component_mask::ComponentMask},
-    visibility::VisibilityScope,
-};
+use crate::shared::replication::{registry::ComponentIndex, visibility::VisibilityScope};
 
 /// Bitset of visibility filters for an entity for a client.
 ///
@@ -51,6 +48,14 @@ impl FiltersMask {
             .any(|bit| matches!(registry.scope(bit), VisibilityScope::Entity))
     }
 
+    /// Returns an iterator over the scope of each set filter.
+    pub(crate) fn scopes(
+        self,
+        registry: &FilterRegistry,
+    ) -> impl Iterator<Item = &VisibilityScope> {
+        self.iter().map(|bit| registry.scope(bit))
+    }
+
     /// Returns `true` if the given component is hidden by any of the filters.
     ///
     /// Entity filters are treated as hiding all components.
@@ -62,19 +67,7 @@ impl FiltersMask {
         self.iter().any(|bit| match registry.scope(bit) {
             VisibilityScope::Entity => true,
             VisibilityScope::Components(component_mask) => component_mask.contains(index),
-        })
-    }
-
-    /// Returns an iterator over hidden components for an entity.
-    pub(crate) fn hidden_components(
-        self,
-        registry: &FilterRegistry,
-    ) -> impl Iterator<Item = &ComponentMask> {
-        self.iter().map(|bit| match registry.scope(bit) {
-            VisibilityScope::Entity => {
-                panic!("if the entity is hidden, iteration over hidden components shouldn't happen")
-            }
-            VisibilityScope::Components(component_mask) => component_mask,
+            VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
         })
     }
 }

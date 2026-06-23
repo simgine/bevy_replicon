@@ -27,16 +27,8 @@ impl ComponentMask {
         self.bits.set(index.0, false);
     }
 
-    pub(crate) fn is_heap(&self) -> bool {
-        self.bits.heap_ptr().is_some()
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.bits.is_empty()
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.bits.clear();
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = ComponentIndex> {

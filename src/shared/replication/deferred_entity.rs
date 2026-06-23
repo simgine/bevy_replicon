@@ -2,6 +2,7 @@ use bevy::{
     ecs::{
         bundle::{BundleScratch, BundleWriter},
         component::{ComponentId, Components, ComponentsRegistrator, Mutable},
+        query::{QueryAccessError, ReleaseStateQueryData, SingleEntityQueryData},
     },
     prelude::*,
 };
@@ -58,6 +59,23 @@ impl<'w> DeferredEntity<'w> {
         self
     }
 
+    /// Like [`EntityWorldMut::remove_with_requires`], but accepts only a single component and buffers it.
+    ///
+    /// Calling this function multiple times for different components is equivalent to removing a bundle with them.
+    pub fn remove_with_requires<C: Component>(&mut self) -> &mut Self {
+        let component_id = self.register_component::<C>();
+        self.buffer.removals.push(component_id);
+
+        let components = self.entity.world().components();
+        // SAFETY: the ID was registered above.
+        let info = unsafe { components.get_info_unchecked(component_id) };
+        for required_id in info.required_components().iter_ids() {
+            self.buffer.removals.push(required_id);
+        }
+
+        self
+    }
+
     /// Gets mutable access to the component of type `C` for the current entity.
     ///
     /// Returns `None` if the entity does not have a component of type `C`.
@@ -66,12 +84,43 @@ impl<'w> DeferredEntity<'w> {
         self.entity.get_mut()
     }
 
+    /// Returns components for the current entity that match the query `Q`.
+    ///
+    /// For more details, see [`EntityWorldMut::get_components_mut`].
+    #[inline]
+    pub fn get_components_mut<Q: ReleaseStateQueryData + SingleEntityQueryData>(
+        &mut self,
+    ) -> Result<Q::Item<'_, 'static>, QueryAccessError> {
+        self.entity.get_components_mut::<Q>()
+    }
+
+    /// Like [`Self::get_components_mut_unchecked`], but doesn't check for aliasing.
+    ///
+    /// For more details, see [`EntityWorldMut::get_components_mut`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `Q` does not provide aliasing mutable references to the same component.
+    #[inline]
+    pub unsafe fn get_components_mut_unchecked<Q: ReleaseStateQueryData + SingleEntityQueryData>(
+        &mut self,
+    ) -> Result<Q::Item<'_, 'static>, QueryAccessError> {
+        unsafe { self.entity.get_components_mut_unchecked::<Q>() }
+    }
+
+    fn register_component<C: Component>(&mut self) -> ComponentId {
+        // SAFETY: no location update is needed because we only register the component ID.
+        unsafe { self.world_mut().register_component::<C>() }
+    }
+
     /// Returns this entity's world.
     ///
     /// # Safety
     ///
-    /// Must only be used to make non-structural ECS changes,
-    /// similar to [`DeferredWorld`](bevy::ecs::world::DeferredWorld).
+    /// All safety requirements of [`EntityWorldMut::world_mut`] apply. In addition,
+    /// [`EntityAllocator`](bevy::ecs::entity::EntityAllocator) must not be mutably
+    /// borrowed, which means that no entities can be freed
+    /// (spawning new entities is safe).
     pub unsafe fn world_mut(&mut self) -> &mut World {
         unsafe { self.entity.world_mut() }
     }
@@ -167,6 +216,7 @@ mod tests {
 
         entity
             .insert(Unit)
+            .insert(WithRequired)
             .insert(Trivial(1))
             .insert(WithVec(vec![2, 3]))
             .insert(WithBox(Box::new(Trivial(4))))
@@ -177,6 +227,8 @@ mod tests {
         let mut entity = DeferredEntity::new(world.entity_mut(entity_id), &mut scratch);
 
         assert!(entity.get::<Unit>().is_some());
+        assert!(entity.get::<WithRequired>().is_some());
+        assert!(entity.get::<Required>().is_some());
         assert_eq!(**entity.get::<Trivial>().unwrap(), 1);
         assert_eq!(**entity.get::<WithVec>().unwrap(), [2, 3]);
 
@@ -196,6 +248,7 @@ mod tests {
 
         entity
             .remove::<Unit>()
+            .remove_with_requires::<WithRequired>()
             .remove::<Trivial>()
             .remove::<WithVec>()
             .remove::<WithBox>()
@@ -206,6 +259,8 @@ mod tests {
         let entity = world.entity(entity_id);
 
         assert!(!entity.contains::<Unit>());
+        assert!(!entity.contains::<WithRequired>());
+        assert!(!entity.contains::<Required>());
         assert!(!entity.contains::<Trivial>());
         assert!(!entity.contains::<WithVec>());
         assert!(!entity.contains::<WithBox>());
@@ -219,6 +274,13 @@ mod tests {
 
     #[derive(Component)]
     struct Unit;
+
+    #[derive(Component)]
+    #[require(Required)]
+    struct WithRequired;
+
+    #[derive(Component, Default)]
+    struct Required;
 
     #[derive(Component, Deref)]
     struct Trivial(usize);

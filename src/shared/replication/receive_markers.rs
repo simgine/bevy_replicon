@@ -148,6 +148,26 @@ pub trait AppMarkerExt {
     #[derive(Component, Serialize, Deserialize, PartialEq)]
     struct Health(u32);
     ```
+
+    Remove with required components:
+
+    ```
+    # use bevy::state::app::StatesPlugin;
+    use bevy::prelude::*;
+    use bevy_replicon::{prelude::*, shared::replication::registry::receive_fns};
+    use serde::{Deserialize, Serialize};
+
+    # let mut app = App::new();
+    # app.add_plugins((StatesPlugin, RepliconPlugins));
+    app.replicate::<Player>().set_receive_fns::<Player>(
+        receive_fns::default_write,
+        receive_fns::remove_with_requires::<Player>,
+    );
+
+    #[derive(Component, Serialize, Deserialize)]
+    #[require(Replicated)] // `Replicated` would otherwise be removed on `Player` removal.
+    struct Player;
+    ```
     */
     fn set_receive_fns<C: Component<Mutability: MutWrite<C>>>(
         &mut self,

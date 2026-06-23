@@ -32,188 +32,228 @@ impl Plugin for ClientMessagePlugin {
             .remove_resource::<RemoteMessageRegistry>()
             .expect("message registry should be initialized on app build");
 
-        let send_fn = (
-            FilteredResourcesParamBuilder::new(|builder| {
-                for message in registry.iter_all_client() {
-                    builder.add_read_by_id(message.messages_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_client() {
-                    builder.add_write_by_id(message.reader_id());
-                }
-            }),
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-        )
-            .build_state(app.world_mut())
-            .build_system(send);
+        if registry.has_any_server() {
+            let receive_builder = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_server() {
+                        builder.add_write_by_id(message.messages_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_server() {
+                        builder.add_write_by_id(message.queue_id());
+                    }
+                }),
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+            );
 
-        let send_shared_fn = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_shared() {
-                    builder.add_write_by_id(message.messages_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_shared() {
-                    builder.add_write_by_id(message.shared_messages_id());
-                }
-            }),
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-        )
-            .build_state(app.world_mut())
-            .build_system(send_shared);
+            let receive_fn = receive_builder
+                .clone()
+                .build_state(app.world_mut())
+                .build_system(receive);
 
-        let trigger_shared_fn = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in registry.iter_shared_events() {
-                    builder.add_write_by_id(event.message().shared_messages_id());
-                }
-            }),
-            ParamBuilder,
-            ParamBuilder,
-        )
-            .build_state(app.world_mut())
-            .build_system(trigger_shared);
+            let enter_receive_fn = receive_builder
+                .build_state(app.world_mut())
+                .build_system(receive);
 
-        let receive_builder = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_server() {
-                    builder.add_write_by_id(message.messages_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_server() {
-                    builder.add_write_by_id(message.queue_id());
-                }
-            }),
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-            ParamBuilder,
-        );
-
-        let receive_fn = receive_builder
-            .clone()
-            .build_state(app.world_mut())
-            .build_system(receive);
-
-        let enter_receive_fn = receive_builder
-            .build_state(app.world_mut())
-            .build_system(receive);
-
-        let trigger_builder = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for event in registry.iter_server_events() {
-                    builder.add_write_by_id(event.message().messages_id());
-                }
-            }),
-            ParamBuilder,
-            ParamBuilder,
-        );
-
-        let trigger_fn = trigger_builder
-            .clone()
-            .build_state(app.world_mut())
-            .build_system(trigger);
-
-        let enter_trigger_fn = trigger_builder
-            .build_state(app.world_mut())
-            .build_system(trigger);
-
-        let send_locally_fn = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_client() {
-                    builder.add_write_by_id(message.from_messages_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_client() {
-                    builder.add_write_by_id(message.messages_id());
-                }
-            }),
-            ParamBuilder,
-        )
-            .build_state(app.world_mut())
-            .build_system(send_locally);
-
-        let send_shared_locally_fn = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_shared() {
-                    builder.add_write_by_id(message.shared_messages_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_shared() {
-                    builder.add_write_by_id(message.messages_id());
-                }
-            }),
-            ParamBuilder,
-        )
-            .build_state(app.world_mut())
-            .build_system(send_shared_locally);
-
-        let reset_fn = (
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_client() {
-                    builder.add_write_by_id(message.messages_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_server() {
-                    builder.add_write_by_id(message.queue_id());
-                }
-            }),
-            FilteredResourcesMutParamBuilder::new(|builder| {
-                for message in registry.iter_all_shared() {
-                    builder.add_write_by_id(message.messages_id());
-                }
-            }),
-            ParamBuilder,
-        )
-            .build_state(app.world_mut())
-            .build_system(reset);
-
-        app.insert_resource(registry)
-            .add_systems(
+            app.add_systems(
                 PreUpdate,
-                (
-                    receive_fn.run_if(in_state(ClientState::Connected)),
-                    trigger_fn,
-                )
-                    .chain()
+                receive_fn
                     .after(super::receive_replication)
+                    .run_if(in_state(ClientState::Connected))
                     .in_set(ClientSystems::Receive),
             )
             .add_systems(
                 OnEnter(ClientState::Connected),
-                (enter_receive_fn, enter_trigger_fn)
-                    .chain()
+                enter_receive_fn
                     .after(super::receive_replication)
                     .in_set(ClientSystems::Receive),
+            );
+        }
+
+        if registry.has_server_events() {
+            let trigger_builder = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for event in registry.iter_server_events() {
+                        builder.add_write_by_id(event.message().messages_id());
+                    }
+                }),
+                ParamBuilder,
+                ParamBuilder,
+            );
+
+            let trigger_fn = trigger_builder
+                .clone()
+                .build_state(app.world_mut())
+                .build_system(trigger);
+
+            let enter_trigger_fn = trigger_builder
+                .build_state(app.world_mut())
+                .build_system(trigger);
+
+            app.add_systems(
+                PreUpdate,
+                trigger_fn.after(receive).in_set(ClientSystems::Receive),
             )
             .add_systems(
-                OnExit(ClientState::Connected),
-                reset_fn.in_set(ClientSystems::Reset),
+                OnEnter(ClientState::Connected),
+                enter_trigger_fn
+                    .after(receive)
+                    .in_set(ClientSystems::Receive),
+            );
+        }
+
+        if registry.has_any_client() {
+            let send_fn = (
+                FilteredResourcesParamBuilder::new(|builder| {
+                    for message in registry.iter_all_client() {
+                        builder.add_read_by_id(message.messages_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_client() {
+                        builder.add_write_by_id(message.reader_id());
+                    }
+                }),
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
             )
-            .add_systems(
+                .build_state(app.world_mut())
+                .build_system(send);
+
+            let send_locally_fn = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_client() {
+                        builder.add_write_by_id(message.from_messages_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_client() {
+                        builder.add_write_by_id(message.messages_id());
+                    }
+                }),
+                ParamBuilder,
+            )
+                .build_state(app.world_mut())
+                .build_system(send_locally);
+
+            app.add_systems(
                 PostUpdate,
                 (
-                    (send_fn, send_shared_fn).run_if(in_state(ClientState::Connected)),
-                    (send_locally_fn, send_shared_locally_fn)
-                        .run_if(in_state(ClientState::Disconnected)),
-                    trigger_shared_fn,
+                    send_fn.run_if(in_state(ClientState::Connected)),
+                    send_locally_fn.run_if(in_state(ClientState::Disconnected)),
                 )
                     .chain()
                     .in_set(ClientSystems::Send),
             );
+        }
+
+        if registry.has_any_shared() {
+            let send_shared_fn = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_shared() {
+                        builder.add_write_by_id(message.messages_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_shared() {
+                        builder.add_write_by_id(message.shared_messages_id());
+                    }
+                }),
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+            )
+                .build_state(app.world_mut())
+                .build_system(send_shared);
+
+            let send_shared_locally_fn = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_shared() {
+                        builder.add_write_by_id(message.shared_messages_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_shared() {
+                        builder.add_write_by_id(message.messages_id());
+                    }
+                }),
+                ParamBuilder,
+            )
+                .build_state(app.world_mut())
+                .build_system(send_shared_locally);
+
+            app.add_systems(
+                PostUpdate,
+                (
+                    send_shared_fn.run_if(in_state(ClientState::Connected)),
+                    send_shared_locally_fn.run_if(in_state(ClientState::Disconnected)),
+                )
+                    .chain()
+                    .in_set(ClientSystems::Send),
+            );
+        }
+
+        if registry.has_shared_events() {
+            let trigger_shared_fn = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for event in registry.iter_shared_events() {
+                        builder.add_write_by_id(event.message().shared_messages_id());
+                    }
+                }),
+                ParamBuilder,
+                ParamBuilder,
+            )
+                .build_state(app.world_mut())
+                .build_system(trigger_shared);
+
+            app.add_systems(
+                PostUpdate,
+                trigger_shared_fn
+                    .after(send_shared_locally)
+                    .in_set(ClientSystems::Send),
+            );
+        }
+
+        if !registry.is_empty() {
+            let reset_fn = (
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_client() {
+                        builder.add_write_by_id(message.messages_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_server() {
+                        builder.add_write_by_id(message.queue_id());
+                    }
+                }),
+                FilteredResourcesMutParamBuilder::new(|builder| {
+                    for message in registry.iter_all_shared() {
+                        builder.add_write_by_id(message.messages_id());
+                    }
+                }),
+                ParamBuilder,
+            )
+                .build_state(app.world_mut())
+                .build_system(reset);
+
+            app.add_systems(
+                OnExit(ClientState::Connected),
+                reset_fn.in_set(ClientSystems::Reset),
+            );
+        }
+
+        app.insert_resource(registry);
     }
 }
 
@@ -221,11 +261,13 @@ fn send(
     messages: FilteredResources,
     mut readers: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ClientSendCtx {
+        storage: &mut storage,
         entity_map: &entity_map,
         type_registry: &type_registry,
         invalid_entities: Vec::new(),
@@ -255,11 +297,13 @@ fn send_shared(
     mut messages: FilteredResourcesMut,
     mut shared_messages: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ClientSendCtx {
+        storage: &mut storage,
         entity_map: &entity_map,
         type_registry: &type_registry,
         invalid_entities: Vec::new(),
@@ -289,12 +333,14 @@ fn receive(
     mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     message_registry: Res<RemoteMessageRegistry>,
     update_tick: Res<ServerUpdateTick>,
 ) {
     let mut ctx = ClientReceiveCtx {
+        storage: &mut storage,
         type_registry: &type_registry,
         entity_map: &entity_map,
         invalid_entities: Vec::new(),

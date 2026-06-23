@@ -726,6 +726,40 @@ fn hidden_component() {
 }
 
 #[test]
+fn hidden_all_except() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .add_visibility_filter::<AllExceptVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // The client lacks `AllExceptVisibility`, so the filter applies and only `A` reaches it.
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, B, AllExceptVisibility));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut a = client_app.world_mut().query::<&A>();
+    assert_eq!(a.iter(client_app.world()).len(), 1, "allowed by all except");
+    let mut b = client_app.world_mut().query::<&B>();
+    assert_eq!(b.iter(client_app.world()).len(), 0, "hidden by all except");
+}
+
+#[test]
 fn visibility_gain() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -817,6 +851,19 @@ struct ComponentVisibility;
 impl VisibilityFilter for ComponentVisibility {
     type ClientComponent = Self;
     type Scope = SingleComponent<A>;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct AllExceptVisibility;
+
+impl VisibilityFilter for AllExceptVisibility {
+    type ClientComponent = Self;
+    type Scope = AllExcept<SingleComponent<A>>;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()

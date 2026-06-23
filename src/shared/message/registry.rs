@@ -45,6 +45,34 @@ impl RemoteMessageRegistry {
         self.shared_events.push(event);
     }
 
+    pub(crate) fn has_any_server(&self) -> bool {
+        !self.server_messages.is_empty() || !self.server_events.is_empty()
+    }
+
+    pub(crate) fn has_any_client(&self) -> bool {
+        !self.client_messages.is_empty() || !self.client_events.is_empty()
+    }
+
+    pub(crate) fn has_any_shared(&self) -> bool {
+        !self.shared_messages.is_empty() || !self.shared_events.is_empty()
+    }
+
+    pub(crate) fn has_server_events(&self) -> bool {
+        !self.server_events.is_empty()
+    }
+
+    pub(crate) fn has_client_events(&self) -> bool {
+        !self.client_events.is_empty()
+    }
+
+    pub(crate) fn has_shared_events(&self) -> bool {
+        !self.shared_events.is_empty()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        !self.has_any_server() && !self.has_any_client() && !self.has_any_shared()
+    }
+
     pub(super) fn iter_server_messages_mut(&mut self) -> impl Iterator<Item = &mut ServerMessage> {
         self.server_messages.iter_mut()
     }

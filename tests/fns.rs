@@ -56,6 +56,35 @@ fn write() {
 }
 
 #[test]
+fn write_diff() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
+        .replicate_diff::<DiffComponent>();
+
+    let tick = RepliconTick::default();
+    let (_, fns_id) =
+        app.world_mut()
+            .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                registry.register_rule_fns(world, RuleFns::<DiffComponent>::default())
+            });
+
+    let mut entity = app.world_mut().spawn(DiffComponent(0));
+    entity.apply_diff::<DiffComponent>(AddValue(1)).unwrap();
+    entity.apply_diff::<DiffComponent>(AddValue(2)).unwrap();
+    let component = entity.get::<DiffComponent>().unwrap();
+    assert_eq!(component.0, 3);
+
+    let data = entity.serialize_with_diff(fns_id, tick, Some(DiffIndex::new(0)));
+
+    // Reset the component
+    entity.insert(DiffComponent(0));
+    entity.apply_write(data, fns_id, tick);
+
+    let component = entity.get::<DiffComponent>().unwrap();
+    assert_eq!(component.0, 3);
+}
+
+#[test]
 fn remove() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins));
@@ -376,4 +405,19 @@ fn replace(
 /// Adds special [`Despawned`] marker instead of despawning an entity.
 fn mark_despawned(_ctx: &DespawnCtx, mut entity: EntityWorldMut) {
     entity.insert(Despawned);
+}
+
+#[derive(Component, Serialize, Deserialize, PartialEq, Debug)]
+struct DiffComponent(u8);
+
+#[derive(Serialize, Deserialize)]
+struct AddValue(u8);
+
+impl Diffable for DiffComponent {
+    type Diff = AddValue;
+
+    fn apply_diff(&mut self, diff: &Self::Diff) -> Result<()> {
+        self.0 += diff.0;
+        Ok(())
+    }
 }

@@ -5,7 +5,11 @@ use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
 
 use super::ctx::{SerializeCtx, WriteCtx};
-use crate::postcard_utils;
+use crate::{
+    postcard_utils,
+    prelude::*,
+    shared::replication::diff::{ComponentDelta, ComponentDeltaRef, DiffBuffer, DiffHistory},
+};
 
 /// Type-erased version of [`RuleFns`].
 ///
@@ -68,7 +72,7 @@ impl<C: Component> From<RuleFns<C>> for UntypedRuleFns {
 
 /// Serialization and deserialization functions for a component.
 ///
-/// See also [`AppRuleExt`](crate::shared::replication::rules::AppRuleExt)
+/// See also [`AppRuleExt`]
 /// and [`ReplicationRule`](crate::shared::replication::rules::ReplicationRule).
 pub struct RuleFns<C> {
     serialize: SerializeFn<C>,
@@ -80,7 +84,7 @@ pub struct RuleFns<C> {
 impl<C: Component> RuleFns<C> {
     /// Creates a new instance.
     ///
-    /// For more details see [`AppRuleExt::replicate_with`](crate::prelude::AppRuleExt::replicate_with).
+    /// For more details see [`AppRuleExt::replicate_with`].
     pub fn new(serialize: SerializeFn<C>, deserialize: DeserializeFn<C>) -> Self {
         Self {
             serialize,
@@ -93,7 +97,7 @@ impl<C: Component> RuleFns<C> {
     /// Like [`Self::default`], but converts the component into `T` before serialization
     /// and back into `C` after deserialization.
     ///
-    /// For more details see [`AppRuleExt::replicate_as`](crate::prelude::AppRuleExt::replicate_as).
+    /// For more details see [`AppRuleExt::replicate_as`].
     pub fn new_as<T>() -> Self
     where
         T: Serialize + DeserializeOwned,
@@ -132,7 +136,7 @@ impl<C: Component> RuleFns<C> {
     /// Serializes a component into a message.
     pub(super) fn serialize(
         &self,
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &C,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -164,6 +168,14 @@ impl<C: Component> RuleFns<C> {
     }
 }
 
+impl<C: Diffable> RuleFns<C> {
+    /// Creates a new instance for diff-based replication.
+    pub fn new_diff() -> Self {
+        Self::new(serialize_diff::<C>, deserialize_diff::<C>)
+            .with_in_place(deserialize_diff_in_place)
+    }
+}
+
 impl<C: Component + Serialize + DeserializeOwned> Default for RuleFns<C> {
     /// Creates a new instance with default functions for a component.
     ///
@@ -174,7 +186,7 @@ impl<C: Component + Serialize + DeserializeOwned> Default for RuleFns<C> {
 }
 
 /// Signature of component serialization functions.
-pub type SerializeFn<C> = fn(&SerializeCtx, &C, &mut Vec<u8>) -> Result<()>;
+pub type SerializeFn<C> = fn(&mut SerializeCtx, &C, &mut Vec<u8>) -> Result<()>;
 
 /// Signature of component deserialization functions.
 pub type DeserializeFn<C> = fn(&mut WriteCtx, &mut Bytes) -> Result<C>;
@@ -188,7 +200,7 @@ pub type ConsumeFn<C> = fn(DeserializeFn<C>, &mut WriteCtx, &mut Bytes) -> Resul
 
 /// Default component serialization function.
 pub fn default_serialize<C: Component + Serialize>(
-    _ctx: &SerializeCtx,
+    _ctx: &mut SerializeCtx,
     component: &C,
     message: &mut Vec<u8>,
 ) -> Result<()> {
@@ -235,7 +247,7 @@ pub fn consume_as_deserialize<C: Component>(
 
 /// Converts `C` into `T` and serializes it.
 pub fn serialize_as<C: Component + Clone + Into<T>, T: Serialize>(
-    _ctx: &SerializeCtx,
+    _ctx: &mut SerializeCtx,
     component: &C,
     message: &mut Vec<u8>,
 ) -> Result<()> {
@@ -253,4 +265,84 @@ pub fn deserialize_as<C: Component + From<T>, T: DeserializeOwned>(
     let mut component = deserialized.into();
     C::map_entities(&mut component, ctx);
     Ok(component)
+}
+
+/// Serializes a component diff.
+pub fn serialize_diff<C: Diffable>(
+    ctx: &mut SerializeCtx,
+    component: &C,
+    message: &mut Vec<u8>,
+) -> Result<()> {
+    let last_changed = ctx.last_changed;
+    let diff_cursor = ctx.diff_cursor;
+    let history = ctx.get_or_default::<DiffHistory<C>>();
+
+    let (index, diffs) = history.diffs_after(diff_cursor, last_changed);
+    let delta = if diffs.len() == 0 {
+        ComponentDeltaRef::Snapshot { index, component }
+    } else {
+        ComponentDeltaRef::Diffs { index, diffs }
+    };
+
+    postcard_utils::to_extend_mut(&delta, message)?;
+
+    ctx.diff_cursor = Some(index);
+
+    Ok(())
+}
+
+/// Deserializes a component diff.
+///
+/// Deserializes only snapshots because it's called only when the component is missing.
+pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) -> Result<C> {
+    match postcard_utils::from_buf(message)? {
+        ComponentDelta::Snapshot {
+            index,
+            mut component,
+        } => {
+            let buffer = ctx.get_or_default::<DiffBuffer<C>>();
+            buffer.set_last_applied(index);
+
+            C::map_entities(&mut component, ctx);
+            Ok(component)
+        }
+        ComponentDelta::Diffs { .. } => Err(format!(
+            "cannot apply diffs to `{}` that is not present on the entity",
+            ShortName::of::<C>()
+        )
+        .into()),
+    }
+}
+/// Deserializes a component diff and applies it to the passed component.
+///
+/// Snapshots replace the current component value and reset the diff buffer to
+/// the snapshot's diff cursor. Diffs are buffered and applied only when
+/// all preceding diffs have been received, ensuring diffs are applied once
+/// and in order.
+pub fn deserialize_diff_in_place<C: Diffable>(
+    _deserialize: DeserializeFn<C>,
+    ctx: &mut WriteCtx,
+    component: &mut C,
+    message: &mut Bytes,
+) -> Result<()> {
+    match postcard_utils::from_buf(message)? {
+        ComponentDelta::<C>::Snapshot {
+            index,
+            component: new_component,
+        } => {
+            let buffer = ctx.get_or_default::<DiffBuffer<C>>();
+            buffer.set_last_applied(index);
+
+            *component = new_component;
+            C::map_entities(component, ctx);
+        }
+        ComponentDelta::<C>::Diffs { index, diffs } => {
+            let buffer = ctx.get_or_default::<DiffBuffer<C>>();
+            buffer.push(index, diffs);
+            for diff in buffer.drain_ready() {
+                component.apply_diff(&diff)?;
+            }
+        }
+    }
+    Ok(())
 }

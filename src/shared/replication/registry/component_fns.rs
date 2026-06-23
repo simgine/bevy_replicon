@@ -85,7 +85,7 @@ impl ComponentFns {
     /// The caller must ensure that `ptr` and `rule_fns` were created for the same type as this instance.
     pub(crate) unsafe fn serialize(
         &self,
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         rule_fns: &UntypedRuleFns,
         ptr: Ptr,
         message: &mut Vec<u8>,
@@ -174,7 +174,7 @@ impl ComponentFns {
 
 /// Signature of component serialization functions that restore the original type.
 type UntypedSerializeFn =
-    unsafe fn(&SerializeCtx, &UntypedRuleFns, Ptr, &mut Vec<u8>) -> Result<()>;
+    unsafe fn(&mut SerializeCtx, &UntypedRuleFns, Ptr, &mut Vec<u8>) -> Result<()>;
 
 /// Signature of component writing functions that restore the original type.
 type UntypedWriteFn = unsafe fn(
@@ -194,7 +194,7 @@ type UntypedConsumeFn = unsafe fn(&mut WriteCtx, &UntypedRuleFns, &mut Bytes) ->
 ///
 /// The caller must ensure that `ptr` and `rule_fns` were created for `C`.
 unsafe fn untyped_serialize<C: Component>(
-    ctx: &SerializeCtx,
+    ctx: &mut SerializeCtx,
     rule_fns: &UntypedRuleFns,
     ptr: Ptr,
     message: &mut Vec<u8>,

@@ -115,6 +115,7 @@ fn spawn_boids(commands: &mut Commands) {
 
         commands.spawn((
             Boid { color, group },
+            Replicated,
             Bias(bias),
             Velocity(velocity),
             Transform {
@@ -283,7 +284,7 @@ impl Default for Cli {
 }
 
 #[derive(Component, Serialize, Deserialize)]
-#[require(Replicated, Mesh2d, MeshMaterial2d<ColorMaterial>)]
+#[require(Mesh2d, MeshMaterial2d<ColorMaterial>)]
 #[component(immutable)]
 struct Boid {
     color: Color,

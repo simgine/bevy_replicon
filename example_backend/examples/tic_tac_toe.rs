@@ -35,17 +35,27 @@ fn main() {
         .init_resource::<TurnSymbol>()
         .replicate::<Symbol>()
         .add_client_event::<PickCell>(Channel::Ordered)
+        .add_client_event::<ResetGame>(Channel::Ordered)
+        .add_server_event::<RestartGame>(Channel::Ordered)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_observer(disconnect_by_client)
         .add_observer(init_client)
         .add_observer(apply_pick)
-        .add_observer(init_symbols)
+        .add_observer(init_symbol)
+        .add_observer(deinit_symbol)
         .add_observer(advance_turn)
+        .add_observer(request_reset_game)
+        .add_observer(reset_game)
+        .add_observer(restart_game)
         .add_systems(Startup, (read_cli, setup_ui))
         .add_systems(
             OnEnter(GameState::InGame),
             (show_turn_text, show_turn_symbol),
         )
+        .add_systems(OnEnter(GameState::Winner), show_reset_button)
+        .add_systems(OnEnter(GameState::Tie), show_reset_button)
+        .add_systems(OnExit(GameState::Winner), hide_reset_button)
+        .add_systems(OnExit(GameState::Tie), hide_reset_button)
         .add_systems(OnEnter(GameState::Disconnected), show_disconnected_text)
         .add_systems(OnEnter(GameState::Winner), show_winner_text)
         .add_systems(OnEnter(GameState::Tie), show_tie_text)
@@ -61,6 +71,11 @@ fn main() {
                 show_turn_symbol.run_if(resource_changed::<TurnSymbol>),
             )
                 .run_if(in_state(GameState::InGame)),
+        )
+        .add_systems(
+            Update,
+            update_buttons_background
+                .run_if(in_state(GameState::Winner).or(in_state(GameState::Tie))),
         )
         .run();
 }
@@ -95,7 +110,7 @@ fn read_cli(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             let server = ExampleServer::new(port)?;
             commands.insert_resource(server);
 
-            commands.spawn((LocalPlayer, symbol));
+            commands.spawn((LocalPlayer, Replicated, symbol));
         }
         Cli::Client { ip, port } => {
             info!("connecting to {ip}:{port}");
@@ -176,7 +191,9 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
                     },
                     Children::spawn(SpawnWith(|parent: &mut RelatedSpawner<_>| {
                         for index in 0..GRID_SIZE * GRID_SIZE {
-                            parent.spawn(Cell { index }).observe(pick_cell);
+                            parent
+                                .spawn((Cell { index }, Replicated))
+                                .observe(pick_cell);
                         }
                     }))
                 ),
@@ -204,10 +221,32 @@ fn setup_ui(mut commands: Commands, symbol_font: Res<SymbolFont>) {
                             TextColor(TEXT_COLOR),
                         )]
                     )]
-                )
+                ),
+                (
+                    ResetButton,
+                    Visibility::Hidden,
+                    children![(
+                        Text::new("Reset Game"),
+                        TextFont {
+                            font_size: FONT_SIZE,
+                            ..Default::default()
+                        },
+                        TextColor(TEXT_COLOR),
+                    )]
+                ),
             ]
         )],
     ));
+}
+
+fn show_reset_button(mut reset_button_visibility: Single<&mut Visibility, With<ResetButton>>) {
+    debug!("showing reset button");
+    **reset_button_visibility = Visibility::Inherited;
+}
+
+fn hide_reset_button(mut reset_button_visibility: Single<&mut Visibility, With<ResetButton>>) {
+    debug!("hiding reset button");
+    **reset_button_visibility = Visibility::Hidden;
 }
 
 /// Converts point clicks into cell picking events.
@@ -271,7 +310,7 @@ fn apply_pick(
 }
 
 /// Initializes spawned symbol on client after replication and on server / single-player right after the spawn.
-fn init_symbols(
+fn init_symbol(
     add: On<Add, Symbol>,
     mut commands: Commands,
     symbol_font: Res<SymbolFont>,
@@ -296,6 +335,14 @@ fn init_symbols(
         ));
 }
 
+/// Removes symbol's underlying ui elements and adds interaction back to reset to an empty cell.
+fn deinit_symbol(remove: On<Remove, Symbol>, mut commands: Commands) {
+    commands
+        .entity(remove.entity)
+        .insert(Interaction::None)
+        .despawn_children();
+}
+
 /// Starts the game after connection.
 ///
 /// Used only for a client.
@@ -312,12 +359,61 @@ fn init_client(
     server_symbol: Single<&Symbol, With<LocalPlayer>>,
 ) {
     // Utilize client entity as a player for convenient lookups by `client`.
-    commands.entity(add.entity).insert((
-        ClientPlayer,
-        Signature::of::<ClientPlayer>(),
-        server_symbol.next(),
-    ));
+    commands
+        .entity(add.entity)
+        .insert((ClientPlayer, Replicated, server_symbol.next()));
 
+    commands.set_state(GameState::InGame);
+}
+
+/// Listens for click on a reset button and requests [`ResetGame`] event on match.
+///
+/// Runs on singleplayer, server, client.
+fn request_reset_game(
+    click: On<Pointer<Click>>,
+    reset_button: Single<Entity, With<ResetButton>>,
+    mut commands: Commands,
+) {
+    if click.entity == *reset_button {
+        debug!("requesting reset");
+        commands.client_trigger(ResetGame);
+    }
+}
+
+/// Resets the game on event by deleting all placed symbols from the game
+/// and replicating the deletion back to clients.
+///
+/// Runs on singleplayer, server.
+fn reset_game(
+    reset: On<FromClient<ResetGame>>,
+    game_state: Res<State<GameState>>,
+    cells_entities: Query<Entity, (With<Symbol>, With<Button>)>,
+    mut commands: Commands,
+) {
+    if *game_state != GameState::Winner && *game_state != GameState::Tie {
+        error!(
+            "client {} requested game reset in wrong game state",
+            reset.client_id
+        );
+        return;
+    }
+
+    info!("resetting the game");
+    for entity in cells_entities {
+        commands.entity(entity).remove::<Symbol>();
+    }
+
+    commands.server_trigger(ToClients {
+        targets: SendTargets::All,
+        message: RestartGame,
+    });
+}
+
+/// Sets the state of the game back to [`GameState::InGame`].
+///
+/// Runs on singleplayer, server, client.
+fn restart_game(_on: On<RestartGame>, mut commands: Commands) {
+    info!("restarting game");
     commands.set_state(GameState::InGame);
 }
 
@@ -547,15 +643,26 @@ impl fmt::Display for Symbol {
 #[derive(Component)]
 struct BottomText;
 
+/// Reset button UI node.
+#[derive(Component)]
+#[require(
+    Button,
+    BackgroundColor(BACKGROUND_COLOR),
+    Node {
+        margin: UiRect::all(Val::Px(BUTTON_MARGIN)),
+        justify_content: JustifyContent::Center,
+        ..Default::default()
+    }
+)]
+struct ResetButton;
+
 /// Cell location on the grid.
 ///
-/// We want to replicate all cells, so we set [`Replicated`] as a required component.
-/// We also want entities with this component to be automatically mapped between
+/// We want entities with this component to be automatically mapped between
 /// client and server, so we also require the [`Signature`] component.
 #[derive(Component, Hash)]
 #[require(
     Button,
-    Replicated,
     BackgroundColor(BACKGROUND_COLOR),
     Signature::of::<Cell>(),
     Node {
@@ -574,7 +681,6 @@ struct Cell {
 /// Used to determine if player can place a symbol.
 /// See also [`local_player_turn`].
 #[derive(Component)]
-#[require(Replicated)]
 struct LocalPlayer;
 
 /// Player that is also a client.
@@ -583,7 +689,7 @@ struct LocalPlayer;
 /// and automatically map it to the player entity on the server
 /// with the [`Signature`] component.
 #[derive(Component, Hash)]
-#[require(Replicated, Signature::of::<ClientPlayer>())]
+#[require(Signature::of::<ClientPlayer>())]
 struct ClientPlayer;
 
 /// A symbol pick.
@@ -594,3 +700,13 @@ struct ClientPlayer;
 struct PickCell {
     index: usize,
 }
+
+/// A request to reset the game and clear up the board.
+#[derive(Event, Deserialize, Serialize, Clone, Copy)]
+struct ResetGame;
+
+/// Resets the state to [`GameState::InGame`].
+///
+/// Used as a confirmation after a successful [`ResetGame`].
+#[derive(Event, Deserialize, Serialize, Clone, Copy)]
+struct RestartGame;
