@@ -93,28 +93,24 @@ fn message_loss() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate_diff::<Points>()
+        .replicate_resource_diff::<Points>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, Points(vec![0])))
-        .id();
+    server_app.insert_resource(Points(vec![0]));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut points_query = client_app.world_mut().query::<&Points>();
-    assert_eq!(points_query.iter(client_app.world()).len(), 1);
+    let points = client_app.world().resource::<Points>();
+    assert_eq!(points.0.len(), 1);
 
     server_app
         .world_mut()
-        .entity_mut(server_entity)
-        .apply_diff::<Points>(AddPoint(1))
+        .apply_resource_diff::<Points>(AddPoint(1))
         .unwrap();
 
     server_app.update();
@@ -124,15 +120,14 @@ fn message_loss() {
 
     server_app
         .world_mut()
-        .entity_mut(server_entity)
-        .apply_diff::<Points>(AddPoint(2))
+        .apply_resource_diff::<Points>(AddPoint(2))
         .unwrap();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let points = points_query.single(client_app.world()).unwrap();
+    let points = client_app.world().resource::<Points>();
     assert_eq!(points.0, [0, 1, 2]);
 }
 
@@ -146,29 +141,25 @@ fn outside_of_history_window() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate_diff::<Points>()
+        .replicate_resource_diff::<Points>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, Points(vec![0])))
-        .id();
+    server_app.insert_resource(Points(vec![0]));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut points_query = client_app.world_mut().query::<&Points>();
-    assert_eq!(points_query.iter(client_app.world()).len(), 1);
+    let points = client_app.world().resource::<Points>();
+    assert_eq!(points.0.len(), 1);
 
     for index in 1..=Points::HISTORY_LEN {
         server_app
             .world_mut()
-            .entity_mut(server_entity)
-            .apply_diff::<Points>(AddPoint(index as u8))
+            .apply_resource_diff::<Points>(AddPoint(index))
             .unwrap();
     }
 
@@ -179,15 +170,14 @@ fn outside_of_history_window() {
 
     server_app
         .world_mut()
-        .entity_mut(server_entity)
-        .apply_diff::<Points>(AddPoint(100))
+        .apply_resource_diff::<Points>(AddPoint(100))
         .unwrap();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let points = points_query.single(client_app.world()).unwrap();
+    let points = client_app.world().resource::<Points>();
     assert_eq!(points.0, [0, 1, 2, 3, 4, 5, 100]);
     assert_eq!(points.0.len(), Points::HISTORY_LEN + 2);
 }
@@ -202,43 +192,37 @@ fn external_mutation() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate_diff::<Points>()
+        .replicate_resource_diff::<Points>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
-        .world_mut()
-        .spawn((Replicated, Points(vec![0])))
-        .id();
+    server_app.insert_resource(Points(vec![0]));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut points_query = client_app.world_mut().query::<&Points>();
-    assert_eq!(points_query.iter(client_app.world()).len(), 1);
+    let points = client_app.world().resource::<Points>();
+    assert_eq!(points.0.len(), 1);
 
-    let mut points = server_app
-        .world_mut()
-        .get_mut::<Points>(server_entity)
-        .unwrap();
+    let mut points = server_app.world_mut().resource_mut::<Points>();
     points.0.push(1);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let points = points_query.single(client_app.world()).unwrap();
+    let points = client_app.world().resource::<Points>();
     assert_eq!(points.0, [0, 1]);
 }
 
 #[derive(Resource, Deserialize, Serialize, Debug, Clone)]
-struct Points(Vec<u8>);
+struct Points(Vec<usize>);
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-struct AddPoint(u8);
+struct AddPoint(usize);
 
 impl Diffable for Points {
     type Diff = AddPoint;
