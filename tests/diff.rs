@@ -3,7 +3,7 @@ use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use serde::{Deserialize, Serialize};
 
 #[test]
-fn apply() {
+fn component() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -42,6 +42,44 @@ fn apply() {
     client_app.update();
 
     let points = points_query.single(client_app.world()).unwrap();
+    assert_eq!(points.0, [0, 1]);
+}
+
+#[test]
+fn resource() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_resource_diff::<Points>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.insert_resource(Points(vec![0]));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let points = client_app.world().resource::<Points>();
+    assert_eq!(points.0, [0]);
+
+    server_app
+        .world_mut()
+        .apply_resource_diff::<Points>(AddPoint(1))
+        .unwrap();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let points = client_app.world().resource::<Points>();
     assert_eq!(points.0, [0, 1]);
 }
 
@@ -196,7 +234,7 @@ fn external_mutation() {
     assert_eq!(points.0, [0, 1]);
 }
 
-#[derive(Component, Deserialize, Serialize, Debug, Clone)]
+#[derive(Resource, Deserialize, Serialize, Debug, Clone)]
 struct Points(Vec<u8>);
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
