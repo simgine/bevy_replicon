@@ -170,19 +170,14 @@ pub trait WorldDiffExt {
 
 impl WorldDiffExt for World {
     fn apply_resource_diff<R: Resource + Diffable>(&mut self, diff: R::Diff) -> Result<()> {
-        let mut resource = self
-            .get_resource_mut::<R>()
-            .ok_or_else(|| format!("missing resource `{}`", ShortName::of::<R>()))?;
+        let Some(entity) = self
+            .component_id::<R>()
+            .and_then(|id| self.resource_entities().get(id))
+        else {
+            return Err(format!("missing resource `{}`", ShortName::of::<R>()).into());
+        };
 
-        let before_diff = resource.last_changed();
-        resource.apply_diff(&diff)?;
-        let after_diff = resource.last_changed();
-
-        let mut storage = self.resource_mut::<ReplicationStorage>();
-        let history = storage.global.get_or_default::<DiffHistory<R>>();
-        history.record(diff, before_diff, after_diff);
-
-        Ok(())
+        self.entity_mut(entity).apply_diff::<R>(diff)
     }
 }
 
