@@ -130,7 +130,6 @@ pub(crate) struct BufferedSpawner<'a> {
 impl<'a> BufferedSpawner<'a> {
     /// Creates a spawner with an empty buffer.
     pub(crate) fn new(allocator: &'a EntityAllocator, spawn_buffer: &'a mut EntityBuffer) -> Self {
-        debug_assert!(spawn_buffer.is_empty(), "buffer should freed before reuse");
         Self {
             allocator,
             spawn_buffer,
@@ -140,13 +139,14 @@ impl<'a> BufferedSpawner<'a> {
     /// Buffers an empty entity spawn.
     fn spawn_empty(&mut self) -> Entity {
         let entity = self.allocator.alloc();
+        trace!("buffering spawn for `{entity}`");
         self.spawn_buffer.push(entity);
         entity
     }
 }
 
 /// Entities allocated by [`BufferedSpawner`] that have not been spawned yet.
-#[derive(Default, Deref)]
+#[derive(Default, Deref, Debug)]
 pub(crate) struct EntityBuffer(Vec<Entity>);
 
 impl EntityBuffer {

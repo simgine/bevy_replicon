@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Incorrect assertion during entity spawning.
+
 ## [0.41.0] - 2026-05-17
 
 ### Added

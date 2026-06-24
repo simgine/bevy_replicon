@@ -540,6 +540,12 @@ fn apply_changes(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
+    debug_assert!(
+        params.entity_buffer.is_empty(),
+        "`{:?}` should be freed before reuse",
+        params.entity_buffer
+    );
+
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
@@ -675,6 +681,12 @@ fn apply_mutations(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
+    debug_assert!(
+        params.entity_buffer.is_empty(),
+        "`{:?}` should be freed before applying mutations",
+        params.entity_buffer
+    );
+
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
