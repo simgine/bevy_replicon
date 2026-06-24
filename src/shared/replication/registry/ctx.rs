@@ -2,6 +2,7 @@ use bevy::{
     ecs::{change_detection::Tick, component::ComponentId, entity::EntityAllocator},
     prelude::*,
 };
+use log::trace;
 
 use crate::{prelude::*, shared::server_entity_map::ServerEntityMap};
 
