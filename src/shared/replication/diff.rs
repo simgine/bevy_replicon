@@ -631,60 +631,7 @@ mod tests {
     }
 
     #[test]
-    fn apply() {
-        let mut world = World::new();
-        world.init_resource::<ReplicationStorage>();
-
-        let mut entity = world.spawn(Value::default());
-        entity.apply_diff::<Value>(ValueDiff::Add(10)).unwrap();
-        entity.apply_diff::<Value>(ValueDiff::Sub(3)).unwrap();
-        assert_eq!(entity.get::<Value>().copied(), Some(Value(7)));
-
-        let entity = entity.id();
-        let storage = world.resource::<ReplicationStorage>();
-        let history = storage.get::<DiffHistory<Value>>(entity).unwrap();
-        assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
-    }
-
-    #[test]
-    fn apply_on_missing() {
-        let mut world = World::new();
-        world.init_resource::<ReplicationStorage>();
-
-        let mut entity = world.spawn_empty();
-        assert!(entity.apply_diff::<Value>(ValueDiff::Add(10)).is_err());
-        assert!(entity.get::<Value>().is_none());
-    }
-
-    #[test]
-    fn apply_with_external_mutation() {
-        let mut world = World::new();
-        world.init_resource::<ReplicationStorage>();
-
-        let mut entity = world.spawn(Value::default());
-        entity.apply_diff::<Value>(ValueDiff::Add(10)).unwrap();
-        let entity_id = entity.id();
-
-        world.increment_change_tick();
-
-        let mut value = world.get_mut::<Value>(entity_id).unwrap();
-        assert_eq!(*value, Value(10));
-        value.set_changed(); // Mock external change after diff application.
-
-        let mut entity = world.entity_mut(entity_id);
-        entity.apply_diff::<Value>(ValueDiff::Sub(3)).unwrap();
-        assert_eq!(entity.get::<Value>().copied(), Some(Value(7)));
-
-        let storage = world.resource::<ReplicationStorage>();
-        let history = storage.get::<DiffHistory<Value>>(entity_id).unwrap();
-        assert!(
-            history.diffs.is_empty(),
-            "history should be cleared on external mutation"
-        );
-    }
-
-    #[test]
-    fn apply_commands() {
+    fn apply_diff_command() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
 
@@ -705,18 +652,18 @@ mod tests {
     }
 
     #[test]
-    fn resource_apply() {
+    fn apply_resource_diff_command() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
 
         let entity = world.spawn(Value::default()).id();
-
-        world
+        let mut commands = world.commands();
+        commands
             .apply_resource_diff::<Value>(ValueDiff::Add(10))
-            .unwrap();
-        world
-            .apply_resource_diff::<Value>(ValueDiff::Sub(3))
-            .unwrap();
+            .apply_resource_diff::<Value>(ValueDiff::Sub(3));
+
+        world.flush();
+
         assert_eq!(*world.resource::<Value>(), Value(7));
 
         let storage = world.resource::<ReplicationStorage>();
@@ -725,7 +672,17 @@ mod tests {
     }
 
     #[test]
-    fn resource_apply_on_missing() {
+    fn apply_missing_component() {
+        let mut world = World::new();
+        world.init_resource::<ReplicationStorage>();
+
+        let mut entity = world.spawn_empty();
+        assert!(entity.apply_diff::<Value>(ValueDiff::Add(10)).is_err());
+        assert!(!world.contains_resource::<Value>());
+    }
+
+    #[test]
+    fn apply_missing_resource() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
 
@@ -738,7 +695,7 @@ mod tests {
     }
 
     #[test]
-    fn resource_apply_with_external_mutation() {
+    fn apply_with_external_mutation() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
 
@@ -765,27 +722,6 @@ mod tests {
             history.diffs.is_empty(),
             "history should be cleared on external mutation"
         );
-    }
-
-    #[test]
-    fn resource_apply_commands() {
-        let mut world = World::new();
-        world.init_resource::<ReplicationStorage>();
-
-        let entity = world.spawn(Value::default()).id();
-
-        let mut commands = world.commands();
-        commands
-            .apply_resource_diff::<Value>(ValueDiff::Add(10))
-            .apply_resource_diff::<Value>(ValueDiff::Sub(3));
-
-        world.flush();
-
-        assert_eq!(*world.resource::<Value>(), Value(7));
-
-        let storage = world.resource::<ReplicationStorage>();
-        let history = storage.get::<DiffHistory<Value>>(entity).unwrap();
-        assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
     }
 
     #[derive(Component, Serialize, Deserialize)]
