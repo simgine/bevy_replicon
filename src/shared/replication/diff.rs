@@ -708,7 +708,8 @@ mod tests {
     fn resource_apply() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
-        world.init_resource::<Value>();
+
+        let entity = world.spawn(Value::default()).id();
 
         world
             .apply_resource_diff::<Value>(ValueDiff::Add(10))
@@ -719,7 +720,7 @@ mod tests {
         assert_eq!(*world.resource::<Value>(), Value(7));
 
         let storage = world.resource::<ReplicationStorage>();
-        let history = storage.global.get::<DiffHistory<Value>>().unwrap();
+        let history = storage.get::<DiffHistory<Value>>(entity).unwrap();
         assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
     }
 
@@ -740,7 +741,8 @@ mod tests {
     fn resource_apply_with_external_mutation() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
-        world.init_resource::<Value>();
+
+        let entity = world.spawn(Value::default()).id();
 
         world
             .apply_resource_diff::<Value>(ValueDiff::Add(10))
@@ -758,7 +760,7 @@ mod tests {
         assert_eq!(*world.resource::<Value>(), Value(7));
 
         let storage = world.resource::<ReplicationStorage>();
-        let history = storage.global.get::<DiffHistory<Value>>().unwrap();
+        let history = storage.get::<DiffHistory<Value>>(entity).unwrap();
         assert!(
             history.diffs.is_empty(),
             "history should be cleared on external mutation"
@@ -769,7 +771,8 @@ mod tests {
     fn resource_apply_commands() {
         let mut world = World::new();
         world.init_resource::<ReplicationStorage>();
-        world.init_resource::<Value>();
+
+        let entity = world.spawn(Value::default()).id();
 
         let mut commands = world.commands();
         commands
@@ -781,7 +784,7 @@ mod tests {
         assert_eq!(*world.resource::<Value>(), Value(7));
 
         let storage = world.resource::<ReplicationStorage>();
-        let history = storage.global.get::<DiffHistory<Value>>().unwrap();
+        let history = storage.get::<DiffHistory<Value>>(entity).unwrap();
         assert_eq!(history.diffs, [ValueDiff::Add(10), ValueDiff::Sub(3)]);
     }
 
