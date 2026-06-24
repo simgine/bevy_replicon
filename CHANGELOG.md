@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.1] - 2026-06-24
+
 ### Fixed
 
 - Incorrect assertion during entity spawning.
 
-## [0.41.0] - 2026-05-17
+## [0.41.0] - 2026-06-24
 
 ### Added
 
@@ -1124,7 +1126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.41.0..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.41.1..HEAD
+[0.41.1]: https://github.com/simgine/bevy_replicon/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...v0.41.0
 [0.40.4]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...v0.40.4
 [0.40.3]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...v0.40.3
