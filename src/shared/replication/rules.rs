@@ -167,15 +167,35 @@ pub trait AppRuleExt {
         self.replicate_once_filtered_as::<C, T, ()>()
     }
 
-    /// Like [`Self::replicate`], but for [`Resource`].
+    /// Like [`Self::replicate`], but also registers [`Replicated`] as a
+    /// required component for `R`.
     ///
-    /// The only difference from the component version is that it makes [`Replicated`] a
-    /// required component for `R`, so you don't need to insert it manually to enable replication.
+    /// This is just a convenience helper for:
     ///
-    /// To spawn a replicated resource ahead of the server, use [`Signature`] to
+    /// ```
+    /// # use bevy::prelude::*;
+    /// # use bevy_prelude::prelude::*;
+    /// # let mut app = App::new();
+    /// app.replicate::<MyResource>()
+    ///     .register_required_components::<MyResource, Replicated>();
+    /// # #[derive(Resource)]
+    /// # struct MyResource;
+    /// ```
+    ///
+    /// This allows the resource to be replicated automatically when it's
+    /// inserted via [`Commands::insert_resource`] or [`App::insert_resource`].
+    ///
+    /// To replicate the resource conditionally, use [`Self::replicate`] and
+    /// initialize the resource via [`Commands::spawn`] with [`Replicated`],
+    /// or insert the component dynamically by querying the resource entity.
+    ///
+    /// **Note:** To initialize a resource ahead of the server, use [`Signature`] to
     /// map the local resource entity to the corresponding server entity. Otherwise,
     /// when the server later replicates that resource, Bevy will reject spawning
-    /// the entity because the resource already exists in the world.
+    /// the entity because the resource already exists in the world. Resources are
+    /// not applied via `insert_resource` because the server may replicate
+    /// additional components attached to the resource entity, or replicate an entity
+    /// with multiple resources on it. This is why resources are replicated as components.
     fn replicate_resource<R>(&mut self) -> &mut Self
     where
         R: Resource<Mutability: MutWrite<R>> + Serialize + DeserializeOwned,
