@@ -193,7 +193,7 @@ pub trait AppRuleExt {
     /// map the local resource entity to the corresponding server entity. Otherwise,
     /// when the server later replicates that resource, Bevy will reject spawning
     /// the entity because the resource already exists in the world. Resources are
-    /// not applied via `insert_resource` because the server may replicate
+    /// not applied via [`World::insert_resource`] because the server may replicate
     /// additional components attached to the resource entity, or replicate an entity
     /// with multiple resources on it. This is why resources are replicated as components.
     fn replicate_resource<R>(&mut self) -> &mut Self
