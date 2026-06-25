@@ -173,12 +173,14 @@ pub trait AppRuleExt {
     /// This is just a convenience helper for:
     ///
     /// ```
-    /// # use bevy::prelude::*;
-    /// # use bevy_prelude::prelude::*;
+    /// # use bevy::{prelude::*, state::app::StatesPlugin};
+    /// # use bevy_replicon::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
     /// # let mut app = App::new();
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
     /// app.replicate::<MyResource>()
     ///     .register_required_components::<MyResource, Replicated>();
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, Serialize, Deserialize)]
     /// # struct MyResource;
     /// ```
     ///
