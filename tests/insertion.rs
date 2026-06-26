@@ -589,8 +589,11 @@ fn with_client_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).len(), 0);
+    let mut components = client_app
+        .world_mut()
+        .query_filtered::<Entity, (With<Remote>, With<A>)>();
+    let new_client_entity = components.single(client_app.world()).unwrap();
+    assert_ne!(new_client_entity, client_entity);
 }
 
 #[test]

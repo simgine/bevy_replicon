@@ -438,6 +438,63 @@ fn after_unreplicate() {
 }
 
 #[test]
+fn unpause_replication() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .replicate::<B>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut remote = client_app
+        .world_mut()
+        .query_filtered::<Entity, (With<Remote>, With<A>, Without<B>)>();
+    let client_entity = remote.single(client_app.world()).unwrap();
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<Replicated>()
+        .insert(B);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let client_entity_ref = client_app.world().entity(client_entity);
+    assert!(client_entity_ref.contains::<A>());
+    assert!(!client_entity_ref.contains::<B>());
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let client_entity_ref = client_app.world().entity(client_entity);
+    assert!(client_entity_ref.contains::<A>());
+    assert!(client_entity_ref.contains::<B>());
+}
+
+#[test]
 fn confirm_history() {
     let mut server_app = App::new();
     let mut client_app = App::new();
