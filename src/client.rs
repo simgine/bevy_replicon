@@ -16,6 +16,7 @@ use crate::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
             deferred_entity::{DeferredEntity, EntityScratch},
+            message_flags::UpdateMessageFlags,
             mutate_index::MutateIndex,
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
@@ -24,7 +25,6 @@ use crate::{
             },
             signature::SignatureMap,
             track_mutate_messages::TrackMutateMessages,
-            update_message_flags::UpdateMessageFlags,
         },
         server_entity_map::{EntityEntry, ServerEntityMap},
     },

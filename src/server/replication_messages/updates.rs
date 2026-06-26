@@ -10,8 +10,8 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
+            message_flags::UpdateMessageFlags,
             registry::{ComponentIndex, component_mask::ComponentMask},
-            update_message_flags::UpdateMessageFlags,
         },
     },
 };
