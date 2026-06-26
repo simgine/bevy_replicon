@@ -422,6 +422,7 @@ fn after_unreplicate() {
         .query_filtered::<Entity, With<Remote>>();
     let client_entity = remote.single(client_app.world()).unwrap();
 
+    // Un-replicate and remove at the same time.
     server_app
         .world_mut()
         .entity_mut(server_entity)
