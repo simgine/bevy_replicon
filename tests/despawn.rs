@@ -50,82 +50,6 @@ fn single() {
 }
 
 #[test]
-fn after_unreplicate() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    let server_entity = server_app.world_mut().spawn(Replicated).id();
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    let client_entity = *client_app
-        .world()
-        .resource::<ServerEntityMap>()
-        .to_client()
-        .get(&server_entity)
-        .unwrap();
-
-    let mut server_entity = server_app.world_mut().entity_mut(server_entity);
-    server_entity.remove::<Replicated>();
-    server_entity.despawn();
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-
-    assert!(client_app.world().get_entity(client_entity).is_ok());
-}
-
-#[test]
-fn client_despawn_cleans_entity_map() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    let server_entity = server_app.world_mut().spawn(Replicated).id();
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    let client_entity = *client_app
-        .world()
-        .resource::<ServerEntityMap>()
-        .to_client()
-        .get(&server_entity)
-        .unwrap();
-
-    client_app.world_mut().entity_mut(client_entity).despawn();
-
-    let entity_map = client_app.world().resource::<ServerEntityMap>();
-    assert!(entity_map.to_client().is_empty());
-    assert!(entity_map.to_server().is_empty());
-}
-
-#[test]
 fn resource() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -226,6 +150,59 @@ fn after_spawn() {
         0,
         "client shouldn't receive anything for an unreplicated entity"
     );
+}
+
+#[test]
+fn after_unreplicate() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
+
+    let mut server_entity = server_app.world_mut().entity_mut(server_entity);
+    server_entity.remove::<Replicated>();
+    server_entity.despawn();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(
+        client_app.world().get_entity(client_entity).is_ok(),
+        "client shouldn't receive a despawn for unreplicated entity"
+    );
+
+    let entity_map = client_app.world().resource::<ServerEntityMap>();
+    assert!(!entity_map.to_client().is_empty());
+    assert!(!entity_map.to_server().is_empty());
+
+    client_app.world_mut().despawn(client_entity);
+
+    let entity_map = client_app.world().resource::<ServerEntityMap>();
+    assert!(entity_map.to_client().is_empty());
+    assert!(entity_map.to_server().is_empty());
 }
 
 #[test]
