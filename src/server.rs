@@ -320,13 +320,13 @@ fn buffer_removals(
 }
 
 fn buffer_despawn(
-    remove: On<Remove, Replicated>,
+    despawn: On<Despawn, Replicated>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     state: Res<State<ServerState>>,
 ) {
     if *state == ServerState::Running {
-        trace!("buffering despawn of `{}`", remove.entity);
-        despawn_buffer.push(remove.entity);
+        trace!("buffering despawn of `{}`", despawn.entity);
+        despawn_buffer.push(despawn.entity);
     }
 }
 
@@ -940,10 +940,6 @@ pub enum ServerSystems {
 struct ServerChangeTick(Tick);
 
 /// Buffer with all despawned entities.
-///
-/// We treat removals of [`Replicated`] component as despawns
-/// to avoid missing events in case the server's tick policy is
-/// not [`TickPolicy::EveryFrame`].
 #[derive(Resource, Deref, DerefMut, Default)]
 struct DespawnBuffer(Vec<Entity>);
 
