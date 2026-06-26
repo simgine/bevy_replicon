@@ -190,8 +190,9 @@ fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<Replicatio
     storage.entities.remove(&remove.entity);
 }
 
-// The server could despawn an entity without sending a replication message
-// so we need to manually clear the entity from the ServerEntityMap if the entity gets despawned
+// The server can despawn an entity without sending a replication message,
+// so we need to manually remove the entity from the `ServerEntityMap`
+// when it is despawned on the client.
 fn cleanup_entity_map(despawn: On<Despawn, Remote>, mut entity_map: If<ResMut<ServerEntityMap>>) {
     entity_map.remove_by_client(despawn.entity);
 }
