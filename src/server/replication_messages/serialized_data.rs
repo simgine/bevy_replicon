@@ -15,7 +15,7 @@ use crate::{
 /// serialized data.
 ///
 /// See [`Updates`](super::updates::Updates) and
-/// [`MutateMessage`](super::mutations::MutateMessage).
+/// [`Mutations`](super::mutations::Mutations).
 #[derive(Resource, Deref, DerefMut, Default)]
 pub(crate) struct SerializedData(Vec<u8>);
 

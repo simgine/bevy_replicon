@@ -63,7 +63,7 @@ pub(crate) struct Updates {
     /// Components are stored in multiple chunks because newly connected clients may need to serialize all components,
     /// while previously connected clients only need the components spawned during this tick.
     ///
-    /// Usually mutations are stored in [`MutateMessage`], but if an entity has any insertions or removal,
+    /// Usually mutations are stored in [`Mutations`], but if an entity has any insertions or removal,
     /// or the entity just became visible for a client, we serialize it as part of the update message to keep entity updates atomic.
     changes: Vec<EntityRanges>,
 
