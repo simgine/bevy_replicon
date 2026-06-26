@@ -640,7 +640,7 @@ fn with_client_despawn() {
 
     server_app.world_mut().entity_mut(server_entity).insert(A);
 
-    client_app.world_mut().entity_mut(client_entity).despawn();
+    client_app.world_mut().despawn(client_entity);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);

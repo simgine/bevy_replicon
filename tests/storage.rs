@@ -95,8 +95,8 @@ fn entity_cleanup() {
     storage.insert(replicated, Scale(0));
     storage.insert(remote, Scale(0));
 
-    app.world_mut().entity_mut(replicated).despawn();
-    app.world_mut().entity_mut(remote).despawn();
+    app.world_mut().despawn(replicated);
+    app.world_mut().despawn(remote);
 
     let storage = app.world_mut().resource_mut::<ReplicationStorage>();
     assert!(storage.entities.is_empty());

@@ -333,7 +333,7 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().entity_mut(server_entity).despawn();
+    server_app.world_mut().despawn(server_entity);
 
     server_app.update();
 
