@@ -10,7 +10,7 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
-            message_flags::UpdateMessageFlags,
+            message_flags::UpdateFlags,
             registry::{ComponentIndex, component_mask::ComponentMask},
         },
     },
@@ -211,7 +211,7 @@ impl Updates {
     ///
     /// Sent over [`ServerChannel::Updates`] channel.
     ///
-    /// Some data is optional, and their presence is encoded in the [`UpdateMessageFlags`] bitset.
+    /// Some data is optional, and their presence is encoded in the [`UpdateFlags`] bitset.
     ///
     /// To know how much data array takes, we serialize it's length. We use `usize`,
     /// but we use variable integer encoding, so they are correctly deserialized even
@@ -232,22 +232,22 @@ impl Updates {
         let last_flag = flags.last();
 
         // Precalculate size first to avoid extra allocations.
-        let mut message_size = size_of::<UpdateMessageFlags>() + server_tick_range.len();
+        let mut message_size = size_of::<UpdateFlags>() + server_tick_range.len();
         for (_, flag) in flags.iter_names() {
             match flag {
-                UpdateMessageFlags::MAPPINGS => {
+                UpdateFlags::MAPPINGS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.mappings_len)?;
                     }
                     message_size += self.mappings.iter().map(Range::len).sum::<usize>();
                 }
-                UpdateMessageFlags::DESPAWNS => {
+                UpdateFlags::DESPAWNS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.despawns_len)?;
                     }
                     message_size += self.despawns.iter().map(Range::len).sum::<usize>();
                 }
-                UpdateMessageFlags::REMOVALS => {
+                UpdateFlags::REMOVALS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.removals.len())?;
                     }
@@ -257,7 +257,7 @@ impl Updates {
                         .map(EntityRanges::size)
                         .sum::<Result<usize>>()?;
                 }
-                UpdateMessageFlags::CHANGES => {
+                UpdateFlags::CHANGES => {
                     debug_assert_eq!(flag, last_flag);
                     message_size += self
                         .changes
@@ -274,7 +274,7 @@ impl Updates {
         message.extend_from_slice(&serialized[server_tick_range]);
         for (_, flag) in flags.iter_names() {
             match flag {
-                UpdateMessageFlags::MAPPINGS => {
+                UpdateFlags::MAPPINGS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.mappings_len, &mut message)?;
                     }
@@ -282,7 +282,7 @@ impl Updates {
                         message.extend_from_slice(&serialized[range.clone()]);
                     }
                 }
-                UpdateMessageFlags::DESPAWNS => {
+                UpdateFlags::DESPAWNS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.despawns_len, &mut message)?;
                     }
@@ -290,7 +290,7 @@ impl Updates {
                         message.extend_from_slice(&serialized[range.clone()]);
                     }
                 }
-                UpdateMessageFlags::REMOVALS => {
+                UpdateFlags::REMOVALS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.removals.len(), &mut message)?;
                     }
@@ -302,7 +302,7 @@ impl Updates {
                         }
                     }
                 }
-                UpdateMessageFlags::CHANGES => {
+                UpdateFlags::CHANGES => {
                     // Changes are always last, don't write len for it.
                     for changes in &self.changes {
                         message.extend_from_slice(&serialized[changes.entity.clone()]);
@@ -323,20 +323,20 @@ impl Updates {
         Ok(())
     }
 
-    fn flags(&self) -> UpdateMessageFlags {
-        let mut flags = UpdateMessageFlags::default();
+    fn flags(&self) -> UpdateFlags {
+        let mut flags = UpdateFlags::default();
 
         if !self.mappings.is_empty() {
-            flags |= UpdateMessageFlags::MAPPINGS;
+            flags |= UpdateFlags::MAPPINGS;
         }
         if !self.despawns.is_empty() {
-            flags |= UpdateMessageFlags::DESPAWNS;
+            flags |= UpdateFlags::DESPAWNS;
         }
         if !self.removals.is_empty() {
-            flags |= UpdateMessageFlags::REMOVALS;
+            flags |= UpdateFlags::REMOVALS;
         }
         if !self.changes.is_empty() {
-            flags |= UpdateMessageFlags::CHANGES;
+            flags |= UpdateFlags::CHANGES;
         }
 
         flags

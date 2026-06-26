@@ -16,7 +16,7 @@ use crate::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
             deferred_entity::{DeferredEntity, EntityScratch},
-            message_flags::UpdateMessageFlags,
+            message_flags::UpdateFlags,
             mutate_index::MutateIndex,
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
@@ -283,7 +283,7 @@ fn apply_update_message(
         stats.bytes += message.len();
     }
 
-    let flags: UpdateMessageFlags = postcard_utils::from_buf(message)?;
+    let flags: UpdateFlags = postcard_utils::from_buf(message)?;
     debug_assert!(!flags.is_empty(), "message can't be empty");
 
     let message_tick = postcard_utils::from_buf(message)?;
@@ -299,7 +299,7 @@ fn apply_update_message(
         };
 
         match flag {
-            UpdateMessageFlags::MAPPINGS => {
+            UpdateFlags::MAPPINGS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_entity_mapping(world, params, message)
                 })
@@ -308,7 +308,7 @@ fn apply_update_message(
                     stats.mappings += len;
                 }
             }
-            UpdateMessageFlags::DESPAWNS => {
+            UpdateFlags::DESPAWNS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_despawn(world, params, message, message_tick)
                 })
@@ -317,7 +317,7 @@ fn apply_update_message(
                     stats.despawns += len;
                 }
             }
-            UpdateMessageFlags::REMOVALS => {
+            UpdateFlags::REMOVALS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_removals(world, params, message, message_tick)
                 })
@@ -326,7 +326,7 @@ fn apply_update_message(
                     stats.entities_changed += len;
                 }
             }
-            UpdateMessageFlags::CHANGES => {
+            UpdateFlags::CHANGES => {
                 debug_assert_eq!(array_kind, ArrayKind::Dynamic);
                 let len = apply_array(array_kind, message, |message| {
                     apply_changes(world, params, message, message_tick)
