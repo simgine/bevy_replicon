@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Removing `Replicated` from an entity now stops replication without despawning the entity on clients. Client-side despawns of `Remote` entities clean up their `ServerEntityMap` mappings.
+
 ## [0.41.1] - 2026-06-24
 
 ### Fixed

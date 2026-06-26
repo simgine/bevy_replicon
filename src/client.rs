@@ -64,6 +64,7 @@ impl Plugin for ClientPlugin {
                 (ClientSystems::Send, ClientSystems::SendPackets).chain(),
             )
             .add_observer(cleanup_storage)
+            .add_observer(cleanup_entity_map)
             .add_systems(
                 PreUpdate,
                 receive_replication
@@ -187,6 +188,12 @@ pub(super) fn receive_replication(
 // Cleanup is handled manually in the receive logic.
 fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<ReplicationStorage>>) {
     storage.entities.remove(&remove.entity);
+}
+
+// The server could despawn an entity without sending a replication message
+// so we need to manually clear the entity from the ServerEntityMap if the entity gets despawned
+fn cleanup_entity_map(despawn: On<Despawn, Remote>, mut entity_map: If<ResMut<ServerEntityMap>>) {
+    entity_map.remove_by_client(despawn.entity);
 }
 
 fn reset(

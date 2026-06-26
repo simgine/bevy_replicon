@@ -130,7 +130,8 @@ component on the server for entities you want to replicate.
 
 On clients [`Remote`] will be automatically inserted for every entity spawned by replication.
 
-If you remove the [`Replicated`] component from an entity on the server, it will be despawned on all clients.
+If you remove the [`Replicated`] component from an entity on the server, replication stops. No replication messages
+will be sent, including if the entity gets despawned.
 
 Entity IDs differ between clients and server. As a result, clients maps server entities to local entities
 on receive. These mappings are stored in the [`ServerEntityMap`](shared::server_entity_map::ServerEntityMap)

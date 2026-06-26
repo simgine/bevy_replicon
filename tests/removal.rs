@@ -395,7 +395,7 @@ fn after_spawn() {
 }
 
 #[test]
-fn after_despawn() {
+fn after_unreplicate() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -417,10 +417,11 @@ fn after_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).len(), 1);
+    let mut remote = client_app
+        .world_mut()
+        .query_filtered::<Entity, With<Remote>>();
+    let client_entity = remote.single(client_app.world()).unwrap();
 
-    // Un-replicate and remove at the same time.
     server_app
         .world_mut()
         .entity_mut(server_entity)
@@ -431,7 +432,9 @@ fn after_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(remote.iter(client_app.world()).len(), 0);
+    let client_entity = client_app.world().entity(client_entity);
+    assert!(client_entity.contains::<Remote>());
+    assert!(client_entity.contains::<A>());
 }
 
 #[test]
