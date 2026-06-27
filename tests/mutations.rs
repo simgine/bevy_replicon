@@ -1289,6 +1289,65 @@ fn after_disconnect() {
     server_app.update();
 }
 
+#[test]
+fn after_pause() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity_id = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Change value and pause replication.
+    let mut server_entity = server_app.world_mut().entity_mut(server_entity_id);
+    server_entity.remove::<Replicated>();
+    let mut component = server_entity.get_mut::<BoolComponent>().unwrap();
+    component.0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<&BoolComponent>();
+    let component = components.single(client_app.world()).unwrap();
+    assert!(
+        !component.0,
+        "client shouldn't receive mutations during replication pause"
+    );
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity_id)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(
+        component.0,
+        "client should receive mutations after replication unpause"
+    );
+}
+
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
