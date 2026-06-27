@@ -17,9 +17,12 @@ bitflags! {
 impl UpdateFlags {
     /// Returns the last set flag in the message.
     pub(crate) fn last(self) -> UpdateFlags {
-        debug_assert!(!self.is_empty());
-        let zeroes = u8::BITS - 1 - self.bits().leading_zeros();
-        UpdateFlags::from_bits_retain(1 << zeroes)
+        if self.is_empty() {
+            Self::empty()
+        } else {
+            let zeroes = u8::BITS - 1 - self.bits().leading_zeros();
+            UpdateFlags::from_bits_retain(1 << zeroes)
+        }
     }
 }
 
@@ -38,6 +41,7 @@ mod tests {
 
     #[test]
     fn last() {
+        assert_eq!(UpdateFlags::empty().last(), UpdateFlags::empty());
         assert_eq!(UpdateFlags::CHANGES.last(), UpdateFlags::CHANGES);
         assert_eq!(UpdateFlags::MAPPINGS.last(), UpdateFlags::MAPPINGS);
         assert_eq!(UpdateFlags::all().last(), UpdateFlags::CHANGES);

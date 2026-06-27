@@ -294,10 +294,6 @@ fn apply_update_message(
     }
 
     let flags: UpdateFlags = postcard_utils::from_buf(message)?;
-    if flags.is_empty() {
-        return Err("update message is empty".into());
-    }
-
     let message_tick = postcard_utils::from_buf(message)?;
     trace!("applying update message with `{flags:?}` for {message_tick:?}");
     world.resource_mut::<ServerUpdateTick>().0 = message_tick;
@@ -372,10 +368,6 @@ fn buffer_mutate_message(
     }
 
     let flags: MutateFlags = postcard_utils::from_buf(&mut message)?;
-    if flags.is_empty() {
-        return Err("mutate message is empty".into());
-    }
-
     let mutate_index: MutateIndex = postcard_utils::from_buf(&mut message)?;
     postcard_utils::to_extend_mut(&mutate_index, acks)?;
 
