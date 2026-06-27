@@ -307,6 +307,10 @@ fn apply_update_message(
         };
 
         match flag {
+            UpdateFlags::USERDATA => {
+                apply_userdata(world, message)
+                    .map_err(|e| format!("unable to apply userdata: {e}"))?;
+            }
             UpdateFlags::MAPPINGS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_entity_mapping(world, params, message)
@@ -397,6 +401,10 @@ fn apply_mutate_message(
 
     for (_, flag) in mutate.flags.iter_names() {
         match flag {
+            MutateFlags::USERDATA => {
+                apply_userdata(world, &mut mutate.message)
+                    .map_err(|e| format!("unable to apply userdata: {e}"))?;
+            }
             MutateFlags::MESSAGES_COUNT => {
                 confirm_mutate_tick(world, params.mutate_ticks, mutate)
                     .map_err(|e| format!("unable to confirm mutate tick: {e}"))?;
@@ -613,6 +621,22 @@ fn apply_changes(
         .entity_buffer
         .spawn(unsafe { client_entity.world_mut() });
     client_entity.flush();
+
+    Ok(())
+}
+
+fn apply_userdata(world: &mut World, message: &mut Bytes) -> Result<()> {
+    let len = postcard_utils::from_buf(message)?;
+    if len > message.len() {
+        return Err(format!(
+            "userdata length ({len}) exceeds remaining message length ({})",
+            message.len()
+        )
+        .into());
+    }
+    world.trigger(UserdataReceived {
+        bytes: message.split_to(len),
+    });
 
     Ok(())
 }
@@ -952,3 +976,12 @@ pub struct ClientReplicationStats {
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Remote;
+
+/// Triggered when user-defined bytes are received in a replication message.
+///
+/// This is emitted for data sent through [`ReplicationUserdata`](crate::server::ReplicationUserdata).
+#[derive(Event)]
+pub struct UserdataReceived {
+    /// Raw user-defined bytes received from the server.
+    pub bytes: Bytes,
+}

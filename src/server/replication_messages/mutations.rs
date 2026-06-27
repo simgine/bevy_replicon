@@ -8,6 +8,7 @@ use super::{entity_ranges::EntityRanges, serialized_data::SerializedData};
 use crate::{
     postcard_utils,
     prelude::*,
+    server::ReplicationUserdata,
     shared::{
         backend::channels::ServerChannel,
         replication::{
@@ -147,6 +148,7 @@ impl Mutations {
         split_buffer: &mut Vec<MutationsSplit>,
         serialized: &SerializedData,
         track_mutate_messages: bool,
+        userdata: &ReplicationUserdata,
         server_tick_range: Range<usize>,
         server_tick: RepliconTick,
         system_tick: Tick,
@@ -158,6 +160,9 @@ impl Mutations {
         let update_tick = postcard::to_slice(&ticks.update_tick, &mut tick_buffer)?;
         let mut base_header_size =
             size_of::<MutateFlags>() + update_tick.len() + server_tick_range.len();
+        if !userdata.is_empty() {
+            base_header_size += serialized_size(&userdata.len())? + userdata.len();
+        }
         if track_mutate_messages {
             // We don't know the number of messages ahead of time, so we assume the maximum
             // possible size during the splits calculation to avoid exceeding MTU.
@@ -237,6 +242,9 @@ impl Mutations {
         if track_mutate_messages {
             base_flags |= MutateFlags::MESSAGES_COUNT;
         }
+        if !userdata.is_empty() {
+            base_flags |= MutateFlags::USERDATA;
+        }
 
         for split in &*split_buffer {
             let mut message_size = split.message_size;
@@ -256,6 +264,10 @@ impl Mutations {
             postcard_utils::to_extend_mut(&split.mutate_index, &mut message)?;
             message.extend_from_slice(update_tick);
             message.extend_from_slice(&serialized[server_tick_range.clone()]);
+            if !userdata.is_empty() {
+                postcard_utils::to_extend_mut(&userdata.len(), &mut message)?;
+                message.extend_from_slice(userdata);
+            }
             if track_mutate_messages {
                 postcard_utils::to_extend_mut(&split_buffer.len(), &mut message)?;
             }
@@ -487,6 +499,7 @@ mod tests {
                 &mut Default::default(),
                 &serialized,
                 track_mutate_messages,
+                &Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),

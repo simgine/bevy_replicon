@@ -7,10 +7,11 @@ bitflags! {
     /// Serialized at the beginning of the message.
     #[derive(Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
     pub(crate) struct UpdateFlags: u8 {
-        const MAPPINGS = 0b00000001;
-        const DESPAWNS = 0b00000010;
-        const REMOVALS = 0b00000100;
-        const CHANGES = 0b00001000;
+        const USERDATA = 0b00000001;
+        const MAPPINGS = 0b00000010;
+        const DESPAWNS = 0b00000100;
+        const REMOVALS = 0b00001000;
+        const CHANGES = 0b00010000;
     }
 }
 
@@ -30,8 +31,9 @@ bitflags! {
     /// Like [`UpdateFlags`], but for mutate messages.
     #[derive(Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
     pub(crate) struct MutateFlags: u8 {
-        const MESSAGES_COUNT = 0b00000001;
-        const MUTATIONS = 0b00000010;
+        const USERDATA = 0b00000001;
+        const MESSAGES_COUNT = 0b00000010;
+        const MUTATIONS = 0b00000100;
     }
 }
 

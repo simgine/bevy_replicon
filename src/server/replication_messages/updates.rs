@@ -7,6 +7,7 @@ use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
+    server::ReplicationUserdata,
     shared::{
         backend::channels::ServerChannel,
         replication::{
@@ -226,15 +227,19 @@ impl Updates {
         messages: &mut ServerMessages,
         client: Entity,
         serialized: &SerializedData,
+        userdata: &ReplicationUserdata,
         server_tick_range: Range<usize>,
     ) -> Result<()> {
-        let flags = self.flags();
+        let flags = self.flags(userdata);
         let last_flag = flags.last();
 
         // Precalculate size first to avoid extra allocations.
         let mut message_size = size_of::<UpdateFlags>() + server_tick_range.len();
         for (_, flag) in flags.iter_names() {
             match flag {
+                UpdateFlags::USERDATA => {
+                    message_size += serialized_size(&userdata.len())? + userdata.len();
+                }
                 UpdateFlags::MAPPINGS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.mappings_len)?;
@@ -274,6 +279,10 @@ impl Updates {
         message.extend_from_slice(&serialized[server_tick_range]);
         for (_, flag) in flags.iter_names() {
             match flag {
+                UpdateFlags::USERDATA => {
+                    postcard_utils::to_extend_mut(&userdata.len(), &mut message)?;
+                    message.extend_from_slice(userdata);
+                }
                 UpdateFlags::MAPPINGS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.mappings_len, &mut message)?;
@@ -323,7 +332,7 @@ impl Updates {
         Ok(())
     }
 
-    fn flags(&self) -> UpdateFlags {
+    fn flags(&self, userdata: &ReplicationUserdata) -> UpdateFlags {
         let mut flags = UpdateFlags::default();
 
         if !self.mappings.is_empty() {
@@ -337,6 +346,9 @@ impl Updates {
         }
         if !self.changes.is_empty() {
             flags |= UpdateFlags::CHANGES;
+        }
+        if !userdata.is_empty() {
+            flags |= UpdateFlags::USERDATA;
         }
 
         flags
