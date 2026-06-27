@@ -16,7 +16,7 @@ use crate::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
             deferred_entity::{DeferredEntity, EntityScratch},
-            message_flags::UpdateFlags,
+            message_flags::{MutateFlags, UpdateFlags},
             mutate_index::MutateIndex,
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
@@ -24,7 +24,6 @@ use crate::{
                 ctx::{BufferedSpawner, DespawnCtx, EntityBuffer, RemoveCtx, WriteCtx},
             },
             signature::SignatureMap,
-            track_mutate_messages::TrackMutateMessages,
         },
         server_entity_map::{EntityEntry, ServerEntityMap},
     },
@@ -43,6 +42,7 @@ impl Plugin for ClientPlugin {
             .init_resource::<ClientStats>()
             .init_resource::<ServerEntityMap>()
             .init_resource::<ServerUpdateTick>()
+            .init_resource::<ServerMutateTicks>()
             .init_resource::<BufferedMutations>()
             .add_message::<EntityReplicated>()
             .add_message::<MutateTickReceived>()
@@ -99,10 +99,6 @@ impl Plugin for ClientPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        if **app.world().resource::<TrackMutateMessages>() {
-            app.init_resource::<ServerMutateTicks>();
-        }
-
         app.world_mut()
             .resource_scope(|world, mut messages: Mut<ClientMessages>| {
                 let channels = world.resource::<RepliconChannels>();
@@ -139,6 +135,7 @@ pub(super) fn receive_replication(
     let mut entity_map = world.remove_resource::<ServerEntityMap>().unwrap();
     let mut signature_map = world.remove_resource::<SignatureMap>().unwrap();
     let mut storage = world.remove_resource::<ReplicationStorage>().unwrap();
+    let mut mutate_ticks = world.remove_resource::<ServerMutateTicks>().unwrap();
     let mut buffered_mutations = world.remove_resource::<BufferedMutations>().unwrap();
     let receive_markers = world.remove_resource::<ReceiveMarkers>().unwrap();
     let registry = world.remove_resource::<ReplicationRegistry>().unwrap();
@@ -148,7 +145,6 @@ pub(super) fn receive_replication(
 
     let type_registry = world.resource::<AppTypeRegistry>().clone();
     let mut stats = world.remove_resource::<ClientReplicationStats>();
-    let mut mutate_ticks = world.remove_resource::<ServerMutateTicks>();
 
     let mut params = ReceiveParams {
         scratch: &mut scratch,
@@ -157,8 +153,8 @@ pub(super) fn receive_replication(
         entity_map: &mut entity_map,
         signature_map: &mut signature_map,
         storage: &mut storage,
+        mutate_ticks: &mut mutate_ticks,
         replicated: &mut replicated,
-        mutate_ticks: mutate_ticks.as_mut(),
         stats: stats.as_mut(),
         receive_markers: &receive_markers,
         registry: &registry,
@@ -170,14 +166,12 @@ pub(super) fn receive_replication(
     if let Some(stats) = stats {
         world.insert_resource(stats);
     }
-    if let Some(mutate_ticks) = mutate_ticks {
-        world.insert_resource(mutate_ticks);
-    }
 
     world.insert_resource(messages);
     world.insert_resource(entity_map);
     world.insert_resource(signature_map);
     world.insert_resource(storage);
+    world.insert_resource(mutate_ticks);
     world.insert_resource(buffered_mutations);
     world.insert_resource(receive_markers);
     world.insert_resource(registry);
@@ -377,23 +371,23 @@ fn buffer_mutate_message(
         stats.bytes += message.len();
     }
 
+    let flags: MutateFlags = postcard_utils::from_buf(&mut message)?;
+    if flags.is_empty() {
+        return Err("mutate message is empty".into());
+    }
+
+    let mutate_index: MutateIndex = postcard_utils::from_buf(&mut message)?;
+    postcard_utils::to_extend_mut(&mutate_index, acks)?;
+
     let update_tick = postcard_utils::from_buf(&mut message)?;
     let message_tick = postcard_utils::from_buf(&mut message)?;
-    let messages_count = if params.mutate_ticks.is_some() {
-        postcard_utils::from_buf(&mut message)?
-    } else {
-        1
-    };
-    let mutate_index: MutateIndex = postcard_utils::from_buf(&mut message)?;
     trace!("received mutate message for {message_tick:?}");
     buffered_mutations.insert(BufferedMutate {
+        flags,
         update_tick,
         message_tick,
-        messages_count,
         message,
     });
-
-    postcard_utils::to_extend_mut(&mutate_index, acks)?;
 
     Ok(())
 }
@@ -404,24 +398,28 @@ fn apply_mutate_message(
     params: &mut ReceiveParams,
     mutate: &mut BufferedMutate,
 ) -> Result<()> {
-    trace!("applying mutate message for {:?}", mutate.message_tick);
+    trace!(
+        "applying mutate message with `{:?}` for {:?}",
+        mutate.flags, mutate.message_tick
+    );
 
-    let len = apply_array(ArrayKind::Dynamic, &mut mutate.message, |message| {
-        apply_mutations(world, params, message, mutate.message_tick)
-    })
-    .map_err(|e| format!("unable to apply mutations: {e}"))?;
-
-    if let Some(stats) = &mut params.stats {
-        stats.entities_changed += len;
-    }
-
-    if let Some(mutate_ticks) = &mut params.mutate_ticks
-        && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
-    {
-        mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
-        world.write_message(MutateTickReceived {
-            tick: mutate.message_tick,
-        });
+    for (_, flag) in mutate.flags.iter_names() {
+        match flag {
+            MutateFlags::MESSAGES_COUNT => {
+                confirm_mutate_tick(world, params.mutate_ticks, mutate)
+                    .map_err(|e| format!("unable to confirm mutate tick: {e}"))?;
+            }
+            MutateFlags::MUTATIONS => {
+                let len = apply_array(ArrayKind::Dynamic, &mut mutate.message, |message| {
+                    apply_mutations(world, params, message, mutate.message_tick)
+                })
+                .map_err(|e| format!("unable to apply mutations: {e}"))?;
+                if let Some(stats) = &mut params.stats {
+                    stats.entities_changed += len;
+                }
+            }
+            _ => unreachable!("iteration should yield only named flags"),
+        }
     }
 
     Ok(())
@@ -678,6 +676,22 @@ fn confirm_tick(
     });
 }
 
+fn confirm_mutate_tick(
+    world: &mut World,
+    mutate_ticks: &mut ServerMutateTicks,
+    mutate: &mut BufferedMutate,
+) -> Result<()> {
+    let count = postcard_utils::from_buf(&mut mutate.message)?;
+    if mutate_ticks.confirm(mutate.message_tick, count) {
+        mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
+        world.write_message(MutateTickReceived {
+            tick: mutate.message_tick,
+        });
+    }
+
+    Ok(())
+}
+
 /// Deserializes and applies component mutations for an entity.
 fn apply_mutations(
     world: &mut World,
@@ -813,8 +827,8 @@ struct ReceiveParams<'a> {
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,
     storage: &'a mut ReplicationStorage,
+    mutate_ticks: &'a mut ServerMutateTicks,
     replicated: &'a mut Messages<EntityReplicated>,
-    mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
     receive_markers: &'a ReceiveMarkers,
     registry: &'a ReplicationRegistry,
@@ -877,11 +891,11 @@ impl BufferedMutations {
     }
 
     /// Inserts a new buffered message, maintaining sorting by their message tick in descending order.
-    fn insert(&mut self, mutation: BufferedMutate) {
+    fn insert(&mut self, mutate: BufferedMutate) {
         let index = self
             .0
-            .partition_point(|other_mutation| mutation.message_tick < other_mutation.message_tick);
-        self.0.insert(index, mutation);
+            .partition_point(|other| mutate.message_tick < other.message_tick);
+        self.0.insert(index, mutate);
     }
 }
 
@@ -889,16 +903,14 @@ impl BufferedMutations {
 ///
 /// See also [`crate::server::replication_messages`].
 pub(super) struct BufferedMutate {
+    /// Flags for data in the message.
+    flags: MutateFlags,
+
     /// Required tick to wait for.
     update_tick: RepliconTick,
 
     /// The tick this mutations corresponds to.
     message_tick: RepliconTick,
-
-    /// Total number of mutate messages sent by the server for this tick.
-    ///
-    /// May not be equal to the number of received messages.
-    messages_count: usize,
 
     /// Mutations data.
     message: Bytes,

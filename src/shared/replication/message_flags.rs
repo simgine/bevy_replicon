@@ -23,6 +23,15 @@ impl UpdateFlags {
     }
 }
 
+bitflags! {
+    /// Like [`UpdateFlags`], but for mutate messages.
+    #[derive(Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
+    pub(crate) struct MutateFlags: u8 {
+        const MESSAGES_COUNT = 0b00000001;
+        const MUTATIONS = 0b00000010;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -11,10 +11,6 @@ use crate::prelude::*;
 /// an array indicating whether all mutate messages for the most
 /// recent 64 ticks were received.
 ///
-/// Inserted to the world in [`ClientPlugin::finish`](super::ClientPlugin::finish) if
-/// [`TrackAppExt::track_mutate_messages`](crate::shared::replication::track_mutate_messages::TrackAppExt::track_mutate_messages)
-/// were called.
-///
 /// See also [`MutateTickReceived`] and the [ticks information](crate#ticks-information)
 /// in the quick start guide.
 #[derive(Debug, Resource)]

@@ -44,7 +44,6 @@ use crate::{
             },
             rules::ReplicationRules,
             storage::ReplicationStorage,
-            track_mutate_messages::TrackMutateMessages,
             visibility::VisibilityScope,
         },
     },
@@ -92,6 +91,19 @@ pub struct ServerPlugin {
     ///
     /// In practice mutations will live at least `mutations_timeout`, and at most `2*mutations_timeout`.
     pub mutations_timeout: Duration,
+
+    /// Enables mutate messages tracking.
+    ///
+    /// Server will start sending mutate messages each tick even if they empty
+    /// and include the amount of the messages for each header.
+    ///
+    /// Client will track the received messages using
+    /// [`ServerMutateTicks`](crate::client::server_mutate_ticks::ServerMutateTicks).
+    ///
+    /// By default set to `false`. Needs to be set by rollback crates to assume that the
+    /// entity value didn't change on a tick if all updates were received and
+    /// [`ConfirmHistory`](crate::client::confirm_history::ConfirmHistory) don't have this tick confirmed.
+    pub track_mutate_messages: bool,
 }
 
 impl ServerPlugin {
@@ -100,6 +112,7 @@ impl ServerPlugin {
         Self {
             tick_schedule: Some(tick_schedule.intern()),
             mutations_timeout: Duration::from_secs(10),
+            track_mutate_messages: false,
         }
     }
 }
@@ -126,6 +139,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<RelatedEntities>()
             .init_resource::<FilterRegistry>()
             .register_required_components::<Replicated, TicksTracked>()
+            .insert_resource(TrackMutateMessages(self.track_mutate_messages))
             .configure_sets(
                 PreUpdate,
                 (ServerSystems::ReceivePackets, ServerSystems::Receive).chain(),
@@ -1005,3 +1019,7 @@ pub struct PriorityMap(EntityHashMap<f32>);
 /// replicated, so this marker is used to clean up [`ClientTicks`].
 #[derive(Component, Default)]
 struct TicksTracked;
+
+/// Value of the [`ServerPlugin::track_mutate_messages`].
+#[derive(Resource, Deref, Default, Debug, Clone, Copy)]
+struct TrackMutateMessages(bool);

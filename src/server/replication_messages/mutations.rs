@@ -12,6 +12,7 @@ use crate::{
         backend::channels::ServerChannel,
         replication::{
             client_ticks::{ClientTicks, DiffCursors, MutateInfo, MutatedEntityInfo},
+            message_flags::MutateFlags,
             mutate_index::MutateIndex,
             registry::{ComponentIndex, component_mask::ComponentMask},
         },
@@ -155,7 +156,8 @@ impl Mutations {
         const MESSAGES_COUNT_MAX_SIZE: usize = usize::POSTCARD_MAX_SIZE;
         let mut tick_buffer = [0; RepliconTick::POSTCARD_MAX_SIZE];
         let update_tick = postcard::to_slice(&ticks.update_tick, &mut tick_buffer)?;
-        let mut metadata_size = update_tick.len() + server_tick_range.len();
+        let mut metadata_size =
+            size_of::<MutateFlags>() + update_tick.len() + server_tick_range.len();
         if track_mutate_messages {
             // We don't know the number of messages ahead of time, so we assume the maximum
             // possible size during the splits calculation to avoid exceeding MTU.
@@ -231,6 +233,11 @@ impl Mutations {
             );
         }
 
+        let mut base_flags = MutateFlags::default();
+        if track_mutate_messages {
+            base_flags |= MutateFlags::MESSAGES_COUNT;
+        }
+
         for split in &*split_buffer {
             let mut message_size = split.message_size;
             if track_mutate_messages {
@@ -239,12 +246,19 @@ impl Mutations {
             }
             let mut message = Vec::with_capacity(message_size);
 
+            let flags = if split.chunks_range.is_empty() {
+                base_flags
+            } else {
+                base_flags | MutateFlags::MUTATIONS
+            };
+
+            postcard_utils::to_extend_mut(&flags, &mut message)?;
+            postcard_utils::to_extend_mut(&split.mutate_index, &mut message)?;
             message.extend_from_slice(update_tick);
             message.extend_from_slice(&serialized[server_tick_range.clone()]);
             if track_mutate_messages {
                 postcard_utils::to_extend_mut(&split_buffer.len(), &mut message)?;
             }
-            postcard_utils::to_extend_mut(&split.mutate_index, &mut message)?;
             for mutations in chunks.iter_flatten(split.chunks_range.clone()) {
                 message.extend_from_slice(&serialized[mutations.ranges.entity.clone()]);
                 postcard_utils::to_extend_mut(&mutations.ranges.data_size(), &mut message)?;
