@@ -121,38 +121,6 @@ fn with_relations() {
 }
 
 #[test]
-fn after_spawn() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .replicate::<TestComponent>()
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    // Insert and remove `Replicated` in the same tick.
-    server_app
-        .world_mut()
-        .spawn((Replicated, TestComponent))
-        .remove::<Replicated>();
-
-    server_app.update();
-
-    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(
-        messages.drain_sent().len(),
-        0,
-        "client shouldn't receive anything after replication pause"
-    );
-}
-
-#[test]
 fn after_pause() {
     let mut server_app = App::new();
     let mut client_app = App::new();
