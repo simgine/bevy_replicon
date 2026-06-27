@@ -255,10 +255,9 @@ fn apply_replication(
     // but skip outdated data per-entity by checking last received tick for it
     // (unless user requested history via marker).
     let update_tick = *world.resource::<ServerUpdateTick>();
-    let acks_size =
-        MutateIndex::POSTCARD_MAX_SIZE * messages.received_count(ServerChannel::Mutations);
-    if acks_size != 0 {
-        let mut acks = Vec::with_capacity(acks_size);
+    let mutations_count = messages.received_count(ServerChannel::Mutations);
+    if mutations_count != 0 {
+        let mut acks = Vec::with_capacity(MutateIndex::POSTCARD_MAX_SIZE * mutations_count);
         for message in messages.receive(ServerChannel::Mutations) {
             if let Err(e) = buffer_mutate_message(params, buffered_mutations, message, &mut acks) {
                 error!("unable to buffer mutate message: {e}");
@@ -267,7 +266,24 @@ fn apply_replication(
         messages.send(ClientChannel::MutationAcks, acks);
     }
 
-    apply_mutate_messages(world, params, buffered_mutations, update_tick);
+    buffered_mutations.0.retain_mut(|mutate| {
+        if mutate.update_tick > *update_tick {
+            return true;
+        }
+
+        if let Err(e) = apply_mutate_message(world, params, mutate) {
+            error!(
+                "unable to apply mutate message for tick `{:?}`: {e}",
+                mutate.message_tick
+            );
+
+            // SAFETY: components in the scratch were pushed using this world.
+            unsafe { params.scratch.manual_drop(world.components()) };
+            params.entity_buffer.free(world);
+        }
+
+        false
+    });
 }
 
 /// Reads and applies an update message.
@@ -380,55 +396,33 @@ fn buffer_mutate_message(
     Ok(())
 }
 
-/// Applies mutations from [`BufferedMutations`].
-///
-/// If the mutate message can't be applied yet (because the update message with the
-/// corresponding tick hasn't arrived), it will be kept in the buffer.
-fn apply_mutate_messages(
+/// Reads and applies a buffered mutate message.
+fn apply_mutate_message(
     world: &mut World,
     params: &mut ReceiveParams,
-    buffered_mutations: &mut BufferedMutations,
-    update_tick: ServerUpdateTick,
-) {
-    buffered_mutations.0.retain_mut(|mutate| {
-        if mutate.update_tick > *update_tick {
-            return true;
-        }
+    mutate: &mut BufferedMutate,
+) -> Result<()> {
+    trace!("applying mutate message for {:?}", mutate.message_tick);
 
-        trace!("applying mutate message for {:?}", mutate.message_tick);
-        let len = apply_array(ArrayKind::Dynamic, &mut mutate.message, |message| {
-            apply_mutations(world, params, message, mutate.message_tick)
+    let len = apply_array(ArrayKind::Dynamic, &mut mutate.message, |message| {
+        apply_mutations(world, params, message, mutate.message_tick)
+    })
+    .map_err(|e| format!("unable to apply mutations: {e}"))?;
+
+    if let Some(stats) = &mut params.stats {
+        stats.entities_changed += len;
+    }
+
+    if let Some(mutate_ticks) = &mut params.mutate_ticks
+        && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
+    {
+        mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
+        world.write_message(MutateTickReceived {
+            tick: mutate.message_tick,
         });
+    }
 
-        match len {
-            Ok(len) => {
-                if let Some(stats) = &mut params.stats {
-                    stats.entities_changed += len;
-                }
-            }
-            Err(e) => {
-                error!(
-                    "unable to apply mutate message for tick `{:?}`: {e}",
-                    mutate.message_tick
-                );
-
-                // SAFETY: components in the scratch were pushed using this world.
-                unsafe { params.scratch.manual_drop(world.components()) };
-                params.entity_buffer.free(world);
-            }
-        }
-
-        if let Some(mutate_ticks) = &mut params.mutate_ticks
-            && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
-        {
-            mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
-            world.write_message(MutateTickReceived {
-                tick: mutate.message_tick,
-            });
-        }
-
-        false
-    });
+    Ok(())
 }
 
 /// Deserializes and applies the mapping from a server entity to a client
