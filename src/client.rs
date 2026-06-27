@@ -308,8 +308,8 @@ fn apply_update_message(
 
         match flag {
             UpdateFlags::USERDATA => {
-                apply_userdata(world, message)
-                    .map_err(|e| format!("unable to apply userdata: {e}"))?;
+                process_userdata(world, message)
+                    .map_err(|e| format!("unable to process userdata: {e}"))?;
             }
             UpdateFlags::MAPPINGS => {
                 let len = apply_array(array_kind, message, |message| {
@@ -402,7 +402,7 @@ fn apply_mutate_message(
     for (_, flag) in mutate.flags.iter_names() {
         match flag {
             MutateFlags::USERDATA => {
-                apply_userdata(world, &mut mutate.message)
+                process_userdata(world, &mut mutate.message)
                     .map_err(|e| format!("unable to apply userdata: {e}"))?;
             }
             MutateFlags::MESSAGES_COUNT => {
@@ -625,7 +625,7 @@ fn apply_changes(
     Ok(())
 }
 
-fn apply_userdata(world: &mut World, message: &mut Bytes) -> Result<()> {
+fn process_userdata(world: &mut World, message: &mut Bytes) -> Result<()> {
     let len = postcard_utils::from_buf(message)?;
     if len > message.len() {
         return Err(format!(
