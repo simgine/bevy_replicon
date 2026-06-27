@@ -395,7 +395,7 @@ fn after_spawn() {
 }
 
 #[test]
-fn after_unreplicate() {
+fn after_pause() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -422,7 +422,7 @@ fn after_unreplicate() {
         .query_filtered::<Entity, With<Remote>>();
     let client_entity = remote.single(client_app.world()).unwrap();
 
-    // Un-replicate and remove at the same time.
+    // Pause replication and remove at the same time.
     server_app
         .world_mut()
         .entity_mut(server_entity)

@@ -148,12 +148,12 @@ fn after_spawn() {
     assert_eq!(
         messages.drain_sent().len(),
         0,
-        "client shouldn't receive anything for an unreplicated entity"
+        "client shouldn't receive anything after replication pause"
     );
 }
 
 #[test]
-fn after_unreplicate() {
+fn after_pause() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -191,7 +191,7 @@ fn after_unreplicate() {
 
     assert!(
         client_app.world().get_entity(client_entity).is_ok(),
-        "client shouldn't receive a despawn for unreplicated entity"
+        "client shouldn't receive a despawn after replication pause"
     );
 
     let entity_map = client_app.world().resource::<ServerEntityMap>();
@@ -456,7 +456,7 @@ fn with_visibility_gain_and_signature() {
 
     server_app.connect_client(&mut client_app);
 
-    // Remove visibility filter to make the entity visible and unreplicate.
+    // Remove visibility filter to make the entity visible and pause replication.
     server_app
         .world_mut()
         .spawn((Replicated, EntityVisibility, Signature::from(0)))
