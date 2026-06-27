@@ -400,10 +400,7 @@ impl<C: Diffable> DiffBuffer<C> {
     pub fn push(&mut self, last_index: DiffIndex, diffs: Vec<C::Diff>) {
         for (offset, diff) in diffs.into_iter().rev().enumerate() {
             let index = last_index - offset as u16;
-            if self
-                .last_applied
-                .is_none_or(|last_applied| index.is_newer_than(last_applied))
-            {
+            if self.last_applied.is_none_or(|last| index.is_newer(last)) {
                 self.pending.insert(index, diff);
             }
         }

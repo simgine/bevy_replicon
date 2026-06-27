@@ -24,11 +24,17 @@ impl DiffIndex {
         self.0
     }
 
+    /// Deprecated alias for [`Self::is_newer`].
+    #[deprecated = "use `Self::is_newer`"]
+    pub fn is_newer_than(self, other: Self) -> bool {
+        self.is_newer(other)
+    }
+
     /// Returns `true` if `self` is newer than `other`.
     ///
     /// The value is considered newer if it is ahead of the other value
     /// by at most [`DiffIndex::MAX_NEWER_DISTANCE`].
-    pub fn is_newer_than(self, other: Self) -> bool {
+    pub fn is_newer(self, other: Self) -> bool {
         let distance = self.distance_after(other);
         distance != 0 && distance <= Self::MAX_NEWER_DISTANCE
     }
@@ -71,7 +77,7 @@ mod tests {
     #[test]
     fn comparison() {
         assert_eq!(DiffIndex::new(0), DiffIndex::new(0));
-        assert!(DiffIndex::new(1).is_newer_than(DiffIndex::new(0)));
-        assert!(DiffIndex::new(0).is_newer_than(DiffIndex::new(u16::MAX)));
+        assert!(DiffIndex::new(1).is_newer(DiffIndex::new(0)));
+        assert!(DiffIndex::new(0).is_newer(DiffIndex::new(u16::MAX)));
     }
 }
