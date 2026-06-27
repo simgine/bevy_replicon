@@ -125,6 +125,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .init_resource::<FilterRegistry>()
+            .register_required_components::<Replicated, TicksTracked>()
             .configure_sets(
                 PreUpdate,
                 (ServerSystems::ReceivePackets, ServerSystems::Receive).chain(),
@@ -142,6 +143,7 @@ impl Plugin for ServerPlugin {
             .add_observer(handle_disconnect)
             .add_observer(check_mutation_ticks)
             .add_observer(buffer_despawn)
+            .add_observer(cleanup_unreplicated)
             .add_observer(cleanup_storage)
             .add_systems(
                 PreUpdate,
@@ -327,6 +329,20 @@ fn buffer_despawn(
     if *state == ServerState::Running {
         trace!("buffering despawn of `{}`", despawn.entity);
         despawn_buffer.push(despawn.entity);
+    }
+}
+
+fn cleanup_unreplicated(
+    despawn: On<Despawn, TicksTracked>,
+    state: Res<State<ServerState>>,
+    replicated: Query<&Replicated>,
+    mut clients: Query<&mut ClientTicks>,
+) {
+    if *state == ServerState::Running && !replicated.contains(despawn.entity) {
+        trace!("cleaning up ticks for despawned `{}`", despawn.entity);
+        for mut ticks in &mut clients {
+            ticks.entities.remove(&despawn.entity);
+        }
     }
 }
 
@@ -977,3 +993,15 @@ pub struct AuthorizedClient;
 /// See its documentation for more details.
 #[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);
+
+/// Marker for entities stored in [`ClientTicks`].
+///
+/// Marked as required for [`Replicated`] by [`ServerPlugin`].
+///
+/// Despawned entities with [`Replicated`] are automatically removed
+/// from all [`ClientTicks`] during [`collect_despawns`].
+///
+/// If [`Replicated`] was removed before despawning, the despawn is not
+/// replicated, so this marker is used to clean up [`ClientTicks`].
+#[derive(Component, Default)]
+struct TicksTracked;
