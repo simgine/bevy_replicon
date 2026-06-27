@@ -417,10 +417,8 @@ fn after_pause() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut remote = client_app
-        .world_mut()
-        .query_filtered::<Entity, With<Remote>>();
-    let client_entity = remote.single(client_app.world()).unwrap();
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 
     // Pause replication and remove at the same time.
     server_app
@@ -433,9 +431,22 @@ fn after_pause() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let client_entity = client_app.world().entity(client_entity);
-    assert!(client_entity.contains::<Remote>());
-    assert!(client_entity.contains::<A>());
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(
+        components.iter(client_app.world()).len(),
+        1,
+        "removals happened during replication pause shouldn't be replicated"
+    );
 }
 
 #[test]

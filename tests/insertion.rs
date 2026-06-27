@@ -554,7 +554,7 @@ fn after_removal() {
 }
 
 #[test]
-fn after_unpause() {
+fn after_pause() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -564,37 +564,33 @@ fn after_unpause() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .replicate::<A>()
-        .replicate::<B>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut remote = client_app
-        .world_mut()
-        .query_filtered::<Entity, (With<Remote>, With<A>, Without<B>)>();
-    let client_entity = remote.single(client_app.world()).unwrap();
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
 
     server_app
         .world_mut()
         .entity_mut(server_entity)
         .remove::<Replicated>()
-        .insert(B);
+        .insert(A);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let client_entity_ref = client_app.world().entity(client_entity);
-    assert!(client_entity_ref.contains::<A>());
-    assert!(!client_entity_ref.contains::<B>());
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 
     server_app
         .world_mut()
@@ -605,9 +601,7 @@ fn after_unpause() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let client_entity_ref = client_app.world().entity(client_entity);
-    assert!(client_entity_ref.contains::<A>());
-    assert!(client_entity_ref.contains::<B>());
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
