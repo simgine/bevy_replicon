@@ -152,12 +152,14 @@ impl Mutations {
         timestamp: Duration,
         max_size: usize,
     ) -> Result<usize> {
-        const MAX_COUNT_SIZE: usize = usize::POSTCARD_MAX_SIZE;
+        const MESSAGES_COUNT_MAX_SIZE: usize = usize::POSTCARD_MAX_SIZE;
         let mut tick_buffer = [0; RepliconTick::POSTCARD_MAX_SIZE];
         let update_tick = postcard::to_slice(&ticks.update_tick, &mut tick_buffer)?;
         let mut metadata_size = update_tick.len() + server_tick_range.len();
         if track_mutate_messages {
-            metadata_size += MAX_COUNT_SIZE;
+            // We don't know the number of messages ahead of time, so we assume the maximum
+            // possible size during the splits calculation to avoid exceeding MTU.
+            metadata_size += MESSAGES_COUNT_MAX_SIZE;
         }
 
         let mut mutate_info = MutateInfo {
@@ -233,7 +235,7 @@ impl Mutations {
             let mut message_size = split.message_size;
             if track_mutate_messages {
                 // Update message counter size based on actual value.
-                message_size -= MAX_COUNT_SIZE - serialized_size(&split_buffer.len())?;
+                message_size -= MESSAGES_COUNT_MAX_SIZE - serialized_size(&split_buffer.len())?;
             }
             let mut message = Vec::with_capacity(message_size);
 
