@@ -300,7 +300,9 @@ fn apply_update_message(
     }
 
     let flags: UpdateFlags = postcard_utils::from_buf(message)?;
-    debug_assert!(!flags.is_empty(), "message can't be empty");
+    if flags.is_empty() {
+        return Err("update message is empty".into());
+    }
 
     let message_tick = postcard_utils::from_buf(message)?;
     trace!("applying update message with `{flags:?}` for {message_tick:?}");
