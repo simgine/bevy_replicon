@@ -308,7 +308,7 @@ fn apply_update_message(
 
         match flag {
             UpdateFlags::USERDATA => {
-                process_userdata(world, message)
+                process_userdata(world, message, message_tick)
                     .map_err(|e| format!("unable to process userdata: {e}"))?;
             }
             UpdateFlags::MAPPINGS => {
@@ -402,7 +402,7 @@ fn apply_mutate_message(
     for (_, flag) in mutate.flags.iter_names() {
         match flag {
             MutateFlags::USERDATA => {
-                process_userdata(world, &mut mutate.message)
+                process_userdata(world, &mut mutate.message, mutate.message_tick)
                     .map_err(|e| format!("unable to apply userdata: {e}"))?;
             }
             MutateFlags::MESSAGES_COUNT => {
@@ -625,7 +625,11 @@ fn apply_changes(
     Ok(())
 }
 
-fn process_userdata(world: &mut World, message: &mut Bytes) -> Result<()> {
+fn process_userdata(
+    world: &mut World,
+    message: &mut Bytes,
+    message_tick: RepliconTick,
+) -> Result<()> {
     let len = postcard_utils::from_buf(message)?;
     if len > message.len() {
         return Err(format!(
@@ -635,6 +639,7 @@ fn process_userdata(world: &mut World, message: &mut Bytes) -> Result<()> {
         .into());
     }
     world.trigger(UserdataReceived {
+        message_tick,
         bytes: message.split_to(len),
     });
 
@@ -982,6 +987,9 @@ pub struct Remote;
 /// This is emitted for data sent through [`ReplicationUserdata`](crate::server::ReplicationUserdata).
 #[derive(Event)]
 pub struct UserdataReceived {
+    /// Tick of the message with the metadata.
+    pub message_tick: RepliconTick,
+
     /// Raw user-defined bytes received from the server.
     pub bytes: Bytes,
 }
