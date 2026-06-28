@@ -135,6 +135,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerTick>()
             .init_resource::<ServerChangeTick>()
             .init_resource::<ReplicatedArchetypes>()
+            .init_resource::<ReplicationUserdata>()
             .init_resource::<MessageBuffer>()
             .init_resource::<RelatedEntities>()
             .init_resource::<FilterRegistry>()
@@ -858,6 +859,7 @@ fn send_messages(
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     track_mutate_messages: Res<TrackMutateMessages>,
+    userdata: Res<ReplicationUserdata>,
     mut serialized: ResMut<SerializedData>,
     mut messages: ResMut<ServerMessages>,
     mut clients: Query<(
@@ -875,7 +877,13 @@ fn send_messages(
             let server_tick_range =
                 serialized.write_cached_tick(&mut server_tick_range, **server_tick)?;
 
-            updates.send(&mut messages, client, &serialized, server_tick_range)?;
+            updates.send(
+                &mut messages,
+                client,
+                &serialized,
+                &userdata,
+                server_tick_range,
+            )?;
         }
 
         if !mutations.is_empty() || **track_mutate_messages {
@@ -889,6 +897,7 @@ fn send_messages(
                 &mut split_buffer,
                 &serialized,
                 **track_mutate_messages,
+                &userdata,
                 server_tick_range,
                 **server_tick,
                 **change_tick,
@@ -1023,3 +1032,16 @@ struct TicksTracked;
 /// Value of the [`ServerPlugin::track_mutate_messages`].
 #[derive(Resource, Deref, Default, Debug, Clone, Copy)]
 struct TrackMutateMessages(bool);
+
+/// User-defined bytes appended to outgoing replication messages.
+///
+/// When this resource is non-empty, its contents are sent with every replication
+/// update and mutate message. On the client, the bytes are triggered as a
+/// [`UserdataReceived`](crate::client::UserdataReceived) before the rest of
+/// the message is applied.
+///
+/// This could be useful to store the game tick for prediction/interpolaton.
+///
+/// The bytes are not cleared after being sent.
+#[derive(Resource, Deref, DerefMut, Default)]
+pub struct ReplicationUserdata(pub Vec<u8>);

@@ -641,6 +641,11 @@ It's also possible to override despawns received from the server via
 [`ReplicationRegistry::despawn`](shared::replication::registry::ReplicationRegistry::despawn), which is also often used together
 with receive markers.
 
+### Replication userdata
+
+It's possible to attach arbitrary bytes to replication messages by writing to the [`ReplicationUserdata`](server::ReplicationUserdata)
+resource. When the client receives a replication message containing userdata, [`UserdataReceived`](client::UserdataReceived) is triggered.
+
 ### Ticks information
 
 This requires an understanding of how replication works. See the documentation on
