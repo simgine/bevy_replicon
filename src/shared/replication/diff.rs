@@ -289,7 +289,7 @@ impl<C: Diffable> DiffHistory<C> {
             return (current, DiffIter::empty(&self.diffs));
         }
 
-        trace!("using {missing_count} diff(s)");
+        trace!("detected {missing_count} diff(s)");
         let start = self.diffs.len() - missing_count;
 
         (current, DiffIter::new(&self.diffs, start))
