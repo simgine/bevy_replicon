@@ -55,7 +55,7 @@ impl ServerMutateTicks {
     ///
     /// All ticks older than 64 ticks relative to [`Self::last_tick`] are considered received.
     pub fn contains(&self, tick: RepliconTick) -> bool {
-        if tick > self.last_tick {
+        if tick.is_newer(self.last_tick) {
             return false;
         }
 
@@ -75,16 +75,16 @@ impl ServerMutateTicks {
     ///
     /// Panics if `debug_assertions` are enabled and `start_tick` is greater than `end_tick`.
     pub fn contains_any(&self, start_tick: RepliconTick, end_tick: RepliconTick) -> bool {
-        debug_assert!(start_tick <= end_tick);
+        debug_assert!(start_tick.is_older_or_eq(end_tick));
 
-        if start_tick > self.last_tick {
+        if start_tick.is_newer(self.last_tick) {
             return false;
         }
-        if start_tick <= self.last_tick - self.ticks.len() as u32 {
+        if start_tick.is_older_or_eq(self.last_tick - self.ticks.len() as u32) {
             return true;
         }
 
-        let end_tick = if end_tick < self.last_tick {
+        let end_tick = if end_tick.is_older(self.last_tick) {
             end_tick
         } else {
             self.last_tick
@@ -112,7 +112,7 @@ impl ServerMutateTicks {
         let len = self.ticks.len();
         debug_assert_eq!(len, u64::BITS as usize);
 
-        if tick > self.last_tick {
+        if tick.is_newer(self.last_tick) {
             let delta = (tick - self.last_tick) as usize;
             trace!("confirming `{tick:?}` which is {delta} ticks since last");
             if delta >= len {

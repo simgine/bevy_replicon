@@ -261,7 +261,7 @@ fn apply_replication(
     }
 
     buffered_mutations.0.retain_mut(|mutate| {
-        if mutate.update_tick > *update_tick {
+        if mutate.update_tick.is_newer(*update_tick) {
             return true;
         }
 
@@ -763,7 +763,7 @@ fn apply_mutations(
         .into());
     };
 
-    let new_tick = message_tick > history.last_tick();
+    let new_tick = message_tick.is_newer(history.last_tick());
     if new_tick {
         history.set_last_tick(message_tick);
     } else {
@@ -915,7 +915,7 @@ impl BufferedMutations {
     fn insert(&mut self, mutate: BufferedMutate) {
         let index = self
             .0
-            .partition_point(|other| mutate.message_tick < other.message_tick);
+            .partition_point(|other| mutate.message_tick.is_older(other.message_tick));
         self.0.insert(index, mutate);
     }
 }

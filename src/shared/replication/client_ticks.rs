@@ -77,7 +77,7 @@ impl ClientTicks {
 
             // Received tick could be outdated because we bump it
             // if we detect any insertion on the entity in `collect_changes`.
-            if entity_ticks.server_tick < mutate_info.server_tick {
+            if entity_ticks.server_tick.is_older(mutate_info.server_tick) {
                 entity_ticks.server_tick = mutate_info.server_tick;
                 entity_ticks.system_tick = mutate_info.system_tick;
                 entity_ticks.components |= &info.components;
