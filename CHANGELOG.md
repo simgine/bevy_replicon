@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `ReplicationUserdata` and `UserdataReceived` to attach custom data to replication messages.
+- `DiffIndex::wrapping_cmp` to compare indices.
 
 ### Changed
 

@@ -1,4 +1,7 @@
-use core::ops::{Add, AddAssign, Sub};
+use core::{
+    cmp::Ordering,
+    ops::{Add, AddAssign, Sub},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -24,19 +27,32 @@ impl DiffIndex {
         self.0
     }
 
+    /// Compares indices using wrapping semantics.
+    ///
+    /// This comparison is only meaningful when the indices are at most
+    /// [`Self::MAX_NEWER_DISTANCE`] apart.
+    ///
+    /// We don't implement [`Ord`] because wrapping ordering is not transitive.
+    pub fn wrapping_cmp(self, other: Self) -> Ordering {
+        let distance = self.distance_after(other);
+        if distance == 0 {
+            Ordering::Equal
+        } else if distance <= Self::MAX_NEWER_DISTANCE {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
+
     /// Deprecated alias for [`Self::is_newer`].
     #[deprecated = "use `Self::is_newer`"]
     pub fn is_newer_than(self, other: Self) -> bool {
         self.is_newer(other)
     }
 
-    /// Returns `true` if `self` is newer than `other`.
-    ///
-    /// The value is considered newer if it is ahead of the other value
-    /// by at most [`DiffIndex::MAX_NEWER_DISTANCE`].
+    /// Tests if `self` is greater than `other` using [`Self::wrapping_cmp`].
     pub fn is_newer(self, other: Self) -> bool {
-        let distance = self.distance_after(other);
-        distance != 0 && distance <= Self::MAX_NEWER_DISTANCE
+        self.wrapping_cmp(other).is_gt()
     }
 
     /// Returns the wrapping distance from `base` to `self`.
@@ -77,7 +93,8 @@ mod tests {
     #[test]
     fn comparison() {
         assert_eq!(DiffIndex::new(0), DiffIndex::new(0));
+        assert!(!DiffIndex::new(0).is_newer(DiffIndex::new(0)));
         assert!(DiffIndex::new(1).is_newer(DiffIndex::new(0)));
-        assert!(DiffIndex::new(0).is_newer(DiffIndex::new(u16::MAX)));
+        assert!(!DiffIndex::new(u16::MAX).is_newer(DiffIndex::new(0)));
     }
 }
