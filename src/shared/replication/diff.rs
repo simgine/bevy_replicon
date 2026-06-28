@@ -8,6 +8,7 @@ use bevy::{
     platform::collections::HashMap,
     prelude::*,
 };
+use log::{debug, trace};
 use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned, ser::SerializeSeq};
 
 use crate::shared::replication::storage::ReplicationStorage;
@@ -132,6 +133,7 @@ impl EntityDiffExt for EntityWorldMut<'_> {
             .get_mut::<C>()
             .ok_or_else(|| format!("`{entity}` doesn't have `{}`", ShortName::of::<C>()))?;
 
+        debug!("applying diff to `{}` on `{entity}`", ShortName::of::<C>());
         let before_diff = component.last_changed();
         component.apply_diff(&diff)?;
         let after_diff = component.last_changed();
@@ -224,17 +226,22 @@ impl<C: Diffable> DiffHistory<C> {
         );
 
         if self.last_changed.is_some_and(|tick| tick != before_diff) {
-            // The component was mutated externally. Increment the
-            // index twice: once for the previous change(s) and one for the current.
+            // Increment the index twice: once for the previous change(s)
+            // and one for the current.
             self.diffs.clear();
             self.last_changed = Some(after_diff);
             self.next_index += 2;
+            trace!(
+                "detected external mutation, the index advanced to `{:?}`",
+                self.current_index()
+            );
             return;
         }
 
         self.next_index += 1;
         self.last_changed = Some(after_diff);
 
+        trace!("recording `{:?}`", self.current_index());
         self.diffs.push_back(diff);
         let excess = self.diffs.len().saturating_sub(C::HISTORY_LEN);
         if excess > 0 {
@@ -258,25 +265,31 @@ impl<C: Diffable> DiffHistory<C> {
         last_changed: Tick,
     ) -> (DiffIndex, DiffIter<'_, C::Diff>) {
         if self.last_changed.is_none_or(|tick| tick != last_changed) {
-            // The component was mutated externally.
             self.diffs.clear();
             self.last_changed = Some(last_changed);
             let current = self.next_index;
             self.next_index += 1;
+            trace!(
+                "detected external mutation, the index advanced to `{:?}`",
+                self.current_index()
+            );
 
             return (current, DiffIter::empty(&self.diffs));
         }
 
         let current = self.current_index();
         let Some(cursor) = cursor else {
+            trace!("no cursor available");
             return (current, DiffIter::empty(&self.diffs));
         };
 
         let missing_count = current.distance_after(cursor) as usize;
         if self.diffs.len() <= missing_count {
+            trace!("cursor is outside the history window: {missing_count}");
             return (current, DiffIter::empty(&self.diffs));
         }
 
+        trace!("using {missing_count} diff(s)");
         let start = self.diffs.len() - missing_count;
 
         (current, DiffIter::new(&self.diffs, start))
