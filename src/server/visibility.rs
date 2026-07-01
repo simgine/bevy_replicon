@@ -129,15 +129,9 @@ fn update_for_new_clients<F: VisibilityFilter>(
 fn on_insert<F: VisibilityFilter>(
     insert: On<Insert, F>,
     registry: Res<FilterRegistry>,
-    entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
+    entities: Query<(Entity, &F), Allow<Disabled>>,
     mut clients: Query<(Entity, Option<&F::ClientComponent>, &mut ClientVisibility)>,
 ) {
-    // `F` and `F::ClientComponent` could be the same,
-    // so we need to ensure that it was not inserted into a client
-    if clients.contains(insert.entity) {
-        return;
-    }
-
     let bit = registry.bit::<F>();
     let (entity, component) = entities.get(insert.entity).unwrap();
     for (client, client_component, mut visibility) in &mut clients {
@@ -154,7 +148,7 @@ fn on_client_insert<F: VisibilityFilter>(
     insert: On<Insert, F::ClientComponent>,
     registry: Res<FilterRegistry>,
     mut clients: Query<(&F::ClientComponent, &mut ClientVisibility)>,
-    entities: Query<(Entity, &F), Without<ClientVisibility>>,
+    entities: Query<(Entity, &F)>,
 ) {
     let Ok((client_component, mut visibility)) = clients.get_mut(insert.entity) else {
         return;
@@ -177,12 +171,6 @@ fn on_remove<F: VisibilityFilter>(
     registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility>,
 ) {
-    // `F` and `F::ClientComponent` could be the same,
-    // so we need to ensure that it wasn't removed from a client.
-    if clients.contains(remove.entity) {
-        return;
-    }
-
     let bit = registry.bit::<F>();
     debug!(
         "removing `{}` filter from entity `{}`",
@@ -198,7 +186,7 @@ fn on_client_remove<F: VisibilityFilter>(
     remove: On<Remove, F::ClientComponent>,
     registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility>,
-    entities: Query<(Entity, &F), Without<ClientVisibility>>,
+    entities: Query<(Entity, &F)>,
 ) {
     let Ok(mut visibility) = clients.get_mut(remove.entity) else {
         return;
@@ -423,4 +411,67 @@ mod tests {
     #[derive(Component)]
     #[component(immutable)]
     struct ClientFilter;
+
+    // Introducing these tests just to prove they work out of the box
+    // but I think we can both agree these are redundant
+    // and can be cut out.
+
+    #[test]
+    fn client_replicates_even_with_entity_filter() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<EntityFilter>();
+
+        let client = app.world_mut().spawn(ClientVisibility::default()).id();
+
+        app.world_mut().entity_mut(client).insert(EntityFilter);
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client).unwrap();
+        assert!(!visibility.get(client).is_empty());
+        assert!(visibility.get(client).is_hidden(registry));
+    }
+
+    #[test]
+    fn component_replicates_even_with_component_filter() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<ComponentVisibility>();
+
+        let client = app.world_mut().spawn(ClientVisibility::default()).id();
+
+        app.world_mut()
+            .entity_mut(client)
+            .insert(ComponentVisibility);
+
+        let (a_index, _) =
+            app.world_mut()
+                .resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                    registry.init_component_fns::<ClientFilter>(world)
+                });
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client).unwrap();
+        assert!(!visibility.get(client).is_empty());
+        assert!(
+            visibility
+                .get(client)
+                .is_component_hidden(registry, a_index)
+        );
+    }
+
+    #[derive(Component, Default)]
+    #[component(immutable)]
+    struct ComponentVisibility;
+
+    impl VisibilityFilter for ComponentVisibility {
+        type ClientComponent = ClientFilter;
+        type Scope = crate::prelude::SingleComponent<ClientFilter>;
+
+        fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_some()
+        }
+    }
 }
