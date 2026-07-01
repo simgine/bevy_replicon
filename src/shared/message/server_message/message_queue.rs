@@ -1,9 +1,9 @@
-use alloc::collections::BTreeMap;
 use core::marker::PhantomData;
 
+use alloc::collections::VecDeque;
 use bevy::prelude::*;
 use bytes::Bytes;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 
 use crate::prelude::*;
 
@@ -13,13 +13,20 @@ use crate::prelude::*;
 /// Needed to ensure that when an message is triggered, all the data that it affects or references already exists.
 #[derive(Resource)]
 pub(super) struct MessageQueue<M> {
-    map: BTreeMap<RepliconTick, SmallVec<[Bytes; 4]>>,
+    entries: VecDeque<(RepliconTick, SmallVec<[Bytes; 4]>)>,
     marker: PhantomData<M>,
 }
 
 impl<M> MessageQueue<M> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
-        self.map.entry(tick).or_default().push(message);
+        let index = self.entries.partition_point(|&(t, _)| tick.is_newer(t));
+        if let Some((entry_tick, messages)) = self.entries.get_mut(index)
+            && *entry_tick == tick
+        {
+            messages.push(message);
+        } else {
+            self.entries.insert(index, (tick, smallvec![message]));
+        }
     }
 
     /// Pops the next message that is at least as old as the specified replicon tick.
@@ -27,31 +34,31 @@ impl<M> MessageQueue<M> {
         &mut self,
         update_tick: RepliconTick,
     ) -> Option<(RepliconTick, SmallVec<[Bytes; 4]>)> {
-        let entry = self.map.first_entry()?;
-        if *entry.key() > update_tick {
+        let (tick, _) = self.entries.front()?;
+        if tick.is_newer(update_tick) {
             return None;
         }
 
-        Some(entry.remove_entry())
+        self.entries.pop_front()
     }
 
     pub(super) fn len(&self) -> usize {
-        self.map.len()
+        self.entries.len()
     }
 
     pub(super) fn is_empty(&self) -> bool {
-        self.map.is_empty()
+        self.entries.is_empty()
     }
 
     pub(super) fn clear(&mut self) {
-        self.map.clear();
+        self.entries.clear();
     }
 }
 
 impl<M> Default for MessageQueue<M> {
     fn default() -> Self {
         Self {
-            map: Default::default(),
+            entries: Default::default(),
             marker: PhantomData,
         }
     }

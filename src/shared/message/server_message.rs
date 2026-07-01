@@ -498,7 +498,7 @@ impl ServerMessage {
 
         for mut message in client_messages.receive(self.channel_id) {
             if !self.independent {
-                let tick = match postcard_utils::from_buf(&mut message) {
+                let tick: RepliconTick = match postcard_utils::from_buf(&mut message) {
                     Ok(tick) => tick,
                     Err(e) => {
                         error!(
@@ -508,7 +508,7 @@ impl ServerMessage {
                         continue;
                     }
                 };
-                if tick > update_tick {
+                if tick.is_newer(update_tick) {
                     debug!("queuing message `{}` with `{tick:?}`", ShortName::of::<M>());
                     queue.insert(tick, message);
                     continue;

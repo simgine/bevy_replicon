@@ -19,6 +19,9 @@ use serde::{Deserialize, Serialize};
 pub struct RepliconTick(u32);
 
 impl RepliconTick {
+    /// The maximum wrapping distance at which a tick is considered newer.
+    pub const MAX_NEWER_DISTANCE: u32 = u32::MAX / 2;
+
     /// Creates a new instance wrapping the given value.
     #[inline]
     pub fn new(value: u32) -> Self {
@@ -30,24 +33,42 @@ impl RepliconTick {
     pub fn get(self) -> u32 {
         self.0
     }
-}
 
-impl PartialOrd for RepliconTick {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for RepliconTick {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let difference = self.0.wrapping_sub(other.0);
-        if difference == 0 {
+    /// Compares ticks using wrapping semantics.
+    ///
+    /// This comparison is only meaningful when the ticks are at most
+    /// [`Self::MAX_NEWER_DISTANCE`] apart.
+    ///
+    /// We don't implement [`Ord`] because wrapping ordering is not transitive.
+    pub fn wrapping_cmp(self, other: Self) -> Ordering {
+        let distance = self.0.wrapping_sub(other.0);
+        if distance == 0 {
             Ordering::Equal
-        } else if difference > u32::MAX / 2 {
-            Ordering::Less
-        } else {
+        } else if distance <= Self::MAX_NEWER_DISTANCE {
             Ordering::Greater
+        } else {
+            Ordering::Less
         }
+    }
+
+    /// Tests if `self` is greater or equal than `other` using [`Self::wrapping_cmp`].
+    pub fn is_newer_or_eq(self, other: Self) -> bool {
+        self.wrapping_cmp(other).is_ge()
+    }
+
+    /// Tests if `self` is greater than `other` using [`Self::wrapping_cmp`].
+    pub fn is_newer(self, other: Self) -> bool {
+        self.wrapping_cmp(other).is_gt()
+    }
+
+    /// Tests if `self` is less than `other` using [`Self::wrapping_cmp`].
+    pub fn is_older(self, other: Self) -> bool {
+        self.wrapping_cmp(other).is_lt()
+    }
+
+    /// Tests if `self` is less or equal than `other` using [`Self::wrapping_cmp`].
+    pub fn is_older_or_eq(self, other: Self) -> bool {
+        self.wrapping_cmp(other).is_le()
     }
 }
 
@@ -94,7 +115,11 @@ mod tests {
     #[test]
     fn tick_comparison() {
         assert_eq!(RepliconTick::new(0), RepliconTick::new(0));
-        assert!(RepliconTick::new(0) < RepliconTick::new(1));
-        assert!(RepliconTick::new(0) > RepliconTick::new(u32::MAX));
+        assert!(RepliconTick::new(0).is_newer_or_eq(RepliconTick::new(0)));
+        assert!(RepliconTick::new(0).is_older_or_eq(RepliconTick::new(0)));
+        assert!(RepliconTick::new(1).is_newer(RepliconTick::new(0)));
+        assert!(RepliconTick::new(1).is_newer_or_eq(RepliconTick::new(0)));
+        assert!(RepliconTick::new(u32::MAX).is_older(RepliconTick::new(0)));
+        assert!(RepliconTick::new(u32::MAX).is_older_or_eq(RepliconTick::new(0)));
     }
 }
