@@ -654,6 +654,7 @@ fn collect_removals(
 fn collect_changes(
     archetypes: &Archetypes,
     query: ReplicationQuery,
+    priorities: Query<&ReplicatePriority>,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     registry: Res<ReplicationRegistry>,
@@ -682,6 +683,7 @@ fn collect_changes(
 
         for entity in archetype.entities() {
             let mut entity_range = None;
+            let entity_priority = priorities.get(entity.id()).ok().map(|priority| **priority);
             for (_, mut updates, mut mutations, ..) in &mut clients {
                 updates.start_entity_changes();
                 mutations.start_entity();
@@ -727,7 +729,11 @@ fn collect_changes(
                     if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
                         && entity_ticks.components.contains(component_index)
                     {
-                        let base_priority = priority.get(&entity.id()).copied().unwrap_or(1.0);
+                        let base_priority = priority
+                            .get(&entity.id())
+                            .copied()
+                            .or(entity_priority)
+                            .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
                         if rule.mode != ReplicationMode::Once
@@ -994,10 +1000,11 @@ struct DespawnBuffer(Vec<Entity>);
 #[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
 
-/// Controls how often mutations are sent for an authorized client.
+/// Controls how often mutations are sent for a replicated entity.
 ///
-/// Associates entities with a priority number configurable by the user.
-/// If the priority is not set, it defaults to 1.0.
+/// If present on an entity, this dynamic priority takes precedence over the static priority
+/// associated with any matching replication rule and is used for all authorized clients unless
+/// overridden by their [`PriorityMap`].
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
@@ -1007,7 +1014,30 @@ pub struct AuthorizedClient;
 /// at which point its priority is reset. As a result, even low-priority objects eventually
 /// reach a high enough priority to be considered for replication.
 ///
-/// For example, if the base priority is 0.5, mutations for an entity will be sent
+/// For example, if the priority is 0.5, mutations for an entity will be sent
+/// no more often than once every 2 ticks. With the default priority of 1.0,
+/// all unacknowledged mutations will be sent every tick.
+///
+/// All of this only affects mutations. For any component insertion or removal, the changes
+/// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
+/// See its documentation for more details.
+#[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone, Copy)]
+pub struct ReplicatePriority(pub f32);
+
+/// Controls how often mutations are sent for an authorized client.
+///
+/// Associates entities with a priority number configurable by the user.
+/// If the priority is not set, the entity's normal replication priority will be used.
+///
+/// During replication, we multiply the difference between the last acknowledged tick
+/// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
+/// we send mutations for this entity.
+///
+/// This means the priority accumulates across server ticks until an entity is acknowledged,
+/// at which point its priority is reset. As a result, even low-priority objects eventually
+/// reach a high enough priority to be considered for replication.
+///
+/// For example, if the priority is 0.5, mutations for an entity will be sent
 /// no more often than once every 2 ticks. With the default priority of 1.0,
 /// all unacknowledged mutations will be sent every tick.
 ///
