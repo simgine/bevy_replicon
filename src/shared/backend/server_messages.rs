@@ -56,9 +56,8 @@ impl ServerMessages {
 
     /// Removes and returns all received messages on a channel.
     ///
-    /// The consuming counterpart of [`Self::iter_received`], mirroring
-    /// [`Self::drain_sent`]. Intended for the messaging backend and for tools
-    /// that take inbound traffic before Replicon consumes it.
+    /// The method is called by the Replicon on receive, but can also be used
+    /// to filter the inbound traffic.
     pub fn drain_received<I: Into<usize>>(
         &mut self,
         channel_id: I,
