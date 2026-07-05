@@ -65,7 +65,7 @@ fn client_priority() {
 }
 
 #[test]
-fn global_priority() {
+fn entity_priority() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -115,7 +115,7 @@ fn global_priority() {
 }
 
 #[test]
-fn client_priority_overrides_global_priority() {
+fn client_priority_overrides_entity_priority() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -162,7 +162,7 @@ fn client_priority_overrides_global_priority() {
     let component = components.single(client_app.world()).unwrap();
     assert!(
         component.0,
-        "client priority should override global priority"
+        "client priority should override entity priority"
     );
 }
 

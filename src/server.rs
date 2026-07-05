@@ -682,7 +682,7 @@ fn collect_changes(
 
         for entity in archetype.entities() {
             let mut entity_range = None;
-            let global_priority = query.get_priority(entity, archetype.table_id());
+            let entity_priority = query.get_priority(entity, archetype.table_id());
             for (_, mut updates, mut mutations, ..) in &mut clients {
                 updates.start_entity_changes();
                 mutations.start_entity();
@@ -731,7 +731,7 @@ fn collect_changes(
                         let base_priority = priority_map
                             .get(&entity.id())
                             .copied()
-                            .or(global_priority)
+                            .or(entity_priority)
                             .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
@@ -1001,9 +1001,9 @@ pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for a replicated entity.
 ///
-/// Applies globally to all authorized clients unless overridden by the client's [`PriorityMap`].
-/// This dynamic priority is independent from the priority used to select a matching replication
-/// rule.
+/// Applies to all authorized clients unless overridden by the client's [`PriorityMap`].
+///
+/// This priority is unrelated to the replication rule priority from methods like [`AppRuleExt::replicate_with_priority`].
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
@@ -1013,7 +1013,7 @@ pub struct AuthorizedClient;
 /// at which point its priority is reset. As a result, even low-priority objects eventually
 /// reach a high enough priority to be considered for replication.
 ///
-/// For example, if the priority is 0.5, mutations for an entity will be sent
+/// For example, if the base priority is 0.5, mutations for an entity will be sent
 /// no more often than once every 2 ticks. With the default priority of 1.0,
 /// all unacknowledged mutations will be sent every tick.
 ///
@@ -1027,8 +1027,8 @@ pub struct ReplicatePriority(pub f32);
 ///
 /// Associates entities with a priority number configurable by the user.
 ///
-/// If no priority is set in a client's [`PriorityMap`] component, [`ReplicatePriority`]
-/// is used. If the entity has no [`ReplicatePriority`], the priority defaults to `1.0`.
+/// If the priority is not set, the entity's [`ReplicatePriority`] will be used (if present),
+/// otherwise it defaults to 1.0.
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
@@ -1038,7 +1038,7 @@ pub struct ReplicatePriority(pub f32);
 /// at which point its priority is reset. As a result, even low-priority objects eventually
 /// reach a high enough priority to be considered for replication.
 ///
-/// For example, if the priority is 0.5, mutations for an entity will be sent
+/// For example, if the base priority is 0.5, mutations for an entity will be sent
 /// no more often than once every 2 ticks. With the default priority of 1.0,
 /// all unacknowledged mutations will be sent every tick.
 ///

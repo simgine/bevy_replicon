@@ -32,15 +32,12 @@ impl<'w> ReplicationQuery<'w, '_> {
 
         // SAFETY: access to `ReplicatePriority` is registered in `component_access`.
         let storages = unsafe { self.world.storages() };
-        let ptr = match self.state.priority_storage {
+        let ptr = match ReplicatePriority::STORAGE_TYPE {
             StorageType::Table => unsafe {
                 let table = storages.tables.get(table_id)?;
                 table.get_component(priority_id, entity.table_row())?
             },
-            StorageType::SparseSet => storages
-                .sparse_sets
-                .get(priority_id)
-                .and_then(|sparse_set| sparse_set.get(entity.id()))?,
+            StorageType::SparseSet => unreachable!("`ReplicatePriority` must have table storage"),
         };
 
         // SAFETY: `priority_id` is registered for `ReplicatePriority`.
@@ -100,11 +97,6 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
 
         let priority_id = world.register_component::<ReplicatePriority>();
         component_access.add_read(priority_id);
-        let priority_storage = world
-            .components()
-            .get_info(priority_id)
-            .unwrap()
-            .storage_type();
 
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
@@ -117,7 +109,6 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         Self::State {
             component_access,
             priority_id,
-            priority_storage,
         }
     }
 
@@ -158,9 +149,6 @@ pub(crate) struct ReplicationQueryState {
 
     /// ID of [`ReplicatePriority`] component.
     priority_id: ComponentId,
-
-    /// Storage type for [`ReplicatePriority`].
-    priority_storage: StorageType,
 }
 
 #[cfg(test)]
