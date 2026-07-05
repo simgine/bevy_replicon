@@ -56,8 +56,8 @@ impl ServerMessages {
 
     /// Removes and returns all received messages on a channel.
     ///
-    /// The method is called by the Replicon on receive, but can also be used
-    /// to filter the inbound traffic.
+    /// The method is called automatically on receive, but can also be used
+    /// to modify or filter the inbound traffic.
     pub fn drain_received<I: Into<usize>>(
         &mut self,
         channel_id: I,
