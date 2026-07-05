@@ -654,7 +654,6 @@ fn collect_removals(
 fn collect_changes(
     archetypes: &Archetypes,
     query: ReplicationQuery,
-    priorities: Query<&ReplicatePriority>,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
     registry: Res<ReplicationRegistry>,
@@ -683,13 +682,13 @@ fn collect_changes(
 
         for entity in archetype.entities() {
             let mut entity_range = None;
-            let entity_priority = priorities.get(entity.id()).ok().map(|priority| **priority);
+            let global_priority = query.get_priority(entity, archetype.table_id());
             for (_, mut updates, mut mutations, ..) in &mut clients {
                 updates.start_entity_changes();
                 mutations.start_entity();
             }
 
-            for &(rule, storage) in &replicated_archetype.components {
+            for &(rule, storage, static_priority) in &replicated_archetype.components {
                 let (component_index, component_id, fns) = registry.get(rule.fns_id);
 
                 // SAFETY: component and storage were obtained from this archetype.
@@ -716,7 +715,7 @@ fn collect_changes(
                 };
 
                 let mut component_range = None;
-                for (client, mut updates, mut mutations, client_ticks, priority, visibility) in
+                for (client, mut updates, mut mutations, client_ticks, priority_map, visibility) in
                     &mut clients
                 {
                     if visibility
@@ -729,10 +728,11 @@ fn collect_changes(
                     if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
                         && entity_ticks.components.contains(component_index)
                     {
-                        let base_priority = priority
+                        let base_priority = priority_map
                             .get(&entity.id())
                             .copied()
-                            .or(entity_priority)
+                            .or(global_priority)
+                            .or(Some(static_priority))
                             .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
@@ -1002,9 +1002,9 @@ pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for a replicated entity.
 ///
-/// If present on an entity, this dynamic priority takes precedence over the static priority
-/// associated with any matching replication rule and is used for all authorized clients unless
-/// overridden by their [`PriorityMap`].
+/// Applies globally to all authorized clients unless overridden by the client's [`PriorityMap`].
+/// This dynamic priority takes precedence over the static priority associated with the matching
+/// replication rule.
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
@@ -1027,7 +1027,11 @@ pub struct ReplicatePriority(pub f32);
 /// Controls how often mutations are sent for an authorized client.
 ///
 /// Associates entities with a priority number configurable by the user.
-/// If the priority is not set, the entity's normal replication priority will be used.
+///
+/// If no priority is set in a client's [`PriorityMap`] component, [`ReplicatePriority`]
+/// is used. If the entity has no [`ReplicatePriority`], the static priority associated with
+/// the matching replication rule is used. If the rule's priority wasn't set explicitly, its
+/// default priority is used, such as `1.0` for a single replicated component.
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,

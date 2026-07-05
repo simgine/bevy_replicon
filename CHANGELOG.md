@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ReplicationUserdata` and `UserdataReceived` to attach custom data to replication messages.
 - `DiffIndex::wrapping_cmp` to compare indices.
 - `ClientMessages::drain_received` and `ServerMessages::drain_received` to drain inbound messages on a channel.
-- `ReplicatePriority` component to dynamically configure an entity's replication priority, taking precedence over the static priority associated with matching replication rules.
+- `ReplicatePriority` component to globally configure entity replication priority, yielding to per-client `PriorityMap` entries.
 
 ### Changed
 

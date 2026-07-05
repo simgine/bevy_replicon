@@ -47,7 +47,7 @@ impl ReplicatedArchetypes {
                     if replicated_archetype
                         .components
                         .iter()
-                        .any(|(existing, _)| existing.id == component.id)
+                        .any(|(existing, ..)| existing.id == component.id)
                     {
                         continue;
                     }
@@ -55,7 +55,11 @@ impl ReplicatedArchetypes {
                     // SAFETY: archetype matches the rule, so the component is present.
                     let storage =
                         unsafe { archetype.get_storage_type(component.id).unwrap_unchecked() };
-                    replicated_archetype.components.push((component, storage));
+                    replicated_archetype.components.push((
+                        component,
+                        storage,
+                        rule.priority as f32,
+                    ));
                 }
             }
 
@@ -95,7 +99,7 @@ pub(super) struct ReplicatedArchetype {
     pub(super) id: ArchetypeId,
 
     /// Components marked as replicated.
-    pub(super) components: Vec<(ComponentRule, StorageType)>,
+    pub(super) components: Vec<(ComponentRule, StorageType, f32)>,
 }
 
 impl ReplicatedArchetype {
@@ -107,7 +111,7 @@ impl ReplicatedArchetype {
     }
 
     pub(super) fn find_rule(&self, id: ComponentId) -> Option<&ComponentRule> {
-        self.components.iter().map(|(r, _)| r).find(|r| r.id == id)
+        self.components.iter().map(|(r, ..)| r).find(|r| r.id == id)
     }
 }
 

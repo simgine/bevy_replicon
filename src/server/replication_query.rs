@@ -15,7 +15,7 @@ use log::debug;
 
 use crate::{prelude::*, shared::replication::rules::ReplicationRules};
 
-/// Like [`Query`], but provides dynamic access only for replicated components.
+/// Like [`Query`], but provides dynamic access for replicated components and replication metadata.
 ///
 /// We don't use [`FilteredEntityRef`](bevy::ecs::world::FilteredEntityRef) to avoid access checks
 /// and [`StorageType`] fetch (we cache this information on replicated archetypes).
@@ -25,6 +25,34 @@ pub(crate) struct ReplicationQuery<'w, 's> {
 }
 
 impl<'w> ReplicationQuery<'w, '_> {
+    /// Returns [`ReplicatePriority`] for an entity if it has one.
+    pub(super) fn get_priority(&self, entity: &ArchetypeEntity, table_id: TableId) -> Option<f32> {
+        let priority_id = self.state.priority_id;
+        debug_assert!(
+            self.state
+                .component_access
+                .access()
+                .has_component_read(priority_id)
+        );
+
+        // SAFETY: access to `ReplicatePriority` is registered in `component_access`.
+        let storages = unsafe { self.world.storages() };
+        let ptr = match self.state.priority_storage {
+            StorageType::Table => unsafe {
+                let table = storages.tables.get(table_id)?;
+                table.get_component(priority_id, entity.table_row())?
+            },
+            StorageType::SparseSet => storages
+                .sparse_sets
+                .get(priority_id)
+                .and_then(|sparse_set| sparse_set.get(entity.id()))?,
+        };
+
+        // SAFETY: `priority_id` is registered for `ReplicatePriority`.
+        let priority = unsafe { ptr.deref::<ReplicatePriority>() };
+        Some(**priority)
+    }
+
     /// Extracts a component as [`Ptr`] and its ticks from a table or sparse set, depending on its storage type.
     ///
     /// # Safety
@@ -75,6 +103,14 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         let marker_id = world.register_component::<Replicated>();
         component_access.add_read(marker_id);
 
+        let priority_id = world.register_component::<ReplicatePriority>();
+        component_access.add_component_read(priority_id);
+        let priority_storage = world
+            .components()
+            .get_info(priority_id)
+            .unwrap()
+            .storage_type();
+
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
         for rule in rules.iter() {
@@ -83,7 +119,11 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
             }
         }
 
-        Self::State { component_access }
+        Self::State {
+            component_access,
+            priority_id,
+            priority_storage,
+        }
     }
 
     fn init_access(
@@ -120,6 +160,12 @@ pub(crate) struct ReplicationQueryState {
     ///
     /// Used only in debug to check component access.
     component_access: FilteredAccess,
+
+    /// ID of [`ReplicatePriority`] component.
+    priority_id: ComponentId,
+
+    /// Storage type for [`ReplicatePriority`].
+    priority_storage: StorageType,
 }
 
 #[cfg(test)]
