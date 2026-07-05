@@ -30,8 +30,9 @@ impl<'w> ReplicationQuery<'w, '_> {
         let priority_id = self.state.priority_id;
         debug_assert!(self.state.component_access.access().has_read(priority_id));
 
-        debug_assert!(
-            matches!(ReplicatePriority::STORAGE_TYPE, StorageType::Table),
+        debug_assert_eq!(
+            ReplicatePriority::STORAGE_TYPE,
+            StorageType::Table,
             "`ReplicatePriority::STORAGE_TYPE` must be `StorageType::Table`",
         );
 
