@@ -54,6 +54,13 @@ impl ServerEntityMap {
         )
     }
 
+    /// Removes a mapping by its client entity.
+    pub(crate) fn remove_by_client(&mut self, client_entity: Entity) -> Option<Entity> {
+        let server_entity = self.client_to_server.remove(&client_entity)?;
+        self.server_to_client.remove(&server_entity);
+        Some(server_entity)
+    }
+
     /// Clears the map.
     pub(crate) fn clear(&mut self) {
         self.client_to_server.clear();
@@ -192,5 +199,9 @@ mod tests {
             CLIENT_ENTITY
         );
         assert_eq!(map.server_entry(SERVER_ENTITY).get(), Some(CLIENT_ENTITY));
+
+        assert_eq!(map.remove_by_client(CLIENT_ENTITY), Some(SERVER_ENTITY));
+        assert_eq!(map.server_entry(SERVER_ENTITY).get(), None);
+        assert!(!map.to_server().contains_key(&CLIENT_ENTITY));
     }
 }

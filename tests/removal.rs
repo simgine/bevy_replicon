@@ -48,7 +48,7 @@ fn single() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
-    assert_eq!(required.iter(client_app.world()).len(), 0);
+    assert_eq!(required.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn receive_fns() {
         .replicate::<A>()
         .set_receive_fns::<A>(
             receive_fns::default_write,
-            receive_fns::remove_without_requires::<A>,
+            receive_fns::remove_with_requires::<A>,
         )
         .finish();
     }
@@ -140,7 +140,7 @@ fn receive_fns() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
-    assert_eq!(required.iter(client_app.world()).len(), 1);
+    assert_eq!(required.iter(client_app.world()).len(), 0);
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn marker() {
         .replicate::<A>()
         .set_marker_fns::<ReplaceMarker, A>(
             receive_fns::default_write,
-            receive_fns::remove_without_requires::<A>,
+            receive_fns::remove_with_requires::<A>,
         )
         .finish();
     }
@@ -190,7 +190,7 @@ fn marker() {
 
     let client_entity = client_app.world().entity(client_entity);
     assert!(!client_entity.contains::<A>());
-    assert!(client_entity.contains::<Required>());
+    assert!(!client_entity.contains::<Required>());
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn with_client_despawn() {
         .entity_mut(server_entity)
         .remove::<A>();
 
-    client_app.world_mut().entity_mut(client_entity).despawn();
+    client_app.world_mut().despawn(client_entity);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -395,7 +395,7 @@ fn after_spawn() {
 }
 
 #[test]
-fn after_despawn() {
+fn after_pause() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -417,10 +417,10 @@ fn after_despawn() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).len(), 1);
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 
-    // Un-replicate and remove at the same time.
+    // Pause replication and remove at the same time.
     server_app
         .world_mut()
         .entity_mut(server_entity)
@@ -431,7 +431,22 @@ fn after_despawn() {
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(remote.iter(client_app.world()).len(), 0);
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(
+        components.iter(client_app.world()).len(),
+        1,
+        "removals happened during replication pause shouldn't be replicated"
+    );
 }
 
 #[test]

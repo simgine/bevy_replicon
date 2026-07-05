@@ -130,10 +130,10 @@ impl SharedMessage {
 
         app.add_message::<M>().add_message::<LocalOrRemote<M>>();
 
-        let messages_id = app.world().resource_id::<Messages<M>>().unwrap();
+        let messages_id = app.world().component_id::<Messages<M>>().unwrap();
         let shared_messages_id = app
             .world()
-            .resource_id::<Messages<LocalOrRemote<M>>>()
+            .component_id::<Messages<LocalOrRemote<M>>>()
             .unwrap();
 
         Self {

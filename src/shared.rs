@@ -11,10 +11,9 @@ use bevy::prelude::*;
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
 use message::registry::RemoteMessageRegistry;
-use replication::signature::SignatureMap;
 use replication::{
     receive_markers::ReceiveMarkers, registry::ReplicationRegistry, rules::ReplicationRules,
-    track_mutate_messages::TrackMutateMessages,
+    signature::SignatureMap,
 };
 
 /// Initializes types, resources and events needed for both client and server.
@@ -104,10 +103,10 @@ impl Plugin for RepliconSharedPlugin {
             .init_state::<ServerState>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<NetworkIdMap>()
-            .init_resource::<TrackMutateMessages>()
             .init_resource::<RepliconChannels>()
             .init_resource::<ReplicationRegistry>()
             .init_resource::<ReplicationRules>()
+            .init_resource::<ReplicationStorage>()
             .init_resource::<SignatureMap>()
             .init_resource::<ReceiveMarkers>()
             .init_resource::<RemoteMessageRegistry>()

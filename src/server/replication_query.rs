@@ -5,7 +5,7 @@ use bevy::{
         component::{ComponentId, StorageType},
         query::{FilteredAccess, FilteredAccessSet},
         storage::TableId,
-        system::{ReadOnlySystemParam, SystemMeta, SystemParam},
+        system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamValidationError},
         world::unsafe_world_cell::UnsafeWorldCell,
     },
     prelude::*,
@@ -37,12 +37,7 @@ impl<'w> ReplicationQuery<'w, '_> {
         storage: StorageType,
         component_id: ComponentId,
     ) -> (Ptr<'w>, ComponentTicks) {
-        debug_assert!(
-            self.state
-                .component_access
-                .access()
-                .has_component_read(component_id)
-        );
+        debug_assert!(self.state.component_access.access().has_read(component_id));
 
         // SAFETY: caller ensured the component is replicated.
         let storages = unsafe { self.world.storages() };
@@ -78,13 +73,13 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         let mut component_access = FilteredAccess::default();
 
         let marker_id = world.register_component::<Replicated>();
-        component_access.add_component_read(marker_id);
+        component_access.add_read(marker_id);
 
         let rules = world.resource::<ReplicationRules>();
         debug!("initializing with {} replication rules", rules.len());
         for rule in rules.iter() {
             for component in &rule.components {
-                component_access.add_component_read(component.id);
+                component_access.add_read(component.id);
             }
         }
 
@@ -113,8 +108,8 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         _system_meta: &SystemMeta,
         world: UnsafeWorldCell<'world>,
         _change_tick: Tick,
-    ) -> Self::Item<'world, 'state> {
-        ReplicationQuery { world, state }
+    ) -> Result<Self::Item<'world, 'state>, SystemParamValidationError> {
+        Ok(ReplicationQuery { world, state })
     }
 }
 

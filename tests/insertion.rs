@@ -406,6 +406,9 @@ fn marker() {
 
     server_app.connect_client(&mut client_app);
 
+    // Make entity IDs different between client and server.
+    client_app.world_mut().spawn_empty();
+
     let server_entity = server_app
         .world_mut()
         .spawn((Replicated, Signature::from(0)))
@@ -542,12 +545,63 @@ fn after_removal() {
 
     let mut system_state: SystemState<RemovedComponents<A>> =
         SystemState::new(client_app.world_mut());
-    let removals = system_state.get(client_app.world());
+    let removals = system_state.get(client_app.world()).unwrap();
     assert_eq!(
         removals.len(),
         1,
         "removal for the old value should also be triggered"
     );
+}
+
+#[test]
+fn after_pause() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<Replicated>()
+        .insert(A);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 0);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 1);
 }
 
 #[test]
@@ -580,14 +634,17 @@ fn with_client_despawn() {
 
     server_app.world_mut().entity_mut(server_entity).insert(A);
 
-    client_app.world_mut().entity_mut(client_entity).despawn();
+    client_app.world_mut().despawn(client_entity);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).len(), 0);
+    let mut components = client_app
+        .world_mut()
+        .query_filtered::<Entity, (With<Remote>, With<A>)>();
+    let new_client_entity = components.single(client_app.world()).unwrap();
+    assert_ne!(new_client_entity, client_entity);
 }
 
 #[test]

@@ -9,13 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
-- `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
+- `ReplicationUserdata` and `UserdataReceived` to attach custom data to replication messages.
+- `DiffIndex::wrapping_cmp` to compare indices.
 - `ClientMessages::drain_received` and `ServerMessages::drain_received` to drain inbound messages on a channel.
 
 ### Changed
 
-- Replicated removals now also remove all required components. This may be unexpected if you set `Replicated` as a required component, because removing it also pauses replication. Use `remove_without_requires` with `AppMarkerExt::set_receive_fns` to restore the old behavior.
+- Removing `Replicated` from an entity now stops replication without despawning the entity on clients. Client-side despawns of `Remote` entities clean up their `ServerEntityMap` mappings. Despawning an entity still replicates as despawn.
+- `RepliconTick` no longer implements `Ord` or `PartialOrd`, because these traits require transitivity. Use the `wrapping_cmp` method instead, or helpers like `is_newer` and `is_older`.
+- Replace `TrackAppExt::track_mutate_messages` function with `ServerPlugin::track_mutate_messages` field. This setting no longer affects the protocol hash and can be set only on the server.
+- `ServerMutateTicks` now always present with `ClientPlugin`.
+- Rename `DiffIndex::is_newer_than` to `DiffIndex::is_newer`.
+
+## [0.41.1] - 2026-06-24
+
+### Fixed
+
+- Incorrect assertion during entity spawning.
+
+## [0.41.0] - 2026-06-24
+
+### Added
+
+- Diff-based replication for components via `replicate_diff`.
+- `AllExcept` filter scope and `VisibilityScope::AllExcept` as a counterpart to `Components`. When a `VisibilityFilter` denies visibility, every component except the listed ones is hidden. Useful for replicating a stripped-down entity (e.g. only its transform and light) to clients outside its full visibility range.
+- `ReplicationStorage` resource for storing arbitrary serialization/deserialization state.
+- `SerializeCtx::entity` and `WriteCtx::entity` with the current entity.
+
+### Changed
+
+- Update to Bevy 0.19.
+- `DeferredEntity::flush` now consumes the entity.
+- Rename `scene` module and feature into `world_serialization`.
+- Rename `DeferredChanges` into `EntityScratch`.
+
+## [0.40.4] - 2026-06-16
+
+### Added
+
+- `DeferredEntity::get_components_mut` and `DeferredEntity::get_components_mut_unchecked` to get multiple components mutably.
+- `DeferredEntity::remove_with_requires` and `remove_with_requires` helper to customize the removal replication.
+
+### Fixed
+
+- Visibility scope registration now allows up to `u32::BITS` scopes instead of incorrectly panicking after `u8::BITS` scopes.
+- Avoid potential UB from aliasing the world during entity spawning.
 
 ## [0.40.3] - 2026-06-02
 
@@ -1102,7 +1140,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.41.1..HEAD
+[0.41.1]: https://github.com/simgine/bevy_replicon/compare/v0.41.0...v0.41.1
+[0.41.0]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...v0.41.0
+[0.40.4]: https://github.com/simgine/bevy_replicon/compare/v0.40.3...v0.40.4
 [0.40.3]: https://github.com/simgine/bevy_replicon/compare/v0.40.2...v0.40.3
 [0.40.2]: https://github.com/simgine/bevy_replicon/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/simgine/bevy_replicon/compare/v0.40.0...v0.40.1

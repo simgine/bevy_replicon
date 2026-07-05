@@ -15,16 +15,15 @@ use crate::{
     shared::{
         backend::channels::{ClientChannel, ServerChannel},
         replication::{
-            deferred_entity::{DeferredChanges, DeferredEntity},
+            deferred_entity::{DeferredEntity, EntityScratch},
+            message_flags::{MutateFlags, UpdateFlags},
             mutate_index::MutateIndex,
             receive_markers::{EntityMarkers, ReceiveMarkers},
             registry::{
                 ReplicationRegistry,
-                ctx::{DespawnCtx, EntitySpawner, RemoveCtx, WriteCtx},
+                ctx::{BufferedSpawner, DespawnCtx, EntityBuffer, RemoveCtx, WriteCtx},
             },
             signature::SignatureMap,
-            track_mutate_messages::TrackMutateMessages,
-            update_message_flags::UpdateMessageFlags,
         },
         server_entity_map::{EntityEntry, ServerEntityMap},
     },
@@ -43,6 +42,7 @@ impl Plugin for ClientPlugin {
             .init_resource::<ClientStats>()
             .init_resource::<ServerEntityMap>()
             .init_resource::<ServerUpdateTick>()
+            .init_resource::<ServerMutateTicks>()
             .init_resource::<BufferedMutations>()
             .add_message::<EntityReplicated>()
             .add_message::<MutateTickReceived>()
@@ -63,6 +63,8 @@ impl Plugin for ClientPlugin {
                 PostUpdate,
                 (ClientSystems::Send, ClientSystems::SendPackets).chain(),
             )
+            .add_observer(cleanup_storage)
+            .add_observer(cleanup_entity_map)
             .add_systems(
                 PreUpdate,
                 receive_replication
@@ -97,10 +99,6 @@ impl Plugin for ClientPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        if **app.world().resource::<TrackMutateMessages>() {
-            app.init_resource::<ServerMutateTicks>();
-        }
-
         app.world_mut()
             .resource_scope(|world, mut messages: Mut<ClientMessages>| {
                 let channels = world.resource::<RepliconChannels>();
@@ -127,56 +125,70 @@ impl Plugin for ClientPlugin {
 /// See also [`ReplicationMessages`](crate::server::replication_messages::ReplicationMessages).
 pub(super) fn receive_replication(
     world: &mut World,
-    mut changes: Local<DeferredChanges>,
+    mut scratch: Local<EntityScratch>,
     mut entity_markers: Local<EntityMarkers>,
+    mut entity_buffer: Local<EntityBuffer>,
 ) {
-    world.resource_scope(|world, mut messages: Mut<ClientMessages>| {
-        world.resource_scope(|world, mut entity_map: Mut<ServerEntityMap>| {
-            world.resource_scope(|world, mut signature_map: Mut<SignatureMap>| {
-                world.resource_scope(|world, mut buffered_mutations: Mut<BufferedMutations>| {
-                    world.resource_scope(|world, receive_markers: Mut<ReceiveMarkers>| {
-                        world.resource_scope(|world, registry: Mut<ReplicationRegistry>| {
-                            world.resource_scope(
-                                |world, mut replicated: Mut<Messages<EntityReplicated>>| {
-                                    let type_registry = world.resource::<AppTypeRegistry>().clone();
-                                    let mut stats =
-                                        world.remove_resource::<ClientReplicationStats>();
-                                    let mut mutate_ticks =
-                                        world.remove_resource::<ServerMutateTicks>();
-                                    let mut params = ReceiveParams {
-                                        changes: &mut changes,
-                                        entity_markers: &mut entity_markers,
-                                        entity_map: &mut entity_map,
-                                        signature_map: &mut signature_map,
-                                        replicated: &mut replicated,
-                                        mutate_ticks: mutate_ticks.as_mut(),
-                                        stats: stats.as_mut(),
-                                        receive_markers: &receive_markers,
-                                        registry: &registry,
-                                        type_registry: &type_registry,
-                                    };
+    // Too many nested `resource_scope` break rustfmt.
+    // Relevant issue to support multiple resources in a single scope: https://github.com/bevyengine/bevy/issues/23476
+    let mut messages = world.remove_resource::<ClientMessages>().unwrap();
+    let mut entity_map = world.remove_resource::<ServerEntityMap>().unwrap();
+    let mut signature_map = world.remove_resource::<SignatureMap>().unwrap();
+    let mut storage = world.remove_resource::<ReplicationStorage>().unwrap();
+    let mut mutate_ticks = world.remove_resource::<ServerMutateTicks>().unwrap();
+    let mut buffered_mutations = world.remove_resource::<BufferedMutations>().unwrap();
+    let receive_markers = world.remove_resource::<ReceiveMarkers>().unwrap();
+    let registry = world.remove_resource::<ReplicationRegistry>().unwrap();
+    let mut replicated = world
+        .remove_resource::<Messages<EntityReplicated>>()
+        .unwrap();
 
-                                    apply_replication(
-                                        world,
-                                        &mut params,
-                                        &mut messages,
-                                        &mut buffered_mutations,
-                                    );
+    let type_registry = world.resource::<AppTypeRegistry>().clone();
+    let mut stats = world.remove_resource::<ClientReplicationStats>();
 
-                                    if let Some(stats) = stats {
-                                        world.insert_resource(stats);
-                                    }
-                                    if let Some(mutate_ticks) = mutate_ticks {
-                                        world.insert_resource(mutate_ticks);
-                                    }
-                                },
-                            )
-                        })
-                    })
-                })
-            })
-        })
-    })
+    let mut params = ReceiveParams {
+        scratch: &mut scratch,
+        entity_markers: &mut entity_markers,
+        entity_buffer: &mut entity_buffer,
+        entity_map: &mut entity_map,
+        signature_map: &mut signature_map,
+        storage: &mut storage,
+        mutate_ticks: &mut mutate_ticks,
+        replicated: &mut replicated,
+        stats: stats.as_mut(),
+        receive_markers: &receive_markers,
+        registry: &registry,
+        type_registry: &type_registry,
+    };
+
+    apply_replication(world, &mut params, &mut messages, &mut buffered_mutations);
+
+    if let Some(stats) = stats {
+        world.insert_resource(stats);
+    }
+
+    world.insert_resource(messages);
+    world.insert_resource(entity_map);
+    world.insert_resource(signature_map);
+    world.insert_resource(storage);
+    world.insert_resource(mutate_ticks);
+    world.insert_resource(buffered_mutations);
+    world.insert_resource(receive_markers);
+    world.insert_resource(registry);
+    world.insert_resource(replicated);
+}
+
+// The storage resource may be unavailable while receiving replication.
+// Cleanup is handled manually in the receive logic.
+fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<ReplicationStorage>>) {
+    storage.entities.remove(&remove.entity);
+}
+
+// The server can despawn an entity without sending a replication message,
+// so we need to manually remove the entity from the `ServerEntityMap`
+// when it is despawned on the client.
+fn cleanup_entity_map(despawn: On<Despawn, Remote>, mut entity_map: If<ResMut<ServerEntityMap>>) {
+    entity_map.remove_by_client(despawn.entity);
 }
 
 fn reset(
@@ -224,6 +236,10 @@ fn apply_replication(
     for mut message in messages.drain_received(ServerChannel::Updates) {
         if let Err(e) = apply_update_message(world, params, &mut message) {
             error!("unable to apply update message: {e}");
+
+            // SAFETY: components in the scratch were pushed using this world.
+            unsafe { params.scratch.manual_drop(world.components()) };
+            params.entity_buffer.free(world);
         }
     }
 
@@ -233,10 +249,9 @@ fn apply_replication(
     // but skip outdated data per-entity by checking last received tick for it
     // (unless user requested history via marker).
     let update_tick = *world.resource::<ServerUpdateTick>();
-    let acks_size =
-        MutateIndex::POSTCARD_MAX_SIZE * messages.received_count(ServerChannel::Mutations);
-    if acks_size != 0 {
-        let mut acks = Vec::with_capacity(acks_size);
+    let mutations_count = messages.received_count(ServerChannel::Mutations);
+    if mutations_count != 0 {
+        let mut acks = Vec::with_capacity(MutateIndex::POSTCARD_MAX_SIZE * mutations_count);
         for message in messages.drain_received(ServerChannel::Mutations) {
             if let Err(e) = buffer_mutate_message(params, buffered_mutations, message, &mut acks) {
                 error!("unable to buffer mutate message: {e}");
@@ -245,7 +260,24 @@ fn apply_replication(
         messages.send(ClientChannel::MutationAcks, acks);
     }
 
-    apply_mutate_messages(world, params, buffered_mutations, update_tick);
+    buffered_mutations.0.retain_mut(|mutate| {
+        if mutate.update_tick.is_newer(*update_tick) {
+            return true;
+        }
+
+        if let Err(e) = apply_mutate_message(world, params, mutate) {
+            error!(
+                "unable to apply mutate message for tick `{:?}`: {e}",
+                mutate.message_tick
+            );
+
+            // SAFETY: components in the scratch were pushed using this world.
+            unsafe { params.scratch.manual_drop(world.components()) };
+            params.entity_buffer.free(world);
+        }
+
+        false
+    });
 }
 
 /// Reads and applies an update message.
@@ -261,9 +293,7 @@ fn apply_update_message(
         stats.bytes += message.len();
     }
 
-    let flags: UpdateMessageFlags = postcard_utils::from_buf(message)?;
-    debug_assert!(!flags.is_empty(), "message can't be empty");
-
+    let flags: UpdateFlags = postcard_utils::from_buf(message)?;
     let message_tick = postcard_utils::from_buf(message)?;
     trace!("applying update message with `{flags:?}` for {message_tick:?}");
     world.resource_mut::<ServerUpdateTick>().0 = message_tick;
@@ -277,7 +307,11 @@ fn apply_update_message(
         };
 
         match flag {
-            UpdateMessageFlags::MAPPINGS => {
+            UpdateFlags::USERDATA => {
+                process_userdata(world, message, message_tick)
+                    .map_err(|e| format!("unable to process userdata: {e}"))?;
+            }
+            UpdateFlags::MAPPINGS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_entity_mapping(world, params, message)
                 })
@@ -286,7 +320,7 @@ fn apply_update_message(
                     stats.mappings += len;
                 }
             }
-            UpdateMessageFlags::DESPAWNS => {
+            UpdateFlags::DESPAWNS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_despawn(world, params, message, message_tick)
                 })
@@ -295,7 +329,7 @@ fn apply_update_message(
                     stats.despawns += len;
                 }
             }
-            UpdateMessageFlags::REMOVALS => {
+            UpdateFlags::REMOVALS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_removals(world, params, message, message_tick)
                 })
@@ -304,7 +338,7 @@ fn apply_update_message(
                     stats.entities_changed += len;
                 }
             }
-            UpdateMessageFlags::CHANGES => {
+            UpdateFlags::CHANGES => {
                 debug_assert_eq!(array_kind, ArrayKind::Dynamic);
                 let len = apply_array(array_kind, message, |message| {
                     apply_changes(world, params, message, message_tick)
@@ -337,70 +371,58 @@ fn buffer_mutate_message(
         stats.bytes += message.len();
     }
 
+    let flags: MutateFlags = postcard_utils::from_buf(&mut message)?;
+    let mutate_index: MutateIndex = postcard_utils::from_buf(&mut message)?;
+    postcard_utils::to_extend_mut(&mutate_index, acks)?;
+
     let update_tick = postcard_utils::from_buf(&mut message)?;
     let message_tick = postcard_utils::from_buf(&mut message)?;
-    let messages_count = if params.mutate_ticks.is_some() {
-        postcard_utils::from_buf(&mut message)?
-    } else {
-        1
-    };
-    let mutate_index: MutateIndex = postcard_utils::from_buf(&mut message)?;
     trace!("received mutate message for {message_tick:?}");
     buffered_mutations.insert(BufferedMutate {
+        flags,
         update_tick,
         message_tick,
-        messages_count,
         message,
     });
-
-    postcard_utils::to_extend_mut(&mutate_index, acks)?;
 
     Ok(())
 }
 
-/// Applies mutations from [`BufferedMutations`].
-///
-/// If the mutate message can't be applied yet (because the update message with the
-/// corresponding tick hasn't arrived), it will be kept in the buffer.
-fn apply_mutate_messages(
+/// Reads and applies a buffered mutate message.
+fn apply_mutate_message(
     world: &mut World,
     params: &mut ReceiveParams,
-    buffered_mutations: &mut BufferedMutations,
-    update_tick: ServerUpdateTick,
-) {
-    buffered_mutations.0.retain_mut(|mutate| {
-        if mutate.update_tick > *update_tick {
-            return true;
-        }
+    mutate: &mut BufferedMutate,
+) -> Result<()> {
+    trace!(
+        "applying mutate message with `{:?}` for {:?}",
+        mutate.flags, mutate.message_tick
+    );
 
-        trace!("applying mutate message for {:?}", mutate.message_tick);
-        let len = apply_array(ArrayKind::Dynamic, &mut mutate.message, |message| {
-            apply_mutations(world, params, message, mutate.message_tick)
-        });
-
-        match len {
-            Ok(len) => {
+    for (_, flag) in mutate.flags.iter_names() {
+        match flag {
+            MutateFlags::USERDATA => {
+                process_userdata(world, &mut mutate.message, mutate.message_tick)
+                    .map_err(|e| format!("unable to apply userdata: {e}"))?;
+            }
+            MutateFlags::MESSAGES_COUNT => {
+                confirm_mutate_tick(world, params.mutate_ticks, mutate)
+                    .map_err(|e| format!("unable to confirm mutate tick: {e}"))?;
+            }
+            MutateFlags::MUTATIONS => {
+                let len = apply_array(ArrayKind::Dynamic, &mut mutate.message, |message| {
+                    apply_mutations(world, params, message, mutate.message_tick)
+                })
+                .map_err(|e| format!("unable to apply mutations: {e}"))?;
                 if let Some(stats) = &mut params.stats {
                     stats.entities_changed += len;
                 }
             }
-            Err(e) => error!(
-                "unable to apply mutate message for tick `{:?}`: {e}",
-                mutate.message_tick
-            ),
+            _ => unreachable!("iteration should yield only named flags"),
         }
+    }
 
-        if let Some(mutate_ticks) = &mut params.mutate_ticks
-            && mutate_ticks.confirm(mutate.message_tick, mutate.messages_count)
-        {
-            mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
-            world.write_message(MutateTickReceived {
-                tick: mutate.message_tick,
-            });
-        }
-
-        false
-    });
+    Ok(())
 }
 
 /// Deserializes and applies the mapping from a server entity to a client
@@ -439,10 +461,10 @@ fn apply_despawn(
     // from the client and could include the deletion in the this message.
     let server_entity = postcard_utils::entity_from_buf(message)?;
     if let Some(client_entity) = params.entity_map.server_entry(server_entity).remove() {
-        // Requires manual removal since the map is removed from the world and inaccessible to triggers.
-        // The entity can also be despawned via a relationship when applying
-        // despawn to another entity, so we always need to remove it from the map.
+        // Requires manual removal since these resources are removed from the world and inaccessible to observers.
         params.signature_map.remove(client_entity);
+        params.storage.entities.remove(&client_entity);
+
         if let Ok(client_entity) = world.get_entity_mut(client_entity) {
             trace!("applying despawn for `{}`", client_entity.id());
             let ctx = DespawnCtx { message_tick };
@@ -472,7 +494,7 @@ fn apply_removals(
 
     let Ok(mut client_entity) = world
         .get_entity_mut(client_entity)
-        .map(|entity| DeferredEntity::new(entity, params.changes))
+        .map(|entity| DeferredEntity::new(entity, params.scratch))
     else {
         // Client could predict despawn.
         debug!("ignoring removals for despawned `{client_entity}`");
@@ -520,13 +542,18 @@ fn apply_changes(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
+    debug_assert!(
+        params.entity_buffer.is_empty(),
+        "`{:?}` should be freed before reuse",
+        params.entity_buffer
+    );
+
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
     let world_cell = world.as_unsafe_world_cell();
-    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
-    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
+    let entity_allocator = world_cell.entity_allocator();
+    // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
     let world = unsafe { world_cell.world_mut() };
 
     let mut client_entity = match params.entity_map.server_entry(server_entity) {
@@ -538,7 +565,7 @@ fn apply_changes(
                 return Ok(());
             };
 
-            let mut client_entity = DeferredEntity::new(client_entity, params.changes);
+            let mut client_entity = DeferredEntity::new(client_entity, params.scratch);
             if !client_entity.contains::<Remote>() {
                 // Even though the entity already exists, it could have been spawned during
                 // deserialization of another component and doesn't have the marker yet.
@@ -547,7 +574,7 @@ fn apply_changes(
             client_entity
         }
         EntityEntry::Vacant(entry) => {
-            let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.changes);
+            let mut client_entity = DeferredEntity::new(world.spawn_empty(), params.scratch);
             client_entity.insert(Remote);
             entry.insert(client_entity.id());
             client_entity
@@ -562,14 +589,17 @@ fn apply_changes(
 
     let mut data = message.split_to(data_size);
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let spawner = BufferedSpawner::new(entity_allocator, params.entity_buffer);
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
-            entity_map: params.entity_map,
-            type_registry: params.type_registry,
+            entity: client_entity.id(),
             component_id,
             message_tick,
-            spawner: &mut spawner,
+            entity_map: params.entity_map,
+            storage: params.storage,
+            type_registry: params.type_registry,
+            spawner,
             ignore_mapping: false,
         };
         trace!(
@@ -586,7 +616,32 @@ fn apply_changes(
         stats.components_changed += len;
     }
 
+    // SAFETY: only used to spawn entities.
+    params
+        .entity_buffer
+        .spawn(unsafe { client_entity.world_mut() });
     client_entity.flush();
+
+    Ok(())
+}
+
+fn process_userdata(
+    world: &mut World,
+    message: &mut Bytes,
+    message_tick: RepliconTick,
+) -> Result<()> {
+    let len = postcard_utils::from_buf(message)?;
+    if len > message.len() {
+        return Err(format!(
+            "userdata length ({len}) exceeds remaining message length ({})",
+            message.len()
+        )
+        .into());
+    }
+    world.trigger(UserdataReceived {
+        message_tick,
+        bytes: message.split_to(len),
+    });
 
     Ok(())
 }
@@ -642,6 +697,22 @@ fn confirm_tick(
     });
 }
 
+fn confirm_mutate_tick(
+    world: &mut World,
+    mutate_ticks: &mut ServerMutateTicks,
+    mutate: &mut BufferedMutate,
+) -> Result<()> {
+    let count = postcard_utils::from_buf(&mut mutate.message)?;
+    if mutate_ticks.confirm(mutate.message_tick, count) {
+        mutate_ticks.set_last_confirmed_tick(mutate.message_tick);
+        world.write_message(MutateTickReceived {
+            tick: mutate.message_tick,
+        });
+    }
+
+    Ok(())
+}
+
 /// Deserializes and applies component mutations for an entity.
 fn apply_mutations(
     world: &mut World,
@@ -649,6 +720,12 @@ fn apply_mutations(
     message: &mut Bytes,
     message_tick: RepliconTick,
 ) -> Result<()> {
+    debug_assert!(
+        params.entity_buffer.is_empty(),
+        "`{:?}` should be freed before applying mutations",
+        params.entity_buffer
+    );
+
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
@@ -660,14 +737,13 @@ fn apply_mutations(
     };
 
     let world_cell = world.as_unsafe_world_cell();
-    // SAFETY: split into `EntitySpawner` and `DeferredEntity`.
-    // The latter won't apply any structural changes until `flush`, and `EntitySpawner` won't be used afterward.
-    let mut spawner = EntitySpawner::new(unsafe { world_cell.world_mut() });
+    let entity_allocator = world_cell.entity_allocator();
+    // SAFETY: used only to create `DeferredEntity`, which won't let mutably alias `EntityAllocator`.
     let world = unsafe { world_cell.world_mut() };
 
     let Ok(mut client_entity) = world
         .get_entity_mut(client_entity)
-        .map(|entity| DeferredEntity::new(entity, params.changes))
+        .map(|entity| DeferredEntity::new(entity, params.scratch))
     else {
         // Client could predict despawn.
         debug!("ignoring mutations for despawned `{client_entity}`");
@@ -687,7 +763,7 @@ fn apply_mutations(
         .into());
     };
 
-    let new_tick = message_tick > history.last_tick();
+    let new_tick = message_tick.is_newer(history.last_tick());
     if new_tick {
         history.set_last_tick(message_tick);
     } else {
@@ -716,14 +792,17 @@ fn apply_mutations(
 
     let mut data = message.split_to(data_size);
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
+        let spawner = BufferedSpawner::new(entity_allocator, params.entity_buffer);
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
         let mut ctx = WriteCtx {
-            entity_map: params.entity_map,
-            type_registry: params.type_registry,
+            entity: client_entity.id(),
             component_id,
             message_tick,
-            spawner: &mut spawner,
+            entity_map: params.entity_map,
+            storage: params.storage,
+            type_registry: params.type_registry,
+            spawner,
             ignore_mapping: false,
         };
         trace!(
@@ -750,6 +829,10 @@ fn apply_mutations(
         stats.components_changed += len;
     }
 
+    // SAFETY: only used to spawn entities.
+    params
+        .entity_buffer
+        .spawn(unsafe { client_entity.world_mut() });
     client_entity.flush();
 
     Ok(())
@@ -759,12 +842,14 @@ fn apply_mutations(
 ///
 /// To avoid passing a lot of arguments into all receive functions.
 struct ReceiveParams<'a> {
-    changes: &'a mut DeferredChanges,
+    scratch: &'a mut EntityScratch,
     entity_markers: &'a mut EntityMarkers,
+    entity_buffer: &'a mut EntityBuffer,
     entity_map: &'a mut ServerEntityMap,
     signature_map: &'a mut SignatureMap,
+    storage: &'a mut ReplicationStorage,
+    mutate_ticks: &'a mut ServerMutateTicks,
     replicated: &'a mut Messages<EntityReplicated>,
-    mutate_ticks: Option<&'a mut ServerMutateTicks>,
     stats: Option<&'a mut ClientReplicationStats>,
     receive_markers: &'a ReceiveMarkers,
     registry: &'a ReplicationRegistry,
@@ -827,11 +912,11 @@ impl BufferedMutations {
     }
 
     /// Inserts a new buffered message, maintaining sorting by their message tick in descending order.
-    fn insert(&mut self, mutation: BufferedMutate) {
+    fn insert(&mut self, mutate: BufferedMutate) {
         let index = self
             .0
-            .partition_point(|other_mutation| mutation.message_tick < other_mutation.message_tick);
-        self.0.insert(index, mutation);
+            .partition_point(|other| mutate.message_tick.is_older(other.message_tick));
+        self.0.insert(index, mutate);
     }
 }
 
@@ -839,16 +924,14 @@ impl BufferedMutations {
 ///
 /// See also [`crate::server::replication_messages`].
 pub(super) struct BufferedMutate {
+    /// Flags for data in the message.
+    flags: MutateFlags,
+
     /// Required tick to wait for.
     update_tick: RepliconTick,
 
     /// The tick this mutations corresponds to.
     message_tick: RepliconTick,
-
-    /// Total number of mutate messages sent by the server for this tick.
-    ///
-    /// May not be equal to the number of received messages.
-    messages_count: usize,
 
     /// Mutations data.
     message: Bytes,
@@ -898,3 +981,15 @@ pub struct ClientReplicationStats {
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Remote;
+
+/// Triggered when user-defined bytes are received in a replication message.
+///
+/// This is emitted for data sent through [`ReplicationUserdata`](crate::server::ReplicationUserdata).
+#[derive(Event)]
+pub struct UserdataReceived {
+    /// Tick of the message with the metadata.
+    pub message_tick: RepliconTick,
+
+    /// Raw user-defined bytes received from the server.
+    pub bytes: Bytes,
+}

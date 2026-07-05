@@ -130,7 +130,10 @@ component on the server for entities you want to replicate.
 
 On clients [`Remote`] will be automatically inserted for every entity spawned by replication.
 
-If you remove the [`Replicated`] component from an entity on the server, it will be despawned on all clients.
+When an entity with the [`Replicated`] component is despawned, clients also receive a despawn.
+
+If you remove the [`Replicated`] component from an entity on the server, replication stops.
+No replication messages will be sent, including when the entity is despawned.
 
 Entity IDs differ between clients and server. As a result, clients maps server entities to local entities
 on receive. These mappings are stored in the [`ServerEntityMap`](shared::server_entity_map::ServerEntityMap)
@@ -208,7 +211,7 @@ struct Player;
 ```
 
 This pairs nicely with server state serialization and keeps saves clean.
-You can use [`scene::replicate_into`] to fill [`DynamicScene`] with replicated entities and their components.
+You can use [`scene::replicate_into`] to fill [`DynamicWorld`] with replicated entities and their components.
 On deserialization all missing required components will be inserted, and initialization
 systems will restore the correct game state.
 
@@ -244,8 +247,8 @@ the desired components. See [receive markers](#receive-markers) for more details
 ### Removals
 
 In Bevy, a component can be removed either alone or together with its required components. However, there is no way to
-distinguish between these two cases, so we always remove its required components as well. While this is a sensible default,
-you can override it using [receive markers](#receive-markers).
+distinguish between these two cases, so we don't don't remove required components by default. You can override it using
+[receive markers](#receive-markers).
 
 #### Component relations
 
@@ -256,9 +259,6 @@ Related entities replicate like any others, so children should also have [`Repli
 In other words, replicating [`ChildOf`] allows you to replicate entities relationships.
 You can also pair [`ChildOf`] with [`AppRuleExt::replicate_filtered`] to replicate only
 part of hierarchy.
-
-Currently `ChildOf` replication emits a [`B0004`](https://bevy.org/learn/errors/b0004) warning which can be safely ignored.
-See [#19776](https://github.com/bevyengine/bevy/issues/19776) for more details.
 
 You can also ensure that their mutations arrive in sync by using [`SyncRelatedAppExt::sync_related_entities`].
 
@@ -641,6 +641,11 @@ It's also possible to override despawns received from the server via
 [`ReplicationRegistry::despawn`](shared::replication::registry::ReplicationRegistry::despawn), which is also often used together
 with receive markers.
 
+### Replication userdata
+
+It's possible to attach arbitrary bytes to replication messages by writing to the [`ReplicationUserdata`](server::ReplicationUserdata)
+resource. When the client receives a replication message containing userdata, [`UserdataReceived`](client::UserdataReceived) is triggered.
+
 ### Ticks information
 
 This requires an understanding of how replication works. See the documentation on
@@ -648,12 +653,12 @@ This requires an understanding of how replication works. See the documentation o
 
 To get information about confirmed ticks for individual entities, we provide
 [`ConfirmHistory`](client::confirm_history::ConfirmHistory). This component is updated when any replication for its entity is received.
-For convenience, we also trigger the [`EntityReplicated`](client::confirm_history::EntityReplicated) to ergonomically react on it.
+For convenience, we also emit the [`EntityReplicated`](client::confirm_history::EntityReplicated) to ergonomically react on it.
 
-However, an entity might not have any mutations at a given tick. To address this, you need to call
-[`TrackAppExt::track_mutate_messages`](shared::replication::track_mutate_messages::TrackAppExt::track_mutate_messages) during the [`App`]
-setup and use [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks) resource to check whether all mutation messages were
-received for this tick.
+However, an entity might not have any mutations at a given tick. You can check this by inspecting whether all mutate messages have
+been received for this tick via [`ServerMutateTicks`](client::server_mutate_ticks::ServerMutateTicks). Since this requires including
+the number of mutate messages in each mutate message, you need to enable this by setting [`ServerPlugin::track_mutate_messages`].
+For convenience, we also emit the [`MutateTickReceived`](client::server_mutate_ticks::MutateTickReceived) to ergonomically react on it.
 
 So, a tick for an entity is confirmed if one of the following is true:
 - [`ConfirmHistory`](client::confirm_history::ConfirmHistory) reports that the tick is received.
@@ -717,13 +722,15 @@ extern crate alloc;
 pub mod client;
 pub mod compact_entity;
 pub mod postcard_utils;
-#[cfg(feature = "scene")]
+#[cfg(any(feature = "scene", feature = "world_serialization"))]
 pub mod scene;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod shared;
 #[cfg(all(feature = "server", feature = "client"))]
 pub mod test_app;
+#[cfg(any(feature = "scene", feature = "world_serialization"))]
+pub mod world_serialization;
 
 pub mod prelude {
     #[expect(deprecated, reason = "Re-export of deprecated aliases")]
@@ -750,10 +757,15 @@ pub mod prelude {
             protocol::{ProtocolHash, ProtocolHasher, ProtocolMismatch},
             replication::{
                 Replicated,
+                diff::{
+                    CommandsDiffExt, Diffable, EntityCommandsDiffExt, EntityDiffExt, WorldDiffExt,
+                    diff_index::DiffIndex,
+                },
                 receive_markers::AppMarkerExt,
                 registry::rule_fns::RuleFns,
                 rules::{AppRuleExt, component::ReplicationMode},
                 signature::Signature,
+                storage::{EntityStorageCtx, ReplicationStorage},
                 visibility::{
                     AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
                     VisibilityFilter,

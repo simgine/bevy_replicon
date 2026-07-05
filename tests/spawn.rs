@@ -184,6 +184,31 @@ fn related() {
 }
 
 #[test]
+fn resource() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_resource::<R>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.world_mut().insert_resource(R);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(client_app.world().contains_resource::<R>());
+}
+
+#[test]
 fn empty_before_connection() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -238,6 +263,38 @@ fn before_connection() {
 
     let mut components = client_app.world_mut().query::<(&Remote, &A)>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
+}
+
+#[test]
+fn with_pause() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // Insert and remove `Replicated` in the same tick.
+    server_app
+        .world_mut()
+        .spawn((Replicated, A))
+        .remove::<Replicated>();
+
+    server_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().len(),
+        0,
+        "client shouldn't receive spawn with replication pause"
+    );
 }
 
 #[test]
@@ -603,6 +660,9 @@ struct A;
 
 #[derive(Component, Deserialize, Serialize)]
 struct B;
+
+#[derive(Resource, Deserialize, Serialize)]
+struct R;
 
 #[derive(Component)]
 #[component(immutable)]

@@ -34,7 +34,7 @@ pub trait AppVisibilityExt {
     If the [`VisibilityFilter::Scope`] was previously visible, it will be despawned (for entities) or
     removed (for components).
 
-    To keep the representation compact, the total number of registered filters cannot exceed [`u32::MAX`].
+    To keep the representation compact, the total number of registered filters cannot exceed [`u32::BITS`].
     But a filter can itself represent multiple flags using a bitmask. See the example in [`VisibilityFilter`].
 
     See also [`ClientVisibility::set`] for manual visibility control.

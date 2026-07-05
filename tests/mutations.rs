@@ -173,6 +173,43 @@ fn many_components() {
 }
 
 #[test]
+fn resource() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_resource::<BoolResource>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.world_mut().insert_resource(BoolResource(false));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert!(client_app.world().contains_resource::<BoolResource>());
+
+    // Change value.
+    let mut resource = server_app.world_mut().resource_mut::<BoolResource>();
+    resource.0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let resource = client_app.world_mut().resource::<BoolResource>();
+    assert!(resource.0, "mutated value should be updated on client");
+}
+
+#[test]
 fn once() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -1252,6 +1289,65 @@ fn after_disconnect() {
     server_app.update();
 }
 
+#[test]
+fn after_pause() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity_id = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Change value and pause replication.
+    let mut server_entity = server_app.world_mut().entity_mut(server_entity_id);
+    server_entity.remove::<Replicated>();
+    let mut component = server_entity.get_mut::<BoolComponent>().unwrap();
+    component.0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<&BoolComponent>();
+    let component = components.single(client_app.world()).unwrap();
+    assert!(
+        !component.0,
+        "client shouldn't receive mutations during replication pause"
+    );
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity_id)
+        .insert(Replicated);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(
+        component.0,
+        "client should receive mutations after replication unpause"
+    );
+}
+
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
@@ -1263,6 +1359,9 @@ struct VecComponent(Vec<u8>);
 
 #[derive(Component, Deserialize, Serialize)]
 struct MappedComponent(#[entities] Entity);
+
+#[derive(Resource, Deserialize, Serialize, PartialEq, Clone, Copy)]
+struct BoolResource(bool);
 
 #[derive(Component)]
 struct ReplaceMarker;

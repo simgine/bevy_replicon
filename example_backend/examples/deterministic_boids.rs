@@ -66,7 +66,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             commands.spawn((
                 Text::new("Server"),
                 TextFont {
-                    font_size: 30.0,
+                    font_size: FontSize::Px(30.0),
                     ..Default::default()
                 },
                 TextColor::WHITE,
@@ -84,7 +84,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
             commands.spawn((
                 Text(format!("Client: {addr}")),
                 TextFont {
-                    font_size: 30.0,
+                    font_size: FontSize::Px(30.0),
                     ..default()
                 },
                 TextColor::WHITE,

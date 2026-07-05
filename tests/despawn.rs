@@ -50,6 +50,40 @@ fn single() {
 }
 
 #[test]
+fn resource() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_resource::<TestResource>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    server_app.world_mut().insert_resource(TestResource);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert!(client_app.world().contains_resource::<TestResource>());
+
+    server_app.world_mut().remove_resource::<TestResource>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(!client_app.world().contains_resource::<TestResource>());
+}
+
+#[test]
 fn with_relations() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -87,7 +121,7 @@ fn with_relations() {
 }
 
 #[test]
-fn after_spawn() {
+fn after_pause() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -96,26 +130,47 @@ fn after_spawn() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .replicate::<TestComponent>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    // Insert and remove `Replicated` to trigger spawn and despawn for client at the same time.
-    server_app
-        .world_mut()
-        .spawn((Replicated, TestComponent))
-        .remove::<Replicated>();
+    let server_entity = server_app.world_mut().spawn(Replicated).id();
 
     server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
 
-    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
-    assert_eq!(
-        messages.drain_sent().len(),
-        0,
-        "client shouldn't receive anything for a despawned entity"
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
+
+    let mut server_entity = server_app.world_mut().entity_mut(server_entity);
+    server_entity.remove::<Replicated>();
+    server_entity.despawn();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(
+        client_app.world().get_entity(client_entity).is_ok(),
+        "client shouldn't receive a despawn after replication pause"
     );
+
+    let entity_map = client_app.world().resource::<ServerEntityMap>();
+    assert!(!entity_map.to_client().is_empty());
+    assert!(!entity_map.to_server().is_empty());
+
+    client_app.world_mut().despawn(client_entity);
+
+    let entity_map = client_app.world().resource::<ServerEntityMap>();
+    assert!(entity_map.to_client().is_empty());
+    assert!(entity_map.to_server().is_empty());
 }
 
 #[test]
@@ -137,10 +192,7 @@ fn signature() {
         .world_mut()
         .spawn((Replicated, Signature::from(0)))
         .id();
-    let client_entity = client_app
-        .world_mut()
-        .spawn((Replicated, Signature::from(0)))
-        .id();
+    let client_entity = client_app.world_mut().spawn(Signature::from(0)).id();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -172,13 +224,10 @@ fn signature_with_hierarchy() {
 
     server_app.connect_client(&mut client_app);
 
-    let client_parent = client_app
-        .world_mut()
-        .spawn((Replicated, Signature::from(0)))
-        .id();
+    let client_parent = client_app.world_mut().spawn(Signature::from(0)).id();
     let client_child = client_app
         .world_mut()
-        .spawn((Replicated, Signature::from(1), ChildOf(client_parent)))
+        .spawn((Signature::from(1), ChildOf(client_parent)))
         .id();
 
     let server_parent = server_app
@@ -252,7 +301,7 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().entity_mut(server_entity).despawn();
+    server_app.world_mut().despawn(server_entity);
 
     server_app.update();
 
@@ -375,7 +424,7 @@ fn with_visibility_gain_and_signature() {
 
     server_app.connect_client(&mut client_app);
 
-    // Remove visibility filter to make the entity visible and unreplicate.
+    // Remove visibility filter to make the entity visible and pause replication.
     server_app
         .world_mut()
         .spawn((Replicated, EntityVisibility, Signature::from(0)))
@@ -389,6 +438,9 @@ fn with_visibility_gain_and_signature() {
 
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
+
+#[derive(Resource, Deserialize, Serialize)]
+struct TestResource;
 
 #[derive(Component)]
 #[component(immutable)]

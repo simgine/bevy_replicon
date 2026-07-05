@@ -49,6 +49,7 @@ impl Plugin for ClientMessagePlugin {
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
+                ParamBuilder,
             );
 
             let receive_fn = receive_builder
@@ -123,6 +124,7 @@ impl Plugin for ClientMessagePlugin {
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
+                ParamBuilder,
             )
                 .build_state(app.world_mut())
                 .build_system(send);
@@ -166,6 +168,7 @@ impl Plugin for ClientMessagePlugin {
                         builder.add_write_by_id(message.shared_messages_id());
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
@@ -258,11 +261,13 @@ fn send(
     messages: FilteredResources,
     mut readers: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ClientSendCtx {
+        storage: &mut storage,
         entity_map: &entity_map,
         type_registry: &type_registry,
         invalid_entities: Vec::new(),
@@ -292,11 +297,13 @@ fn send_shared(
     mut messages: FilteredResourcesMut,
     mut shared_messages: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ClientSendCtx {
+        storage: &mut storage,
         entity_map: &entity_map,
         type_registry: &type_registry,
         invalid_entities: Vec::new(),
@@ -326,12 +333,14 @@ fn receive(
     mut messages: FilteredResourcesMut,
     mut queues: FilteredResourcesMut,
     mut client_messages: ResMut<ClientMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     entity_map: Res<ServerEntityMap>,
     message_registry: Res<RemoteMessageRegistry>,
     update_tick: Res<ServerUpdateTick>,
 ) {
     let mut ctx = ClientReceiveCtx {
+        storage: &mut storage,
         type_registry: &type_registry,
         entity_map: &entity_map,
         invalid_entities: Vec::new(),

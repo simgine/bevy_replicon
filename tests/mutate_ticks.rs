@@ -3,7 +3,6 @@ use bevy_replicon::{
     client::server_mutate_ticks::{MutateTickReceived, ServerMutateTicks},
     prelude::*,
     server::server_tick::ServerTick,
-    shared::replication::track_mutate_messages::TrackAppExt,
     test_app::ServerTestAppExt,
 };
 use serde::{Deserialize, Serialize};
@@ -17,9 +16,11 @@ fn without_changes() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+            RepliconPlugins.set(ServerPlugin {
+                track_mutate_messages: true,
+                ..ServerPlugin::new(PostUpdate)
+            }),
         ))
-        .track_mutate_messages()
         .replicate::<BoolComponent>()
         .finish();
     }
@@ -50,9 +51,11 @@ fn one_message() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+            RepliconPlugins.set(ServerPlugin {
+                track_mutate_messages: true,
+                ..ServerPlugin::new(PostUpdate)
+            }),
         ))
-        .track_mutate_messages()
         .replicate::<BoolComponent>()
         .finish();
     }
@@ -120,9 +123,11 @@ fn multiple_messages() {
         app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+            RepliconPlugins.set(ServerPlugin {
+                track_mutate_messages: true,
+                ..ServerPlugin::new(PostUpdate)
+            }),
         ))
-        .track_mutate_messages()
         .replicate::<BoolComponent>()
         .finish();
     }

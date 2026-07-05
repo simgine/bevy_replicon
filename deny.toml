@@ -14,7 +14,6 @@ allow = [
 
 [advisories]
 version = 2
-ignore = ["RUSTSEC-2024-0436"]
 
 [bans]
 skip-tree = ["bevy"]

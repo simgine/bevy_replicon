@@ -182,12 +182,15 @@ impl ClientMessage {
             .add_message::<FromClient<M>>()
             .init_resource::<ClientMessageReader<M>>();
 
-        let messages_id = app.world().resource_id::<Messages<M>>().unwrap();
+        let messages_id = app.world().component_id::<Messages<M>>().unwrap();
         let from_messages_id = app
             .world()
-            .resource_id::<Messages<FromClient<M>>>()
+            .component_id::<Messages<FromClient<M>>>()
             .unwrap();
-        let reader_id = app.world().resource_id::<ClientMessageReader<M>>().unwrap();
+        let reader_id = app
+            .world()
+            .component_id::<ClientMessageReader<M>>()
+            .unwrap();
 
         Self {
             messages_id,

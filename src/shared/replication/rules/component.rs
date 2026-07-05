@@ -72,6 +72,14 @@ impl<C: Component<Mutability: MutWrite<C>>> IntoComponentRule for (RuleFns<C>, R
     }
 }
 
+/// Wrapper over [`IntoComponentRule`] that adds [`Resource`] constraint.
+///
+/// Needed for [`AppRuleExt::replicate_resource_with`].
+pub trait IntoResourceRule<R: Resource<Mutability: MutWrite<R>>>: IntoComponentRule {}
+
+impl<R: Resource<Mutability: MutWrite<R>>> IntoResourceRule<R> for RuleFns<R> {}
+impl<R: Resource<Mutability: MutWrite<R>>> IntoResourceRule<R> for (RuleFns<R>, ReplicationMode) {}
+
 /// Parameters that can be turned into a list of component replication rules.
 ///
 /// Implemented for tuples of [`IntoComponentRule`].

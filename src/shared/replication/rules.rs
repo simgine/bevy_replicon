@@ -8,7 +8,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use super::registry::{ReplicationRegistry, receive_fns::MutWrite};
 use crate::prelude::*;
-use component::{BundleRules, ComponentRule, IntoComponentRules};
+use component::{BundleRules, ComponentRule, IntoComponentRules, IntoResourceRule};
 use filter::{FilterRule, FilterRules};
 
 /// Replication functions for [`App`].
@@ -33,6 +33,28 @@ pub trait AppRuleExt {
         C: Component<Mutability: MutWrite<C>> + Serialize + DeserializeOwned,
     {
         self.replicate_once_filtered::<C, ()>()
+    }
+
+    /// Like [`Self::replicate`], but sends recorded diffs instead of re-sending
+    /// the entire component when it changes.
+    ///
+    /// Mutations should be performed through [`EntityCommandsDiffExt::apply_diff`]
+    /// or [`EntityDiffExt::apply_diff`].
+    ///
+    /// See [`Diffable`] for more details.
+    fn replicate_diff<C>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        self.replicate_diff_filtered::<C, ()>()
+    }
+
+    /// Like [`Self::replicate_diff`], but also adds filters like [`Self::replicate_filtered`].
+    fn replicate_diff_filtered<C, F: FilterRules>(&mut self) -> &mut Self
+    where
+        C: Diffable,
+    {
+        self.replicate_with_filtered::<_, F>(RuleFns::<C>::new_diff())
     }
 
     /// Like [`Self::replicate`], but converts the component into `T` before serialization
@@ -144,6 +166,95 @@ pub trait AppRuleExt {
     {
         self.replicate_once_filtered_as::<C, T, ()>()
     }
+
+    /// Like [`Self::replicate`], but also registers [`Replicated`] as a
+    /// required component for `R`.
+    ///
+    /// This is just a convenience helper for:
+    ///
+    /// ```
+    /// # use bevy::{prelude::*, state::app::StatesPlugin};
+    /// # use bevy_replicon::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # let mut app = App::new();
+    /// # app.add_plugins((StatesPlugin, RepliconPlugins));
+    /// app.replicate::<MyResource>()
+    ///     .register_required_components::<MyResource, Replicated>();
+    /// # #[derive(Resource, Serialize, Deserialize)]
+    /// # struct MyResource;
+    /// ```
+    ///
+    /// This allows the resource to be replicated automatically when it's
+    /// inserted via [`Commands::insert_resource`] or [`App::insert_resource`].
+    ///
+    /// To replicate the resource conditionally, use [`Self::replicate`] and
+    /// initialize the resource via [`Commands::spawn`] with [`Replicated`],
+    /// or insert the component dynamically by querying the resource entity.
+    ///
+    /// **Note:** To initialize a resource ahead of the server, use [`Signature`] to
+    /// map the local resource entity to the corresponding server entity. Otherwise,
+    /// when the server later replicates that resource, Bevy will reject spawning
+    /// the entity because the resource already exists in the world. Resources are
+    /// not applied via [`World::insert_resource`] because the server may replicate
+    /// additional components attached to the resource entity, or replicate an entity
+    /// with multiple resources on it. This is why resources are replicated as components.
+    fn replicate_resource<R>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with(RuleFns::<R>::default())
+    }
+
+    /// Like [`Self::replicate_resource`], but sends recorded diffs instead of re-sending
+    /// the entire resource when it changes.
+    ///
+    /// Mutations should be performed through [`CommandsDiffExt::apply_resource_diff`]
+    /// or [`WorldDiffExt::apply_resource_diff`].
+    ///
+    /// See [`Diffable`] for more details.
+    fn replicate_resource_diff<R>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Diffable,
+    {
+        self.replicate_resource_with(RuleFns::<R>::new_diff())
+    }
+
+    /// Like [`Self::replicate_resource`], but uses [`ReplicationMode::Once`].
+    fn replicate_resource_once<R>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with((RuleFns::<R>::default(), ReplicationMode::Once))
+    }
+
+    /// Like [`Self::replicate_resource`], but converts the resource into `T` before serialization
+    /// and back into `C` after deserialization.
+    ///
+    /// For more details see [`Self::replicate_as`].
+    fn replicate_resource_as<R, T>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with(RuleFns::<R>::new_as::<T>())
+    }
+
+    /// Like [`Self::replicate_resource_as`], but uses [`ReplicationMode::Once`].
+    fn replicate_resource_once_as<R, T>(&mut self) -> &mut Self
+    where
+        R: Resource<Mutability: MutWrite<R>> + Clone + Into<T> + From<T>,
+        T: Serialize + DeserializeOwned,
+    {
+        self.replicate_resource_with((RuleFns::<R>::new_as::<T>(), ReplicationMode::Once))
+    }
+
+    /// Like [`Self::replicate_with`], but for a single [`Resource`].
+    ///
+    /// See also [`Self::replicate_resource`].
+    fn replicate_resource_with<R: Resource<Mutability: MutWrite<R>>>(
+        &mut self,
+        resource_rule: impl IntoResourceRule<R>,
+    ) -> &mut Self;
 
     /// Like [`Self::replicate`], but lets you specify archetype filters an entity must match to replicate.
     ///
@@ -362,7 +473,7 @@ pub trait AppRuleExt {
     ));
 
     fn serialize_big_component(
-        _ctx: &SerializeCtx,
+        _ctx: &mut SerializeCtx,
         component: &BigComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -372,7 +483,7 @@ pub trait AppRuleExt {
         let end = message.len();
 
         // Compress serialized slice.
-        // Could be `zstd`, for example.
+        // Could be zstd, for example.
         let compressed = compress(&mut message[start..end]);
 
         // Replace serialized slice with compressed data prepended by its size.
@@ -387,7 +498,7 @@ pub trait AppRuleExt {
         _ctx: &mut WriteCtx,
         message: &mut Bytes,
     ) -> Result<BigComponent> {
-        // Read size first to know how much data is encoded.
+        // Read size to know how much data is encoded.
         let size = postcard_utils::from_buf(message)?;
 
         // Apply decompression and advance the reading cursor.
@@ -430,7 +541,7 @@ pub trait AppRuleExt {
 
     /// Serializes [`MappedComponent`], but skips [`MappedComponent::unused_field`].
     fn serialize_mapped_component(
-        _ctx: &SerializeCtx,
+        _ctx: &mut SerializeCtx,
         component: &MappedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -485,7 +596,7 @@ pub trait AppRuleExt {
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &ReflectedComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -549,7 +660,7 @@ pub trait AppRuleExt {
     app.replicate_with(RuleFns::new(serialize_reflect, deserialize_reflect));
 
     fn serialize_reflect(
-        ctx: &SerializeCtx,
+        ctx: &mut SerializeCtx,
         component: &WithReflectComponent,
         message: &mut Vec<u8>,
     ) -> Result<()> {
@@ -774,15 +885,11 @@ pub trait AppRuleExt {
             let (player_id, player_fns_id) = registry.register_rule_fns(world, RuleFns::<Player>::default());
             let player = ComponentRule::new(player_id, player_fns_id);
 
-            // We skip `replication` registration since it's a special component.
-            // It's automatically inserted on clients after replication and
-            // deserialization from scenes.
-
             vec![transform, player]
         }
     }
 
-    # fn serialize_translation(_: &SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
+    # fn serialize_translation(_: &mut SerializeCtx, _: &Transform, _: &mut Vec<u8>) -> Result<()> { unimplemented!() }
     # fn deserialize_translation(_: &mut WriteCtx, _: &mut Bytes) -> Result<Transform> { unimplemented!() }
     ```
     **/
@@ -805,6 +912,14 @@ pub trait AppRuleExt {
 }
 
 impl AppRuleExt for App {
+    fn replicate_resource_with<R: Resource<Mutability: MutWrite<R>>>(
+        &mut self,
+        resource_rule: impl IntoResourceRule<R>,
+    ) -> &mut Self {
+        let _ = self.try_register_required_components::<R, Replicated>();
+        self.replicate_with(resource_rule)
+    }
+
     fn replicate_with_priority_filtered<R: IntoComponentRules, F: FilterRules>(
         &mut self,
         priority: usize,
@@ -957,6 +1072,51 @@ mod tests {
 
         assert!(!rule_b_as_d.matches(a));
         assert!(rule_b_as_d.matches(b));
+    }
+
+    #[test]
+    fn resource() {
+        let mut app = App::new();
+        app.init_resource::<ProtocolHasher>()
+            .init_resource::<ReplicationRules>()
+            .init_resource::<ReplicationRegistry>()
+            .replicate_resource::<E>()
+            .replicate_resource_once::<F>()
+            .replicate_resource_as::<E, G>()
+            .replicate_resource_once_as::<F, H>();
+
+        let rules = app
+            .world_mut()
+            .remove_resource::<ReplicationRules>()
+            .unwrap();
+        let [rule_e, rule_f, rule_e_as_g, rule_f_as_h] = rules.0.try_into().unwrap();
+        assert_eq!(rule_e.priority, 1);
+        assert_eq!(rule_f.priority, 1);
+
+        app.world_mut().insert_resource(E);
+        app.world_mut().insert_resource(F);
+
+        let mut e = app.world_mut().query_filtered::<&Archetype, With<E>>();
+        let mut f = app.world_mut().query_filtered::<&Archetype, With<F>>();
+
+        let e = e.single(app.world()).unwrap();
+        let f = f.single(app.world()).unwrap();
+
+        let replicated_id = app.world().component_id::<Replicated>().unwrap();
+        assert!(e.contains(replicated_id));
+        assert!(f.contains(replicated_id));
+
+        assert!(rule_e.matches(e));
+        assert!(!rule_e.matches(f));
+
+        assert!(!rule_f.matches(e));
+        assert!(rule_f.matches(f));
+
+        assert!(rule_e_as_g.matches(e));
+        assert!(!rule_e_as_g.matches(f));
+
+        assert!(!rule_f_as_h.matches(e));
+        assert!(rule_f_as_h.matches(f));
     }
 
     #[test]
@@ -1207,6 +1367,42 @@ mod tests {
     impl From<B> for D {
         fn from(_value: B) -> Self {
             D
+        }
+    }
+
+    #[derive(Resource, Serialize, Deserialize, Clone, Copy)]
+    struct E;
+
+    #[derive(Resource, Serialize, Deserialize, Clone, Copy)]
+    struct F;
+
+    #[derive(Resource, Serialize, Deserialize)]
+    struct G;
+
+    impl From<G> for E {
+        fn from(_value: G) -> Self {
+            E
+        }
+    }
+
+    impl From<E> for G {
+        fn from(_value: E) -> Self {
+            G
+        }
+    }
+
+    #[derive(Resource, Serialize, Deserialize)]
+    struct H;
+
+    impl From<H> for F {
+        fn from(_value: H) -> Self {
+            F
+        }
+    }
+
+    impl From<F> for H {
+        fn from(_value: F) -> Self {
+            H
         }
     }
 }

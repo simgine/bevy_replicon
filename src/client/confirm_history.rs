@@ -53,7 +53,7 @@ impl ConfirmHistory {
     ///
     /// All ticks older then 64 ticks since [`Self::last_tick`] are considered received.
     pub fn contains(&self, tick: RepliconTick) -> bool {
-        if tick > self.last_tick {
+        if tick.is_newer(self.last_tick) {
             return false;
         }
 
@@ -71,16 +71,16 @@ impl ConfirmHistory {
     /// Panics if `debug_assertions` are enabled and
     /// `start_tick` is greater then `end_tick`.
     pub fn contains_any(&self, start_tick: RepliconTick, end_tick: RepliconTick) -> bool {
-        debug_assert!(start_tick <= end_tick);
+        debug_assert!(start_tick.is_older_or_eq(end_tick));
 
-        if start_tick > self.last_tick {
+        if start_tick.is_newer(self.last_tick) {
             return false;
         }
-        if start_tick <= self.last_tick - u64::BITS {
+        if start_tick.is_older_or_eq(self.last_tick - u64::BITS) {
             return true;
         }
 
-        let end_tick = if end_tick < self.last_tick {
+        let end_tick = if end_tick.is_older(self.last_tick) {
             end_tick
         } else {
             self.last_tick
@@ -98,7 +98,7 @@ impl ConfirmHistory {
     ///
     /// Useful for unit tests.
     pub fn confirm(&mut self, tick: RepliconTick) {
-        if tick > self.last_tick {
+        if tick.is_newer(self.last_tick) {
             self.set_last_tick(tick);
         } else {
             let ago = self.last_tick - tick;
@@ -126,7 +126,7 @@ impl ConfirmHistory {
     /// Panics if `debug_assertions` are enabled and
     /// `tick` is less then the last tick.
     pub(super) fn set_last_tick(&mut self, tick: RepliconTick) {
-        debug_assert!(tick >= self.last_tick);
+        debug_assert!(tick.is_newer_or_eq(self.last_tick));
         let diff = tick - self.last_tick;
         self.mask = self.mask.wrapping_shl(diff);
         self.last_tick = tick;

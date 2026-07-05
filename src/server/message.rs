@@ -43,6 +43,7 @@ impl Plugin for ServerMessagePlugin {
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
+                ParamBuilder,
             )
                 .build_state(app.world_mut())
                 .build_system(receive);
@@ -84,6 +85,7 @@ impl Plugin for ServerMessagePlugin {
                         builder.add_write_by_id(message.shared_messages_id());
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
@@ -132,6 +134,7 @@ impl Plugin for ServerMessagePlugin {
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
+                ParamBuilder,
             )
                 .build_state(app.world_mut())
                 .build_system(send_or_buffer);
@@ -175,12 +178,14 @@ fn send_or_buffer(
     to_messages: FilteredResources,
     mut server_messages: ResMut<ServerMessages>,
     mut message_buffer: ResMut<MessageBuffer>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     message_registry: Res<RemoteMessageRegistry>,
     clients: Query<Entity, With<ConnectedClient>>,
 ) {
     message_buffer.start_tick();
     let mut ctx = ServerSendCtx {
+        storage: &mut storage,
         type_registry: &type_registry,
     };
 
@@ -215,10 +220,12 @@ fn send_buffered(
 fn receive(
     mut from_messages: FilteredResourcesMut,
     mut server_messages: ResMut<ServerMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     message_registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ServerReceiveCtx {
+        storage: &mut storage,
         type_registry: &type_registry,
     };
 
@@ -235,10 +242,12 @@ fn receive(
 fn receive_shared(
     mut shared_messages: FilteredResourcesMut,
     mut server_messages: ResMut<ServerMessages>,
+    mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     message_registry: Res<RemoteMessageRegistry>,
 ) {
     let mut ctx = ServerReceiveCtx {
+        storage: &mut storage,
         type_registry: &type_registry,
     };
 

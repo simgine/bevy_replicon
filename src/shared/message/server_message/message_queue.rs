@@ -1,8 +1,9 @@
-use alloc::collections::BTreeMap;
 use core::marker::PhantomData;
 
+use alloc::collections::VecDeque;
 use bevy::prelude::*;
 use bytes::Bytes;
+use smallvec::{SmallVec, smallvec};
 
 use crate::prelude::*;
 
@@ -12,59 +13,52 @@ use crate::prelude::*;
 /// Needed to ensure that when an message is triggered, all the data that it affects or references already exists.
 #[derive(Resource)]
 pub(super) struct MessageQueue<M> {
-    map: BTreeMap<RepliconTick, Vec<Bytes>>,
-    /// [`Vec`]s from removals.
-    ///
-    /// All data is drained before the insertion.
-    /// Stored to reuse allocated capacity.
-    pool: Vec<Vec<Bytes>>,
+    entries: VecDeque<(RepliconTick, SmallVec<[Bytes; 4]>)>,
     marker: PhantomData<M>,
 }
 
 impl<M> MessageQueue<M> {
     pub(super) fn insert(&mut self, tick: RepliconTick, message: Bytes) {
-        self.map
-            .entry(tick)
-            .or_insert_with(|| self.pool.pop().unwrap_or_default())
-            .push(message);
+        let index = self.entries.partition_point(|&(t, _)| tick.is_newer(t));
+        if let Some((entry_tick, messages)) = self.entries.get_mut(index)
+            && *entry_tick == tick
+        {
+            messages.push(message);
+        } else {
+            self.entries.insert(index, (tick, smallvec![message]));
+        }
     }
 
     /// Pops the next message that is at least as old as the specified replicon tick.
     pub(super) fn pop_if_le(
         &mut self,
         update_tick: RepliconTick,
-    ) -> Option<(RepliconTick, impl IntoIterator<Item = Bytes>)> {
-        let entry = self.map.first_entry()?;
-        if *entry.key() > update_tick {
+    ) -> Option<(RepliconTick, SmallVec<[Bytes; 4]>)> {
+        let (tick, _) = self.entries.front()?;
+        if tick.is_newer(update_tick) {
             return None;
         }
 
-        let (tick, messages) = entry.remove_entry();
-        self.pool.push(messages);
-        let messages = self.pool.last_mut().unwrap();
-        Some((tick, messages.drain(..)))
+        self.entries.pop_front()
     }
 
     pub(super) fn len(&self) -> usize {
-        self.map.len()
+        self.entries.len()
     }
 
     pub(super) fn is_empty(&self) -> bool {
-        self.map.is_empty()
+        self.entries.is_empty()
     }
 
     pub(super) fn clear(&mut self) {
-        while let Some((_, messages)) = self.map.pop_first() {
-            self.pool.push(messages);
-        }
+        self.entries.clear();
     }
 }
 
 impl<M> Default for MessageQueue<M> {
     fn default() -> Self {
         Self {
-            map: Default::default(),
-            pool: Default::default(),
+            entries: Default::default(),
             marker: PhantomData,
         }
     }

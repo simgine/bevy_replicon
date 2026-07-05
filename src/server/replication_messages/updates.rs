@@ -1,4 +1,4 @@
-use core::{iter, mem, ops::Range};
+use core::{mem, ops::Range};
 
 use bevy::prelude::*;
 use postcard::experimental::serialized_size;
@@ -7,12 +7,12 @@ use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::
 use crate::{
     postcard_utils,
     prelude::*,
-    server::ClientPools,
+    server::ReplicationUserdata,
     shared::{
         backend::channels::ServerChannel,
         replication::{
+            message_flags::UpdateFlags,
             registry::{ComponentIndex, component_mask::ComponentMask},
-            update_message_flags::UpdateMessageFlags,
         },
     },
 };
@@ -64,7 +64,7 @@ pub(crate) struct Updates {
     /// Components are stored in multiple chunks because newly connected clients may need to serialize all components,
     /// while previously connected clients only need the components spawned during this tick.
     ///
-    /// Usually mutations are stored in [`MutateMessage`], but if an entity has any insertions or removal,
+    /// Usually mutations are stored in [`Mutations`], but if an entity has any insertions or removal,
     /// or the entity just became visible for a client, we serialize it as part of the update message to keep entity updates atomic.
     changes: Vec<EntityRanges>,
 
@@ -116,10 +116,10 @@ impl Updates {
     }
 
     /// Adds an entity chunk for removals.
-    pub(crate) fn add_removals_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
+    pub(crate) fn add_removals_entity(&mut self, entity: Range<usize>) {
         self.removals.push(EntityRanges {
             entity,
-            data: pools.take_ranges(),
+            data: Default::default(),
         });
         self.removals_entity_added = true;
     }
@@ -154,10 +154,10 @@ impl Updates {
     }
 
     /// Adds an entity chunk for insertions and mutations.
-    pub(crate) fn add_changed_entity(&mut self, pools: &mut ClientPools, entity: Range<usize>) {
+    pub(crate) fn add_changed_entity(&mut self, entity: Range<usize>) {
         self.changes.push(EntityRanges {
             entity,
-            data: pools.take_ranges(),
+            data: Default::default(),
         });
         self.changed_entity_added = true;
     }
@@ -179,7 +179,7 @@ impl Updates {
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.
-    pub(crate) fn take_added_entity(&mut self, pools: &mut ClientPools, mutations: &mut Mutations) {
+    pub(crate) fn take_added_entity(&mut self, mutations: &mut Mutations) {
         debug_assert!(mutations.entity_added());
         let entity_mutations = mutations.pop().expect("entity should be written");
 
@@ -189,10 +189,7 @@ impl Updates {
             let changes = self.changes.last_mut().expect("entity should be written");
             debug_assert_eq!(entity_mutations.ranges.entity, changes.entity);
             changes.extend(&entity_mutations.ranges);
-            pools.recycle_ranges(iter::once(entity_mutations.ranges.data));
-
             self.changed_components |= &entity_mutations.components;
-            pools.recycle_components(entity_mutations.components);
         }
     }
 
@@ -215,7 +212,7 @@ impl Updates {
     ///
     /// Sent over [`ServerChannel::Updates`] channel.
     ///
-    /// Some data is optional, and their presence is encoded in the [`UpdateMessageFlags`] bitset.
+    /// Some data is optional, and their presence is encoded in the [`UpdateFlags`] bitset.
     ///
     /// To know how much data array takes, we serialize it's length. We use `usize`,
     /// but we use variable integer encoding, so they are correctly deserialized even
@@ -230,28 +227,32 @@ impl Updates {
         messages: &mut ServerMessages,
         client: Entity,
         serialized: &SerializedData,
+        userdata: &ReplicationUserdata,
         server_tick_range: Range<usize>,
     ) -> Result<()> {
-        let flags = self.flags();
+        let flags = self.flags(userdata);
         let last_flag = flags.last();
 
         // Precalculate size first to avoid extra allocations.
-        let mut message_size = size_of::<UpdateMessageFlags>() + server_tick_range.len();
+        let mut message_size = size_of::<UpdateFlags>() + server_tick_range.len();
         for (_, flag) in flags.iter_names() {
             match flag {
-                UpdateMessageFlags::MAPPINGS => {
+                UpdateFlags::USERDATA => {
+                    message_size += serialized_size(&userdata.len())? + userdata.len();
+                }
+                UpdateFlags::MAPPINGS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.mappings_len)?;
                     }
                     message_size += self.mappings.iter().map(Range::len).sum::<usize>();
                 }
-                UpdateMessageFlags::DESPAWNS => {
+                UpdateFlags::DESPAWNS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.despawns_len)?;
                     }
                     message_size += self.despawns.iter().map(Range::len).sum::<usize>();
                 }
-                UpdateMessageFlags::REMOVALS => {
+                UpdateFlags::REMOVALS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.removals.len())?;
                     }
@@ -261,7 +262,7 @@ impl Updates {
                         .map(EntityRanges::size)
                         .sum::<Result<usize>>()?;
                 }
-                UpdateMessageFlags::CHANGES => {
+                UpdateFlags::CHANGES => {
                     debug_assert_eq!(flag, last_flag);
                     message_size += self
                         .changes
@@ -278,7 +279,11 @@ impl Updates {
         message.extend_from_slice(&serialized[server_tick_range]);
         for (_, flag) in flags.iter_names() {
             match flag {
-                UpdateMessageFlags::MAPPINGS => {
+                UpdateFlags::USERDATA => {
+                    postcard_utils::to_extend_mut(&userdata.len(), &mut message)?;
+                    message.extend_from_slice(userdata);
+                }
+                UpdateFlags::MAPPINGS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.mappings_len, &mut message)?;
                     }
@@ -286,7 +291,7 @@ impl Updates {
                         message.extend_from_slice(&serialized[range.clone()]);
                     }
                 }
-                UpdateMessageFlags::DESPAWNS => {
+                UpdateFlags::DESPAWNS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.despawns_len, &mut message)?;
                     }
@@ -294,7 +299,7 @@ impl Updates {
                         message.extend_from_slice(&serialized[range.clone()]);
                     }
                 }
-                UpdateMessageFlags::REMOVALS => {
+                UpdateFlags::REMOVALS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.removals.len(), &mut message)?;
                     }
@@ -306,7 +311,7 @@ impl Updates {
                         }
                     }
                 }
-                UpdateMessageFlags::CHANGES => {
+                UpdateFlags::CHANGES => {
                     // Changes are always last, don't write len for it.
                     for changes in &self.changes {
                         message.extend_from_slice(&serialized[changes.entity.clone()]);
@@ -327,20 +332,23 @@ impl Updates {
         Ok(())
     }
 
-    fn flags(&self) -> UpdateMessageFlags {
-        let mut flags = UpdateMessageFlags::default();
+    fn flags(&self, userdata: &ReplicationUserdata) -> UpdateFlags {
+        let mut flags = UpdateFlags::default();
 
         if !self.mappings.is_empty() {
-            flags |= UpdateMessageFlags::MAPPINGS;
+            flags |= UpdateFlags::MAPPINGS;
         }
         if !self.despawns.is_empty() {
-            flags |= UpdateMessageFlags::DESPAWNS;
+            flags |= UpdateFlags::DESPAWNS;
         }
         if !self.removals.is_empty() {
-            flags |= UpdateMessageFlags::REMOVALS;
+            flags |= UpdateFlags::REMOVALS;
         }
         if !self.changes.is_empty() {
-            flags |= UpdateMessageFlags::CHANGES;
+            flags |= UpdateFlags::CHANGES;
+        }
+        if !userdata.is_empty() {
+            flags |= UpdateFlags::USERDATA;
         }
 
         flags
@@ -349,13 +357,12 @@ impl Updates {
     /// Clears all chunks.
     ///
     /// Keeps allocated memory for reuse.
-    pub(crate) fn clear(&mut self, pools: &mut ClientPools) {
+    pub(crate) fn clear(&mut self) {
         self.mappings = Default::default();
         self.mappings_len = 0;
         self.despawns.clear();
         self.despawns_len = 0;
-
-        pools.recycle_ranges(self.changes.drain(..).map(|c| c.data));
-        pools.recycle_ranges(self.removals.drain(..).map(|c| c.data));
+        self.changes.clear();
+        self.removals.clear();
     }
 }
