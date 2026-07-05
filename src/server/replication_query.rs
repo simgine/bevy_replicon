@@ -30,15 +30,17 @@ impl<'w> ReplicationQuery<'w, '_> {
         let priority_id = self.state.priority_id;
         debug_assert!(self.state.component_access.access().has_read(priority_id));
 
+        debug_assert!(
+            matches!(ReplicatePriority::STORAGE_TYPE, StorageType::Table),
+            "`ReplicatePriority::STORAGE_TYPE` must be `StorageType::Table`",
+        );
+
         // SAFETY: access to `ReplicatePriority` is registered in `component_access`.
         let storages = unsafe { self.world.storages() };
-        let ptr = match ReplicatePriority::STORAGE_TYPE {
-            StorageType::Table => unsafe {
-                let table = storages.tables.get(table_id)?;
-                table.get_component(priority_id, entity.table_row())?
-            },
-            StorageType::SparseSet => unreachable!("`ReplicatePriority` must have table storage"),
-        };
+        let table = storages.tables.get(table_id)?;
+
+        // SAFETY: the component has table storage.
+        let ptr = unsafe { table.get_component(priority_id, entity.table_row())? };
 
         // SAFETY: `priority_id` is registered for `ReplicatePriority`.
         let priority = unsafe { ptr.deref::<ReplicatePriority>() };
