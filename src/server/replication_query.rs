@@ -28,12 +28,7 @@ impl<'w> ReplicationQuery<'w, '_> {
     /// Returns [`ReplicatePriority`] for an entity if it has one.
     pub(super) fn get_priority(&self, entity: &ArchetypeEntity, table_id: TableId) -> Option<f32> {
         let priority_id = self.state.priority_id;
-        debug_assert!(
-            self.state
-                .component_access
-                .access()
-                .has_component_read(priority_id)
-        );
+        debug_assert!(self.state.component_access.access().has_read(priority_id));
 
         // SAFETY: access to `ReplicatePriority` is registered in `component_access`.
         let storages = unsafe { self.world.storages() };
@@ -104,7 +99,7 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
         component_access.add_read(marker_id);
 
         let priority_id = world.register_component::<ReplicatePriority>();
-        component_access.add_component_read(priority_id);
+        component_access.add_read(priority_id);
         let priority_storage = world
             .components()
             .get_info(priority_id)

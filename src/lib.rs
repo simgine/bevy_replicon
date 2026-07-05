@@ -574,12 +574,12 @@ The server always sees the entire world, even in listen-server mode.
 ### Prioritization
 
 By default, all unacknowledged mutations are sent every tick. This can be expensive if you
-have many entities with mutating components. Priority can be configured statically by specifying
-the priority associated with a replication rule via [`AppRuleExt::replicate_with_priority`] or
-[`AppRuleExt::replicate_bundle_with`], globally for an entity via [`ReplicatePriority`], or per
-client via the [`PriorityMap`] component on an [`AuthorizedClient`]. The effective precedence is
-per-client [`PriorityMap`], [`ReplicatePriority`], static rule priority, then the default priority
-of `1.0`. See [`ReplicatePriority`] and [`PriorityMap`] for more details.
+have many entities with mutating components. Priority can be configured globally for an entity
+via [`ReplicatePriority`] or per client via the [`PriorityMap`] component on an
+[`AuthorizedClient`]. The effective precedence is per-client [`PriorityMap`],
+[`ReplicatePriority`], then the default priority of `1.0`. Rule priority configured via
+[`AppRuleExt::replicate_with_priority`] or [`AppRuleExt::replicate_bundle_with`] controls which
+replication rule is selected, not mutation send priority.
 
 In addition, [client visibility](#client-visibility) can be used to further reduce bandwidth by hiding entities
 that are irrelevant to a given client.

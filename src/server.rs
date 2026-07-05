@@ -688,7 +688,7 @@ fn collect_changes(
                 mutations.start_entity();
             }
 
-            for &(rule, storage, static_priority) in &replicated_archetype.components {
+            for &(rule, storage) in &replicated_archetype.components {
                 let (component_index, component_id, fns) = registry.get(rule.fns_id);
 
                 // SAFETY: component and storage were obtained from this archetype.
@@ -732,7 +732,6 @@ fn collect_changes(
                             .get(&entity.id())
                             .copied()
                             .or(global_priority)
-                            .or(Some(static_priority))
                             .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
@@ -1003,8 +1002,8 @@ pub struct AuthorizedClient;
 /// Controls how often mutations are sent for a replicated entity.
 ///
 /// Applies globally to all authorized clients unless overridden by the client's [`PriorityMap`].
-/// This dynamic priority takes precedence over the static priority associated with the matching
-/// replication rule.
+/// This dynamic priority is independent from the priority used to select a matching replication
+/// rule.
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
@@ -1029,9 +1028,7 @@ pub struct ReplicatePriority(pub f32);
 /// Associates entities with a priority number configurable by the user.
 ///
 /// If no priority is set in a client's [`PriorityMap`] component, [`ReplicatePriority`]
-/// is used. If the entity has no [`ReplicatePriority`], the static priority associated with
-/// the matching replication rule is used. If the rule's priority wasn't set explicitly, its
-/// default priority is used, such as `1.0` for a single replicated component.
+/// is used. If the entity has no [`ReplicatePriority`], the priority defaults to `1.0`.
 ///
 /// During replication, we multiply the difference between the last acknowledged tick
 /// and [`ServerTick`] by the priority. If the result is greater than or equal to 1.0,
