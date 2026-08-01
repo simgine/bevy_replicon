@@ -565,7 +565,7 @@ This behavior can be customized via [`RepliconSharedPlugin::auth_method`].
 
 ### Client visibility
 
-You can control which parts of the world are visible to each client by using components registered as visibility filters.
+You can control which parts of the world are visible to each authorized client by using components registered as visibility filters.
 This works similarly to collision layers in physics: you insert filters to both the client and gameplay entities.
 See [`AppVisibilityExt`] for API details.
 
