@@ -1001,8 +1001,9 @@ pub struct AuthorizedClient;
 
 /// Marker component for a local client running the server itself.
 ///
-/// Messaging backends are responsible for inserting this component on the server client entity.
-/// Needs to be inserted with [`NetworkId`] if the backend provides support for it.
+/// Messaging backends are responsible for inserting this component on the hosting client entity.
+/// Needs to be inserted with [NetworkId](`crate::shared::backend::connected_client::NetworkId`)
+/// if the backend provides support for it.
 ///
 /// See also [`ConnectedClient`].
 #[derive(Component, Reflect, Default, Debug)]
