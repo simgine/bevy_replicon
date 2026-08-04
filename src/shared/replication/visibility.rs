@@ -303,10 +303,10 @@ pub enum VisibilityScope {
 /// visibility.
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum VisibilityLifetime {
-    /// Component or entity is removed/despawned when it becomes visible and despawns when loses
+    /// Component or entity is inserted/spawned when it becomes visible and despawns when loses
     /// visibility.
     WhenVisible,
-    /// Component or entity is removed/despawned when it becomes visible and pauses updates while
+    /// Component or entity is inserted/spawned when it becomes visible and pauses updates while
     /// without visibility.
     OnceVisible,
     /// Component or entity is inserted/spawned at once but receives updates only while
