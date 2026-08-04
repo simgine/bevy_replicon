@@ -72,6 +72,7 @@ impl FiltersMask {
         self.iter().map(|bit| registry.scope(bit))
     }
 
+    // TODO! remove in favour of `get_hidden_component_lowest_lifetime`
     /// Returns `true` if the given component is hidden by any of the filters.
     ///
     /// Entity filters are treated as hiding all components.
@@ -79,12 +80,34 @@ impl FiltersMask {
         &self,
         registry: &FilterRegistry,
         index: ComponentIndex,
+        max_valid_lifetime: VisibilityLifetime,
     ) -> bool {
         self.iter().any(|bit| match registry.scope(bit) {
             VisibilityScope::Entity => true,
             VisibilityScope::Components(component_mask) => component_mask.contains(index),
             VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
-        })
+        } && registry.lifetime(bit) <= max_valid_lifetime)
+    }
+
+    pub(crate) fn get_hidden_component_lowest_lifetime(
+        &self,
+        registry: &FilterRegistry,
+        index: ComponentIndex,
+    ) -> Option<VisibilityLifetime> {
+        self.iter()
+            .filter_map(|bit| {
+                let is_hidden = match registry.scope(bit) {
+                    VisibilityScope::Entity => true,
+                    VisibilityScope::Components(component_mask) => component_mask.contains(index),
+                    VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
+                };
+                if is_hidden {
+                    Some(registry.lifetime(bit))
+                } else {
+                    None
+                }
+            })
+            .max_by(|a, b| a.cmp(b).reverse())
     }
 }
 

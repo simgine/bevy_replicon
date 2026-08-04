@@ -717,15 +717,16 @@ fn collect_changes(
                 for (client, mut updates, mut mutations, client_ticks, priority_map, visibility) in
                     &mut clients
                 {
-                    if visibility
+                    let visibility_lifetime = visibility
                         .get(entity.id())
-                        .is_component_hidden(&filter_registry, component_index)
-                    {
+                        .get_hidden_component_lowest_lifetime(&filter_registry, component_index);
+                    if visibility_lifetime == Some(VisibilityLifetime::WhenVisible) {
                         continue;
                     }
 
                     if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
                         && entity_ticks.components.contains(component_index)
+                        && visibility_lifetime.is_none()
                     {
                         let base_priority = priority_map
                             .get(&entity.id())
@@ -769,7 +770,7 @@ fn collect_changes(
                             };
                             mutations.add_component(component_range);
                         }
-                    } else {
+                    } else if visibility_lifetime.is_none_or(|l| l == VisibilityLifetime::Always) {
                         trace!(
                             "writing `{:?}` insertion for `{}` for client `{client}`",
                             rule.fns_id,

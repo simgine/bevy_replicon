@@ -172,7 +172,11 @@ mod tests {
         assert!(mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, a_index));
+        assert!(mask.is_component_hidden(
+            &filter_registry,
+            a_index,
+            VisibilityLifetime::WhenVisible
+        ));
     }
 
     #[test]
@@ -189,10 +193,18 @@ mod tests {
         assert!(!mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, a_index));
+        assert!(mask.is_component_hidden(
+            &filter_registry,
+            a_index,
+            VisibilityLifetime::WhenVisible
+        ));
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(!mask.is_component_hidden(&filter_registry, b_index));
+        assert!(!mask.is_component_hidden(
+            &filter_registry,
+            b_index,
+            VisibilityLifetime::WhenVisible
+        ));
     }
 
     #[test]
@@ -209,13 +221,25 @@ mod tests {
         assert!(!mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, a_index));
+        assert!(mask.is_component_hidden(
+            &filter_registry,
+            a_index,
+            VisibilityLifetime::WhenVisible
+        ));
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, b_index));
+        assert!(mask.is_component_hidden(
+            &filter_registry,
+            b_index,
+            VisibilityLifetime::WhenVisible
+        ));
 
         let (c_index, _) = registry.init_component_fns::<C>(&mut world);
-        assert!(!mask.is_component_hidden(&filter_registry, c_index));
+        assert!(!mask.is_component_hidden(
+            &filter_registry,
+            c_index,
+            VisibilityLifetime::WhenVisible
+        ));
     }
 
     #[test]
@@ -232,10 +256,18 @@ mod tests {
         assert!(!mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(!mask.is_component_hidden(&filter_registry, a_index));
+        assert!(!mask.is_component_hidden(
+            &filter_registry,
+            a_index,
+            VisibilityLifetime::WhenVisible
+        ));
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, b_index));
+        assert!(mask.is_component_hidden(
+            &filter_registry,
+            b_index,
+            VisibilityLifetime::WhenVisible
+        ));
     }
 
     #[derive(Component)]
