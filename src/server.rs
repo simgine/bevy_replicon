@@ -477,19 +477,18 @@ fn collect_despawns(
         &mut Updates,
         &mut ClientTicks,
         &mut PriorityMap,
-        &mut ClientVisibility,
+        &ClientVisibility,
     )>,
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
-        for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
+        for (client, mut message, mut ticks, mut priority, _visibility) in &mut clients {
             if ticks.entities.remove(&entity).is_some() {
                 // Write despawn only if the entity was previously sent because
                 // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client}`");
                 message.add_despawn(entity_range.clone());
             }
-            visibility.remove_despawned(entity);
             priority.remove(&entity);
         }
     }

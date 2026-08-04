@@ -183,6 +183,13 @@ fn on_remove<F: VisibilityFilter>(
         return;
     }
 
+    if remove.trigger().new_archetype.is_none() {
+        for mut visibility in &mut clients {
+            visibility.remove_despawned(remove.entity);
+        }
+        return;
+    }
+
     let bit = registry.bit::<F>();
     debug!(
         "removing `{}` filter from entity `{}`",
@@ -203,6 +210,13 @@ fn on_client_remove<F: VisibilityFilter>(
     let Ok(mut visibility) = clients.get_mut(remove.entity) else {
         return;
     };
+
+    if remove.trigger().new_archetype.is_none() {
+        for (entity, _component) in &entities {
+            visibility.remove_despawned(entity);
+        }
+        return;
+    }
 
     let bit = registry.bit::<F>();
     for (entity, component) in &entities {
