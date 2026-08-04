@@ -232,9 +232,9 @@ fn on_client_remove<F: VisibilityFilter>(
 
 #[cfg(test)]
 mod tests {
-    use test_log::test;
-    use crate::shared::replication::visibility::VisibilityLifetime;
     use super::*;
+    use crate::shared::replication::visibility::VisibilityLifetime;
+    use test_log::test;
 
     #[test]
     fn after_clients() {
@@ -254,12 +254,28 @@ mod tests {
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(!visibility1.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility1
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            !visibility1
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(visibility2.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(visibility2.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            visibility2
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            visibility2
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
     }
 
     #[test]
@@ -280,12 +296,28 @@ mod tests {
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(!visibility1.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility1
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            !visibility1
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(visibility2.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(visibility2.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            visibility2
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            visibility2
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
     }
 
     #[test]
@@ -304,8 +336,16 @@ mod tests {
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
 
-        assert!(visibility.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(visibility.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            visibility
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            visibility
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         app.world_mut()
             .entity_mut(client)
@@ -313,8 +353,16 @@ mod tests {
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(!visibility.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(!visibility.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            !visibility
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
     }
 
     #[test]
@@ -339,8 +387,16 @@ mod tests {
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(!visibility.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(!visibility.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            !visibility
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
     }
 
     #[test]
@@ -361,8 +417,16 @@ mod tests {
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility = app.world().get::<ClientVisibility>(client).unwrap();
-        assert!(visibility.get(entity1).is_hidden(registry, VisibilityLifetime::WhenVisible));
-        assert!(visibility.get(entity2).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            visibility
+                .get(entity1)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
+        assert!(
+            visibility
+                .get(entity2)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
     }
 
     #[test]
@@ -385,27 +449,47 @@ mod tests {
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.get(entity).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility1
+                .get(entity)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(visibility2.get(entity).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            visibility2
+                .get(entity)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         // Hide entity from the first client too.
         app.world_mut().entity_mut(client1).remove::<ClientFilter>();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(visibility1.get(entity).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            visibility1
+                .get(entity)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         // Relax visibility constraints to make it visible to both.
         app.world_mut().entity_mut(entity).remove::<EntityFilter>();
 
         let registry = app.world().resource::<FilterRegistry>();
         let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
-        assert!(!visibility1.get(entity).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility1
+                .get(entity)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
 
         let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
-        assert!(!visibility2.get(entity).is_hidden(registry, VisibilityLifetime::WhenVisible));
+        assert!(
+            !visibility2
+                .get(entity)
+                .is_hidden(registry, VisibilityLifetime::WhenVisible)
+        );
     }
 
     #[derive(Component)]
