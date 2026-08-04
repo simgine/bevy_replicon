@@ -1,4 +1,5 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy_replicon::shared::replication::visibility::VisibilityLifetime;
 use bevy_replicon::{
     prelude::*,
     shared::server_entity_map::ServerEntityMap,
@@ -358,6 +359,51 @@ fn visibility_lose() {
 }
 
 #[test]
+fn visibility_lose_with_paused_replication() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<TestPauseReplication>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(EntityVisibility);
+
+    server_app.world_mut().spawn((Replicated, EntityVisibility));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(TestPauseReplication);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    // assert_eq!(remote.iter(client_app.world()).len(), 0);
+}
+
+#[test]
 fn visibility_lose_with_component_scope() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -465,5 +511,19 @@ impl VisibilityFilter for ComponentVisibility {
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct TestPauseReplication;
+
+impl VisibilityFilter for TestPauseReplication {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: VisibilityLifetime = VisibilityLifetime::OnceVisible;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_none()
     }
 }

@@ -141,6 +141,34 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     type Scope: FilterScope;
 
     /**
+    Controls whether an entity or components get despawned or removed (respectively) when the filter
+    denies visibility. Is set to [`VisibilityLifetime::WhenVisible`] by default.
+
+    For details, see [`VisibilityLifetime`].
+
+    # Examples
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component)]
+    #[component(immutable, storage = "SparseSet")]
+    struct PauseReplication;
+
+    impl VisibilityFilter for PauseReplication {
+        type ClientComponent = Self;
+        type Scope = Entity;
+        const LIFETIME: VisibilityLifetime = VisibilityLifetime::OnceVisible;
+
+        fn is_visible(&self, client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+            component.is_none()
+        }
+    }
+    ```
+     */
+    const LIFETIME: VisibilityLifetime = VisibilityLifetime::WhenVisible;
+
+    /**
     Returns `true` if a client should see [`Self::Scope`] for an entity with this component
     based on [`Self::ClientComponent`] .
 
@@ -269,6 +297,21 @@ pub enum VisibilityScope {
     Components(ComponentMask),
     /// All components on the entity, except these.
     AllExcept(ComponentMask),
+}
+
+/// Controls when components or entities are inserted/spawned and removed/despawned based on their
+/// visibility.
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub enum VisibilityLifetime {
+    /// Component or entity is removed/despawned when it becomes visible and despawns when loses
+    /// visibility.
+    WhenVisible,
+    /// Component or entity is removed/despawned when it becomes visible and pauses updates while
+    /// without visibility.
+    OnceVisible,
+    /// Component or entity is inserted/spawned at once but receives updates only while
+    /// being visible.
+    Always,
 }
 
 /// Associates the type with a visibility scope.

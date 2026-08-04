@@ -25,6 +25,7 @@ use bevy::{
 use bytes::Buf;
 use log::{Level, debug, log_enabled, trace, warn};
 
+use crate::shared::replication::visibility::VisibilityLifetime;
 use crate::{
     postcard_utils,
     prelude::*,
@@ -455,7 +456,10 @@ fn should_send_mapping(
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
-    if visibility.get(entity).is_hidden(registry) {
+    if visibility
+        .get(entity)
+        .is_hidden(registry, VisibilityLifetime::OnceVisible)
+    {
         return false;
     }
 
@@ -492,7 +496,7 @@ fn collect_despawns(
     for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
-            if !filter_mask.is_hidden(&registry) {
+            if !filter_mask.is_hidden(&registry, VisibilityLifetime::WhenVisible) {
                 continue;
             }
 
@@ -563,7 +567,7 @@ fn collect_removals(
 
     for (client, mut message, mut ticks, mut visibility) in &mut clients {
         for (entity, filter_mask) in visibility.drain_lost() {
-            if filter_mask.is_hidden(&filter_registry) {
+            if filter_mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible) {
                 // Was processed earlier during collecting despawns.
                 continue;
             }
@@ -788,14 +792,19 @@ fn collect_changes(
             }
 
             for (client, mut updates, mut mutations, mut ticks, _, visibility) in &mut clients {
-                if visibility.get(entity.id()).is_hidden(&filter_registry) {
+                let hidden_lifetime = visibility
+                    .get(entity.id())
+                    .get_hidden_lowest_lifetime(&filter_registry);
+                if hidden_lifetime == Some(VisibilityLifetime::WhenVisible) {
                     continue;
                 }
 
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
-                if new_for_client
-                    || updates.changed_entity_added()
+                // todo! does this correctly cover the case when an entity is spawned
+                //  and we want to merge other mutations into the same update?
+                if new_for_client && hidden_lifetime.is_none_or(|l| l == VisibilityLifetime::Always)
+                    || updates.changed_entity_added() && hidden_lifetime.is_none()
                     || removal_buffer.contains_key(&entity.id())
                 {
                     // If there is any insertion, removal, or it's a new entity for a client, include all mutations
@@ -816,7 +825,10 @@ fn collect_changes(
                     );
                 }
 
-                if new_for_client && !updates.changed_entity_added() {
+                if new_for_client
+                    && hidden_lifetime.is_none_or(|l| l == VisibilityLifetime::Always)
+                    && !updates.changed_entity_added()
+                {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
                     // Force-write new entity even if it doesn't have any components.
