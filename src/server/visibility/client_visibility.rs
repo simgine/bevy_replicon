@@ -35,11 +35,6 @@ impl ClientVisibility {
     }
 
     /// Removes a despawned entity tracked by this client.
-    ///
-    /// Since observers can't be ordered, we can't distinguish between
-    /// a despawn and removal of a visibility filter. As a workaround, we record
-    /// all changes and remove all despawned entities when processing despawns
-    /// during replication.
     pub(crate) fn remove_despawned(&mut self, entity: Entity) {
         self.hidden.remove(&entity);
         self.lost.remove(&entity);
