@@ -212,7 +212,7 @@ fn on_client_remove<F: VisibilityFilter>(
     };
 
     if remove.trigger().new_archetype.is_none() {
-        for (entity, _component) in &entities {
+        for (entity, _) in &entities {
             visibility.remove_despawned(entity);
         }
         return;
