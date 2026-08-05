@@ -726,7 +726,6 @@ fn collect_changes(
 
                     if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
                         && entity_ticks.components.contains(component_index)
-                        && hidden_lifetime.is_none()
                     {
                         let base_priority = priority_map
                             .get(&entity.id())
@@ -735,7 +734,8 @@ fn collect_changes(
                             .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
-                        if rule.mode != ReplicationMode::Once
+                        if hidden_lifetime.is_none()
+                            && rule.mode != ReplicationMode::Once
                             && base_priority * tick_diff as f32 >= 1.0
                             && ticks.is_changed(entity_ticks.system_tick, **change_tick)
                         {
