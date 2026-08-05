@@ -141,10 +141,12 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     type Scope: FilterScope;
 
     /**
-    Controls whether an entity or components get despawned or removed (respectively) when the filter
-    denies visibility. Is set to [`ScopeLifetime::WhileVisible`] by default.
+    Controls when a [`Self::Scope`] is present on a client.
 
-    For details, see [`ScopeLifetime`].
+    - For an entity scope, this describes when the entity is spawned or despawned.
+    - For a component scope, it describes when the components are inserted or removed.
+
+    Changes are replicated only while the scope is visible.
 
     # Examples
 
@@ -152,7 +154,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     # use bevy::prelude::*;
     # use bevy_replicon::prelude::*;
     #[derive(Component)]
-    #[component(immutable, storage = "SparseSet")]
+    #[component(immutable)]
     struct PauseReplication;
 
     impl VisibilityFilter for PauseReplication {
