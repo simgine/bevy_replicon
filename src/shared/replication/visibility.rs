@@ -150,20 +150,57 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
 
     # Examples
 
+    Keep a previously discovered entity on the client when it leaves
+    the client's field of view.
+
     ```
     # use bevy::prelude::*;
     # use bevy_replicon::prelude::*;
     #[derive(Component)]
     #[component(immutable)]
-    struct PauseReplication;
+    struct VisibilityPosition(Vec2);
 
-    impl VisibilityFilter for PauseReplication {
-        type ClientComponent = Self;
+    impl VisibilityFilter for VisibilityPosition {
+        type ClientComponent = ClientView;
         type Scope = Entity;
         const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
 
-        fn is_visible(&self, client: Entity, component: Option<&Self::ClientComponent>) -> bool {
-            component.is_none()
+        fn is_visible(
+            &self,
+            _client: Entity,
+            component: Option<&Self::ClientComponent>,
+        ) -> bool {
+            component.is_some_and(|view| {
+                self.0.distance_squared(view.position) <= view.radius.powi(2)
+            })
+        }
+    }
+
+    #[derive(Component)]
+    #[component(immutable)]
+    struct ClientView {
+        position: Vec2,
+        radius: f32,
+    }
+    ```
+
+    Replicate an entity to all clients except its owner.
+    The owner receives only the initial state, but simulates on its own.
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component)]
+    #[component(immutable)]
+    struct OwnedBy(Entity);
+
+    impl VisibilityFilter for OwnedBy {
+        type ClientComponent = AuthorizedClient;
+        type Scope = Entity;
+        const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
+
+        fn is_visible(&self, client: Entity, _: Option<&Self::ClientComponent>) -> bool {
+            self.0 != client
         }
     }
     ```
