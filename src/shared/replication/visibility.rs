@@ -303,7 +303,7 @@ pub enum VisibilityScope {
 ///
 /// See also [`VisibilityFilter::Scope`] and
 /// [`FilterRegistry::register_scope`](crate::server::visibility::registry::FilterRegistry::register_scope).
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
 pub enum ScopeLifetime {
     /// Inserted/spawned when it becomes visible and despawns when loses
     /// visibility.
