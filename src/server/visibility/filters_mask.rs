@@ -60,8 +60,8 @@ impl FiltersMask {
     ) -> Option<ScopeLifetime> {
         self.iter()
             .filter(|bit| matches!(registry.scope(*bit), VisibilityScope::Entity))
-            .max_by(|a, b| registry.lifetime(*a).cmp(&registry.lifetime(*b)).reverse())
             .map(|bit| registry.lifetime(bit))
+            .min()
     }
 
     /// Returns an iterator over the scope of each set filter.
