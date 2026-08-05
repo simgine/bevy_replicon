@@ -1,5 +1,6 @@
-use bevy::prelude::*;
 use core::iter;
+
+use bevy::prelude::*;
 
 use super::registry::FilterRegistry;
 use crate::{
