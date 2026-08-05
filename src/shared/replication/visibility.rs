@@ -142,7 +142,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
 
     /**
     Controls whether an entity or components get despawned or removed (respectively) when the filter
-    denies visibility. Is set to [`ScopeLifetime::WhenVisible`] by default.
+    denies visibility. Is set to [`ScopeLifetime::WhileVisible`] by default.
 
     For details, see [`ScopeLifetime`].
 
@@ -158,7 +158,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     impl VisibilityFilter for PauseReplication {
         type ClientComponent = Self;
         type Scope = Entity;
-        const LIFETIME: ScopeLifetime = ScopeLifetime::OnceVisible;
+        const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
 
         fn is_visible(&self, client: Entity, component: Option<&Self::ClientComponent>) -> bool {
             component.is_none()
@@ -166,7 +166,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     }
     ```
      */
-    const LIFETIME: ScopeLifetime = ScopeLifetime::WhenVisible;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::WhileVisible;
 
     /**
     Returns `true` if a client should see [`Self::Scope`] for an entity with this component
@@ -299,19 +299,33 @@ pub enum VisibilityScope {
     AllExcept(ComponentMask),
 }
 
-/// Controls when components or entities are inserted/spawned and removed/despawned based on their
-/// visibility.
+/// Controls when a [`VisibilityScope`] is present on a client.
+///
+/// See also [`VisibilityFilter::Scope`] and
+/// [`FilterRegistry::register_scope`](crate::server::visibility::registry::FilterRegistry::register_scope).
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ScopeLifetime {
-    /// Component or entity is inserted/spawned when it becomes visible and despawns when loses
+    /// Inserted/spawned when it becomes visible and despawns when loses
     /// visibility.
-    WhenVisible,
-    /// Component or entity is inserted/spawned when it becomes visible and pauses updates while
-    /// without visibility.
-    OnceVisible,
-    /// Component or entity is inserted/spawned at once but receives updates only while
-    /// being visible.
-    Always,
+    ///
+    /// The scope is present only while it is visible.
+    ///
+    /// It's spawned/inserted when it becomes visible, and despawned/removed
+    /// when it becomes hidden.
+    WhileVisible,
+
+    /// The scope remains present after becoming visible for the first time.
+    ///
+    /// It's not spawned/inserted until it first becomes visible. After
+    /// that, it remains present when hidden, but receives updates only while
+    /// visible.
+    AfterFirstVisibility,
+
+    /// The scope is always present, regardless of visibility.
+    ///
+    /// It's spawned/inserted regardless of the visibility, but receives updates only while
+    /// visible.
+    AlwaysPresent,
 }
 
 /// Associates the type with a visibility scope.

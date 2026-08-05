@@ -458,7 +458,7 @@ fn should_send_mapping(
 ) -> bool {
     if visibility
         .get(entity)
-        .is_hidden(registry, ScopeLifetime::OnceVisible)
+        .is_hidden(registry, ScopeLifetime::AfterFirstVisibility)
     {
         return false;
     }
@@ -496,7 +496,7 @@ fn collect_despawns(
     for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
-            if !filter_mask.is_hidden(&registry, ScopeLifetime::WhenVisible) {
+            if !filter_mask.is_hidden(&registry, ScopeLifetime::WhileVisible) {
                 continue;
             }
 
@@ -567,7 +567,7 @@ fn collect_removals(
 
     for (client, mut message, mut ticks, mut visibility) in &mut clients {
         for (entity, filter_mask) in visibility.drain_lost() {
-            if filter_mask.is_hidden(&filter_registry, ScopeLifetime::WhenVisible) {
+            if filter_mask.is_hidden(&filter_registry, ScopeLifetime::WhileVisible) {
                 // Was processed earlier during collecting despawns.
                 continue;
             }
@@ -720,7 +720,7 @@ fn collect_changes(
                     let scope_lifetime = visibility
                         .get(entity.id())
                         .get_hidden_component_lowest_lifetime(&filter_registry, component_index);
-                    if scope_lifetime == Some(ScopeLifetime::WhenVisible) {
+                    if scope_lifetime == Some(ScopeLifetime::WhileVisible) {
                         continue;
                     }
 
@@ -770,7 +770,7 @@ fn collect_changes(
                             };
                             mutations.add_component(component_range);
                         }
-                    } else if scope_lifetime.is_none_or(|l| l == ScopeLifetime::Always) {
+                    } else if scope_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent) {
                         trace!(
                             "writing `{:?}` insertion for `{}` for client `{client}`",
                             rule.fns_id,
@@ -796,7 +796,7 @@ fn collect_changes(
                 let hidden_lifetime = visibility
                     .get(entity.id())
                     .get_hidden_lowest_lifetime(&filter_registry);
-                if hidden_lifetime == Some(ScopeLifetime::WhenVisible) {
+                if hidden_lifetime == Some(ScopeLifetime::WhileVisible) {
                     continue;
                 }
 
@@ -804,7 +804,8 @@ fn collect_changes(
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
                 // todo! does this correctly cover the case when an entity is spawned
                 //  and we want to merge other mutations into the same update?
-                if new_for_client && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::Always)
+                if new_for_client
+                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent)
                     || updates.changed_entity_added() && hidden_lifetime.is_none()
                     || removal_buffer.contains_key(&entity.id())
                 {
@@ -827,7 +828,7 @@ fn collect_changes(
                 }
 
                 if new_for_client
-                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::Always)
+                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent)
                     && !updates.changed_entity_added()
                 {
                     trace!("writing empty `{}` for client `{client}`", entity.id());

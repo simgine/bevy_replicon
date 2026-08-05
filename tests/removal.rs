@@ -970,7 +970,7 @@ struct TestPauseReplication;
 impl VisibilityFilter for TestPauseReplication {
     type ClientComponent = Self;
     type Scope = Entity;
-    const LIFETIME: ScopeLifetime = ScopeLifetime::OnceVisible;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_none()
