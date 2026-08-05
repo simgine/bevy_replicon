@@ -20,8 +20,7 @@ use crate::{
 #[derive(Resource, Default)]
 pub struct FilterRegistry {
     bits: TypeIdMap<FilterBit>,
-    scopes: Vec<VisibilityScope>,
-    lifetimes: Vec<ScopeLifetime>,
+    scopes: Vec<(VisibilityScope, ScopeLifetime)>,
 }
 
 impl FilterRegistry {
@@ -57,12 +56,10 @@ impl FilterRegistry {
         if self.scopes.len() >= u32::BITS as usize {
             panic!("number of visibility scopes can't exceed {}", u32::BITS);
         }
-        assert_eq!(self.scopes.len(), self.lifetimes.len());
 
         let bit = FilterBit::new(self.scopes.len() as u8);
         let scope = S::visibility_scope(world, registry);
-        self.scopes.push(scope);
-        self.lifetimes.push(lifetime);
+        self.scopes.push((scope, lifetime));
         bit
     }
 
@@ -78,13 +75,14 @@ impl FilterRegistry {
     pub(super) fn scope(&self, bit: FilterBit) -> &VisibilityScope {
         self.scopes
             .get(*bit as usize)
+            .map(|(scope, _)| scope)
             .unwrap_or_else(|| panic!("scope for `{bit:?}` should've been registered"))
     }
 
     pub(super) fn lifetime(&self, bit: FilterBit) -> ScopeLifetime {
-        self.lifetimes
+        self.scopes
             .get(*bit as usize)
-            .copied()
+            .map(|&(_, lifetime)| lifetime)
             .unwrap_or_else(|| panic!("lifetime for `{bit:?}` should've been registered"))
     }
 }
@@ -129,8 +127,7 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
-            scopes: vec![VisibilityScope::Entity; 31],
-            lifetimes: vec![ScopeLifetime::Always; 31],
+            scopes: vec![(VisibilityScope::Entity, ScopeLifetime::WhenVisible); 31],
             ..Default::default()
         };
         filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
@@ -142,8 +139,7 @@ mod tests {
         let mut world = World::new();
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
-            scopes: vec![VisibilityScope::Entity; 32],
-            lifetimes: vec![ScopeLifetime::Always; 32],
+            scopes: vec![(VisibilityScope::Entity, ScopeLifetime::WhenVisible); 32],
             ..Default::default()
         };
         filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
