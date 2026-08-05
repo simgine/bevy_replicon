@@ -560,12 +560,19 @@ fn hidden_entity() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<EntityVisibilityAfterFirst>()
+        .add_visibility_filter::<EntityVisibilityAlwaysPresent>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    server_app.world_mut().spawn((Replicated, EntityVisibility));
+    server_app.world_mut().spawn((
+        Replicated,
+        EntityVisibility,
+        EntityVisibilityAfterFirst,
+        EntityVisibilityAlwaysPresent,
+    ));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -588,6 +595,8 @@ fn visibility_gain() {
         ))
         .replicate::<A>()
         .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<EntityVisibilityAfterFirst>()
+        .add_visibility_filter::<EntityVisibilityAlwaysPresent>()
         .finish();
     }
 
@@ -595,24 +604,38 @@ fn visibility_gain() {
 
     server_app
         .world_mut()
-        .spawn((Replicated, EntityVisibility, A));
-
-    server_app.update();
-
-    let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).len(), 0);
-
-    let client = **client_app.world().resource::<TestClientEntity>();
+        .spawn((Replicated, A, EntityVisibility));
     server_app
         .world_mut()
-        .entity_mut(client)
-        .insert(EntityVisibility);
+        .spawn((Replicated, A, EntityVisibilityAfterFirst));
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, EntityVisibilityAlwaysPresent));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(
+        components.iter(client_app.world()).len(),
+        1,
+        "client should receive the entity with `AlwaysPresent` lifetime"
+    );
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app.world_mut().entity_mut(client).insert((
+        EntityVisibility,
+        EntityVisibilityAfterFirst,
+        EntityVisibilityAlwaysPresent,
+    ));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(components.iter(client_app.world()).len(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 3);
 }
 
 #[test]
@@ -671,6 +694,34 @@ struct EntityVisibility;
 impl VisibilityFilter for EntityVisibility {
     type ClientComponent = Self;
     type Scope = Entity;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibilityAfterFirst;
+
+impl VisibilityFilter for EntityVisibilityAfterFirst {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibilityAlwaysPresent;
+
+impl VisibilityFilter for EntityVisibilityAlwaysPresent {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()
