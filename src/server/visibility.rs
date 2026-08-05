@@ -232,9 +232,10 @@ fn on_client_remove<F: VisibilityFilter>(
 
 #[cfg(test)]
 mod tests {
+    use test_log::test;
+
     use super::*;
     use crate::shared::replication::visibility::ScopeLifetime;
-    use test_log::test;
 
     #[test]
     fn after_clients() {
