@@ -802,13 +802,12 @@ fn collect_changes(
 
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
-                // todo! does this correctly cover the case when an entity is spawned
-                //  and we want to merge other mutations into the same update?
-                if new_for_client
-                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent)
-                    || updates.changed_entity_added() && hidden_lifetime.is_none()
-                    || removal_buffer.contains_key(&entity.id())
-                {
+                let has_insertions = updates.changed_entity_added() && hidden_lifetime.is_none();
+                let has_removals = removal_buffer.contains_key(&entity.id());
+                let starts_replication = new_for_client
+                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
+
+                if starts_replication || has_insertions || has_removals {
                     // If there is any insertion, removal, or it's a new entity for a client, include all mutations
                     // into update message and bump the last acknowledged tick to keep entity updates atomic.
                     if mutations.entity_added() {
@@ -827,10 +826,7 @@ fn collect_changes(
                     );
                 }
 
-                if new_for_client
-                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent)
-                    && !updates.changed_entity_added()
-                {
+                if starts_replication && !updates.changed_entity_added() {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
                     // Force-write new entity even if it doesn't have any components.
