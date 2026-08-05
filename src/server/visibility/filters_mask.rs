@@ -42,18 +42,22 @@ impl FiltersMask {
         })
     }
 
-    /// Returns `true` if the entity is hidden by any of the filters.
+    /// Returns `true` if the entity is hidden by any of the filters
+    /// with at most `max_lifetime`.
     pub(crate) fn hides_entity(
         &self,
         registry: &FilterRegistry,
-        max_valid_lifetime: ScopeLifetime,
+        max_lifetime: ScopeLifetime,
     ) -> bool {
         self.iter().any(|bit| {
             matches!(registry.scope(bit), VisibilityScope::Entity)
-                && registry.lifetime(bit) <= max_valid_lifetime
+                && registry.lifetime(bit) <= max_lifetime
         })
     }
 
+    /// Returns the shortest lifetime that hide the entity.
+    ///
+    /// Returns [`None`] if no filter hides it.
     pub(crate) fn hidden_entity_lifetime(
         &self,
         registry: &FilterRegistry,
@@ -72,6 +76,11 @@ impl FiltersMask {
         self.iter().map(|bit| registry.scope(bit))
     }
 
+    /// Returns the shortest lifetime that hide the component.
+    ///
+    /// Returns [`None`] if no filter hides the component.
+    ///
+    /// Entity filters are treated as hiding all components.
     pub(crate) fn hidden_component_lifetime(
         &self,
         registry: &FilterRegistry,
