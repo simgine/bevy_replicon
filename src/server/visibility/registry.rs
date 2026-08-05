@@ -130,6 +130,7 @@ mod tests {
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
             scopes: vec![VisibilityScope::Entity; 31],
+            lifetimes: vec![VisibilityLifetime::Always; 31],
             ..Default::default()
         };
         filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
@@ -142,6 +143,7 @@ mod tests {
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
             scopes: vec![VisibilityScope::Entity; 32],
+            lifetimes: vec![VisibilityLifetime::Always; 32],
             ..Default::default()
         };
         filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
