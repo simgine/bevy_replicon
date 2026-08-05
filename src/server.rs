@@ -25,7 +25,6 @@ use bevy::{
 use bytes::Buf;
 use log::{Level, debug, log_enabled, trace, warn};
 
-use crate::shared::replication::visibility::ScopeLifetime;
 use crate::{
     postcard_utils,
     prelude::*,

@@ -1,5 +1,4 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::shared::replication::visibility::ScopeLifetime;
 use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,

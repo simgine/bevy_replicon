@@ -4,7 +4,6 @@ use bevy::{
 };
 
 use super::{FilterScope, filters_mask::FilterBit};
-use crate::shared::replication::visibility::ScopeLifetime;
 use crate::{
     prelude::*,
     shared::replication::{registry::ReplicationRegistry, visibility::VisibilityScope},

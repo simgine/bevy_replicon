@@ -772,8 +772,8 @@ pub mod prelude {
                 signature::Signature,
                 storage::{EntityStorageCtx, ReplicationStorage},
                 visibility::{
-                    AllExcept, ComponentScope, ComponentsScope, FilterScope, SingleComponent,
-                    VisibilityFilter,
+                    AllExcept, ComponentScope, ComponentsScope, FilterScope, ScopeLifetime,
+                    SingleComponent, VisibilityFilter,
                 },
             },
             replicon_tick::RepliconTick,

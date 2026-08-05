@@ -1,5 +1,4 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::shared::replication::visibility::ScopeLifetime;
 use bevy_replicon::{
     prelude::*,
     shared::server_entity_map::ServerEntityMap,

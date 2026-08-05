@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use core::iter;
 
 use super::registry::FilterRegistry;
-use crate::shared::replication::visibility::ScopeLifetime;
-use crate::shared::replication::{registry::ComponentIndex, visibility::VisibilityScope};
+use crate::{
+    prelude::*,
+    shared::replication::{registry::ComponentIndex, visibility::VisibilityScope},
+};
 
 /// Bitset of visibility filters for an entity for a client.
 ///
