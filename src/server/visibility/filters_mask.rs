@@ -71,12 +71,16 @@ impl FiltersMask {
             .min()
     }
 
-    /// Returns an iterator over the scope of each set filter.
+    /// Returns an iterator over scopes hidden by filters
+    /// with at most `max_lifetime`.
     pub(crate) fn scopes(
         self,
         registry: &FilterRegistry,
+        max_lifetime: ScopeLifetime,
     ) -> impl Iterator<Item = &VisibilityScope> {
-        self.iter().map(|bit| registry.scope(bit))
+        self.iter()
+            .filter(move |&bit| registry.lifetime(bit) <= max_lifetime)
+            .map(|bit| registry.scope(bit))
     }
 
     /// Returns the shortest lifetime that hide the component.

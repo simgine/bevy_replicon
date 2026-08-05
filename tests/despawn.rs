@@ -1,4 +1,5 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy_replicon::shared::replication::visibility::ScopeLifetime;
 use bevy_replicon::{
     prelude::*,
     shared::server_entity_map::ServerEntityMap,
@@ -358,7 +359,7 @@ fn visibility_lose() {
 }
 
 #[test]
-fn visibility_lose_with_paused_replication() {
+fn visibility_lose_with_after_first_lifetime() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -367,8 +368,7 @@ fn visibility_lose_with_paused_replication() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_visibility_filter::<EntityVisibility>()
-        .add_visibility_filter::<TestPauseReplication>()
+        .add_visibility_filter::<AfterFirstVisibilityFilter>()
         .finish();
     }
 
@@ -378,9 +378,11 @@ fn visibility_lose_with_paused_replication() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(EntityVisibility);
+        .insert(AfterFirstVisibilityFilter);
 
-    server_app.world_mut().spawn((Replicated, EntityVisibility));
+    server_app
+        .world_mut()
+        .spawn((Replicated, AfterFirstVisibilityFilter));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -393,13 +395,17 @@ fn visibility_lose_with_paused_replication() {
     server_app
         .world_mut()
         .entity_mut(client)
-        .insert(TestPauseReplication);
+        .remove::<AfterFirstVisibilityFilter>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    // assert_eq!(remote.iter(client_app.world()).len(), 0);
+    assert_eq!(
+        remote.iter(client_app.world()).len(),
+        1,
+        "client shouldn't receive a despawn due to lifetime"
+    );
 }
 
 #[test]
@@ -515,14 +521,14 @@ impl VisibilityFilter for ComponentVisibility {
 
 #[derive(Component)]
 #[component(immutable)]
-struct TestPauseReplication;
+struct AfterFirstVisibilityFilter;
 
-impl VisibilityFilter for TestPauseReplication {
+impl VisibilityFilter for AfterFirstVisibilityFilter {
     type ClientComponent = Self;
     type Scope = Entity;
     const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
-        component.is_none()
+        component.is_some()
     }
 }

@@ -616,7 +616,7 @@ fn collect_removals(
                 Ok(())
             };
 
-            for scope in filter_mask.scopes(&filter_registry) {
+            for scope in filter_mask.scopes(&filter_registry, ScopeLifetime::WhileVisible) {
                 match scope {
                     VisibilityScope::Entity => {
                         unreachable!("entity filters are processed during despawn collection")
