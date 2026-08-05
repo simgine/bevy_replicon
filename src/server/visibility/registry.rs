@@ -37,7 +37,6 @@ impl FilterRegistry {
                 ShortName::of::<F>()
             )
         }
-        assert_eq!(self.lifetimes.len(), *bit as usize);
     }
 
     /// Registers a new visibility scope and returns the [`FilterBit`] assigned to it.
