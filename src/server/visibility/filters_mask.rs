@@ -43,7 +43,7 @@ impl FiltersMask {
     }
 
     /// Returns `true` if the entity is hidden by any of the filters.
-    pub(crate) fn is_hidden(
+    pub(crate) fn hides_entity(
         &self,
         registry: &FilterRegistry,
         max_valid_lifetime: ScopeLifetime,
@@ -54,7 +54,7 @@ impl FiltersMask {
         })
     }
 
-    pub(crate) fn get_hidden_lowest_lifetime(
+    pub(crate) fn hidden_entity_lifetime(
         &self,
         registry: &FilterRegistry,
     ) -> Option<ScopeLifetime> {
@@ -72,7 +72,7 @@ impl FiltersMask {
         self.iter().map(|bit| registry.scope(bit))
     }
 
-    pub(crate) fn get_hidden_component_lowest_lifetime(
+    pub(crate) fn hidden_component_lifetime(
         &self,
         registry: &FilterRegistry,
         index: ComponentIndex,

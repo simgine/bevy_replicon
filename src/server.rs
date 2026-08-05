@@ -458,7 +458,7 @@ fn should_send_mapping(
 ) -> bool {
     if visibility
         .get(entity)
-        .is_hidden(registry, ScopeLifetime::AfterFirstVisibility)
+        .hides_entity(registry, ScopeLifetime::AfterFirstVisibility)
     {
         return false;
     }
@@ -496,7 +496,7 @@ fn collect_despawns(
     for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
-            if !filter_mask.is_hidden(&registry, ScopeLifetime::WhileVisible) {
+            if !filter_mask.hides_entity(&registry, ScopeLifetime::WhileVisible) {
                 continue;
             }
 
@@ -567,7 +567,7 @@ fn collect_removals(
 
     for (client, mut message, mut ticks, mut visibility) in &mut clients {
         for (entity, filter_mask) in visibility.drain_lost() {
-            if filter_mask.is_hidden(&filter_registry, ScopeLifetime::WhileVisible) {
+            if filter_mask.hides_entity(&filter_registry, ScopeLifetime::WhileVisible) {
                 // Was processed earlier during collecting despawns.
                 continue;
             }
@@ -719,7 +719,7 @@ fn collect_changes(
                 {
                     let scope_lifetime = visibility
                         .get(entity.id())
-                        .get_hidden_component_lowest_lifetime(&filter_registry, component_index);
+                        .hidden_component_lifetime(&filter_registry, component_index);
                     if scope_lifetime == Some(ScopeLifetime::WhileVisible) {
                         continue;
                     }
@@ -795,7 +795,7 @@ fn collect_changes(
             for (client, mut updates, mut mutations, mut ticks, _, visibility) in &mut clients {
                 let hidden_lifetime = visibility
                     .get(entity.id())
-                    .get_hidden_lowest_lifetime(&filter_registry);
+                    .hidden_entity_lifetime(&filter_registry);
                 if hidden_lifetime == Some(ScopeLifetime::WhileVisible) {
                     continue;
                 }
