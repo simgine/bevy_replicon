@@ -1,5 +1,5 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::shared::replication::visibility::VisibilityLifetime;
+use bevy_replicon::shared::replication::visibility::ScopeLifetime;
 use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,
@@ -970,7 +970,7 @@ struct TestPauseReplication;
 impl VisibilityFilter for TestPauseReplication {
     type ClientComponent = Self;
     type Scope = Entity;
-    const LIFETIME: VisibilityLifetime = VisibilityLifetime::OnceVisible;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::OnceVisible;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_none()

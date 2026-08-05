@@ -142,9 +142,9 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
 
     /**
     Controls whether an entity or components get despawned or removed (respectively) when the filter
-    denies visibility. Is set to [`VisibilityLifetime::WhenVisible`] by default.
+    denies visibility. Is set to [`ScopeLifetime::WhenVisible`] by default.
 
-    For details, see [`VisibilityLifetime`].
+    For details, see [`ScopeLifetime`].
 
     # Examples
 
@@ -158,7 +158,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     impl VisibilityFilter for PauseReplication {
         type ClientComponent = Self;
         type Scope = Entity;
-        const LIFETIME: VisibilityLifetime = VisibilityLifetime::OnceVisible;
+        const LIFETIME: ScopeLifetime = ScopeLifetime::OnceVisible;
 
         fn is_visible(&self, client: Entity, component: Option<&Self::ClientComponent>) -> bool {
             component.is_none()
@@ -166,7 +166,7 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     }
     ```
      */
-    const LIFETIME: VisibilityLifetime = VisibilityLifetime::WhenVisible;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::WhenVisible;
 
     /**
     Returns `true` if a client should see [`Self::Scope`] for an entity with this component
@@ -302,7 +302,7 @@ pub enum VisibilityScope {
 /// Controls when components or entities are inserted/spawned and removed/despawned based on their
 /// visibility.
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub enum VisibilityLifetime {
+pub enum ScopeLifetime {
     /// Component or entity is inserted/spawned when it becomes visible and despawns when loses
     /// visibility.
     WhenVisible,

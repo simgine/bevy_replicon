@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use core::iter;
 
 use super::registry::FilterRegistry;
-use crate::shared::replication::visibility::VisibilityLifetime;
+use crate::shared::replication::visibility::ScopeLifetime;
 use crate::shared::replication::{registry::ComponentIndex, visibility::VisibilityScope};
 
 /// Bitset of visibility filters for an entity for a client.
@@ -46,7 +46,7 @@ impl FiltersMask {
     pub(crate) fn is_hidden(
         &self,
         registry: &FilterRegistry,
-        max_valid_lifetime: VisibilityLifetime,
+        max_valid_lifetime: ScopeLifetime,
     ) -> bool {
         self.iter().any(|bit| {
             matches!(registry.scope(bit), VisibilityScope::Entity)
@@ -57,7 +57,7 @@ impl FiltersMask {
     pub(crate) fn get_hidden_lowest_lifetime(
         &self,
         registry: &FilterRegistry,
-    ) -> Option<VisibilityLifetime> {
+    ) -> Option<ScopeLifetime> {
         self.iter()
             .filter(|bit| matches!(registry.scope(*bit), VisibilityScope::Entity))
             .max_by(|a, b| registry.lifetime(*a).cmp(&registry.lifetime(*b)).reverse())
@@ -80,7 +80,7 @@ impl FiltersMask {
         &self,
         registry: &FilterRegistry,
         index: ComponentIndex,
-        max_valid_lifetime: VisibilityLifetime,
+        max_valid_lifetime: ScopeLifetime,
     ) -> bool {
         self.iter().any(|bit| match registry.scope(bit) {
             VisibilityScope::Entity => true,
@@ -93,7 +93,7 @@ impl FiltersMask {
         &self,
         registry: &FilterRegistry,
         index: ComponentIndex,
-    ) -> Option<VisibilityLifetime> {
+    ) -> Option<ScopeLifetime> {
         self.iter()
             .filter_map(|bit| {
                 let is_hidden = match registry.scope(bit) {

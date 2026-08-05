@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use super::{FilterScope, filters_mask::FilterBit};
-use crate::shared::replication::visibility::VisibilityLifetime;
+use crate::shared::replication::visibility::ScopeLifetime;
 use crate::{
     prelude::*,
     shared::replication::{registry::ReplicationRegistry, visibility::VisibilityScope},
@@ -21,7 +21,7 @@ use crate::{
 pub struct FilterRegistry {
     bits: TypeIdMap<FilterBit>,
     scopes: Vec<VisibilityScope>,
-    lifetimes: Vec<VisibilityLifetime>,
+    lifetimes: Vec<ScopeLifetime>,
 }
 
 impl FilterRegistry {
@@ -52,7 +52,7 @@ impl FilterRegistry {
         &mut self,
         world: &mut World,
         registry: &mut ReplicationRegistry,
-        lifetime: VisibilityLifetime,
+        lifetime: ScopeLifetime,
     ) -> FilterBit {
         if self.scopes.len() >= u32::BITS as usize {
             panic!("number of visibility scopes can't exceed {}", u32::BITS);
@@ -81,7 +81,7 @@ impl FilterRegistry {
             .unwrap_or_else(|| panic!("scope for `{bit:?}` should've been registered"))
     }
 
-    pub(super) fn lifetime(&self, bit: FilterBit) -> VisibilityLifetime {
+    pub(super) fn lifetime(&self, bit: FilterBit) -> ScopeLifetime {
         self.lifetimes
             .get(*bit as usize)
             .copied()
@@ -130,7 +130,7 @@ mod tests {
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
             scopes: vec![VisibilityScope::Entity; 31],
-            lifetimes: vec![VisibilityLifetime::Always; 31],
+            lifetimes: vec![ScopeLifetime::Always; 31],
             ..Default::default()
         };
         filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
@@ -143,7 +143,7 @@ mod tests {
         let mut registry = ReplicationRegistry::default();
         let mut filter_registry = FilterRegistry {
             scopes: vec![VisibilityScope::Entity; 32],
-            lifetimes: vec![VisibilityLifetime::Always; 32],
+            lifetimes: vec![ScopeLifetime::Always; 32],
             ..Default::default()
         };
         filter_registry.register_filter::<EntityVisibility>(&mut world, &mut registry);
@@ -170,14 +170,10 @@ mod tests {
         let mut mask = FiltersMask::default();
         mask.insert(bit);
 
-        assert!(mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
+        assert!(mask.is_hidden(&filter_registry, ScopeLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(
-            &filter_registry,
-            a_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhenVisible));
     }
 
     #[test]
@@ -191,21 +187,13 @@ mod tests {
         let mut mask = FiltersMask::default();
         mask.insert(bit);
 
-        assert!(!mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
+        assert!(!mask.is_hidden(&filter_registry, ScopeLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(
-            &filter_registry,
-            a_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhenVisible));
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(!mask.is_component_hidden(
-            &filter_registry,
-            b_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(!mask.is_component_hidden(&filter_registry, b_index, ScopeLifetime::WhenVisible));
     }
 
     #[test]
@@ -219,28 +207,16 @@ mod tests {
         let mut mask = FiltersMask::default();
         mask.insert(bit);
 
-        assert!(!mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
+        assert!(!mask.is_hidden(&filter_registry, ScopeLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(
-            &filter_registry,
-            a_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhenVisible));
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(mask.is_component_hidden(
-            &filter_registry,
-            b_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(mask.is_component_hidden(&filter_registry, b_index, ScopeLifetime::WhenVisible));
 
         let (c_index, _) = registry.init_component_fns::<C>(&mut world);
-        assert!(!mask.is_component_hidden(
-            &filter_registry,
-            c_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(!mask.is_component_hidden(&filter_registry, c_index, ScopeLifetime::WhenVisible));
     }
 
     #[test]
@@ -254,21 +230,13 @@ mod tests {
         let mut mask = FiltersMask::default();
         mask.insert(bit);
 
-        assert!(!mask.is_hidden(&filter_registry, VisibilityLifetime::WhenVisible));
+        assert!(!mask.is_hidden(&filter_registry, ScopeLifetime::WhenVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(!mask.is_component_hidden(
-            &filter_registry,
-            a_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(!mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhenVisible));
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(mask.is_component_hidden(
-            &filter_registry,
-            b_index,
-            VisibilityLifetime::WhenVisible
-        ));
+        assert!(mask.is_component_hidden(&filter_registry, b_index, ScopeLifetime::WhenVisible));
     }
 
     #[derive(Component)]
