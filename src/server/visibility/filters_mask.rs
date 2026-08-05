@@ -72,23 +72,6 @@ impl FiltersMask {
         self.iter().map(|bit| registry.scope(bit))
     }
 
-    // TODO! remove in favour of `get_hidden_component_lowest_lifetime`
-    /// Returns `true` if the given component is hidden by any of the filters.
-    ///
-    /// Entity filters are treated as hiding all components.
-    pub(crate) fn is_component_hidden(
-        &self,
-        registry: &FilterRegistry,
-        index: ComponentIndex,
-        max_valid_lifetime: ScopeLifetime,
-    ) -> bool {
-        self.iter().any(|bit| match registry.scope(bit) {
-            VisibilityScope::Entity => true,
-            VisibilityScope::Components(component_mask) => component_mask.contains(index),
-            VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
-        } && registry.lifetime(bit) <= max_valid_lifetime)
-    }
-
     pub(crate) fn get_hidden_component_lowest_lifetime(
         &self,
         registry: &FilterRegistry,

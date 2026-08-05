@@ -169,7 +169,10 @@ mod tests {
         assert!(mask.is_hidden(&filter_registry, ScopeLifetime::WhileVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, a_index)
+                .is_some()
+        );
     }
 
     #[test]
@@ -186,10 +189,16 @@ mod tests {
         assert!(!mask.is_hidden(&filter_registry, ScopeLifetime::WhileVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, a_index)
+                .is_some()
+        );
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(!mask.is_component_hidden(&filter_registry, b_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, b_index)
+                .is_none()
+        );
     }
 
     #[test]
@@ -206,13 +215,22 @@ mod tests {
         assert!(!mask.is_hidden(&filter_registry, ScopeLifetime::WhileVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, a_index)
+                .is_some()
+        );
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, b_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, b_index)
+                .is_some()
+        );
 
         let (c_index, _) = registry.init_component_fns::<C>(&mut world);
-        assert!(!mask.is_component_hidden(&filter_registry, c_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, c_index)
+                .is_none()
+        );
     }
 
     #[test]
@@ -229,10 +247,16 @@ mod tests {
         assert!(!mask.is_hidden(&filter_registry, ScopeLifetime::WhileVisible));
 
         let (a_index, _) = registry.init_component_fns::<A>(&mut world);
-        assert!(!mask.is_component_hidden(&filter_registry, a_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, a_index)
+                .is_none()
+        );
 
         let (b_index, _) = registry.init_component_fns::<B>(&mut world);
-        assert!(mask.is_component_hidden(&filter_registry, b_index, ScopeLifetime::WhileVisible));
+        assert!(
+            mask.get_hidden_component_lowest_lifetime(&filter_registry, b_index)
+                .is_some()
+        );
     }
 
     #[derive(Component)]
