@@ -717,16 +717,16 @@ fn collect_changes(
                 for (client, mut updates, mut mutations, client_ticks, priority_map, visibility) in
                     &mut clients
                 {
-                    let scope_lifetime = visibility
+                    let hidden_lifetime = visibility
                         .get(entity.id())
                         .hidden_component_lifetime(&filter_registry, component_index);
-                    if scope_lifetime == Some(ScopeLifetime::WhileVisible) {
+                    if hidden_lifetime == Some(ScopeLifetime::WhileVisible) {
                         continue;
                     }
 
                     if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
                         && entity_ticks.components.contains(component_index)
-                        && scope_lifetime.is_none()
+                        && hidden_lifetime.is_none()
                     {
                         let base_priority = priority_map
                             .get(&entity.id())
@@ -770,7 +770,7 @@ fn collect_changes(
                             };
                             mutations.add_component(component_range);
                         }
-                    } else if scope_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent) {
+                    } else if hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent) {
                         trace!(
                             "writing `{:?}` insertion for `{}` for client `{client}`",
                             rule.fns_id,
