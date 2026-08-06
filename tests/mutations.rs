@@ -1348,6 +1348,128 @@ fn after_pause() {
     );
 }
 
+#[test]
+fn hidden_entity() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<EntityVisibilityAfterFirst>()
+        .add_visibility_filter::<EntityVisibilityAlwaysPresent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity1 = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), EntityVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), EntityVisibilityAfterFirst))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((
+            Replicated,
+            BoolComponent(false),
+            EntityVisibilityAlwaysPresent,
+        ))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    for entity in [server_entity1, server_entity2, server_entity3] {
+        server_app
+            .world_mut()
+            .get_mut::<BoolComponent>(entity)
+            .unwrap()
+            .0 = true;
+    }
+
+    server_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().len(),
+        0,
+        "client shouldn't receive mutations for hidden entities"
+    );
+}
+
+#[test]
+fn hidden_component() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .add_visibility_filter::<ComponentVisibility>()
+        .add_visibility_filter::<ComponentVisibilityAfterFirst>()
+        .add_visibility_filter::<ComponentVisibilityAlwaysPresent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity1 = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), ComponentVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((
+            Replicated,
+            BoolComponent(false),
+            ComponentVisibilityAfterFirst,
+        ))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((
+            Replicated,
+            BoolComponent(false),
+            ComponentVisibilityAlwaysPresent,
+        ))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    for entity in [server_entity1, server_entity2, server_entity3] {
+        server_app
+            .world_mut()
+            .get_mut::<BoolComponent>(entity)
+            .unwrap()
+            .0 = true;
+    }
+
+    server_app.update();
+
+    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
+    assert_eq!(
+        messages.drain_sent().len(),
+        0,
+        "client shouldn't receive mutations for hidden components"
+    );
+}
+
 #[derive(Component, Deserialize, Serialize)]
 struct TestComponent;
 
@@ -1377,6 +1499,88 @@ struct HistoryMarker;
 
 #[derive(Component, Deref, DerefMut)]
 struct BoolHistory(Vec<bool>);
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibility;
+
+impl VisibilityFilter for EntityVisibility {
+    type ClientComponent = Self;
+    type Scope = Entity;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibilityAfterFirst;
+
+impl VisibilityFilter for EntityVisibilityAfterFirst {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibilityAlwaysPresent;
+
+impl VisibilityFilter for EntityVisibilityAlwaysPresent {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibility;
+
+impl VisibilityFilter for ComponentVisibility {
+    type ClientComponent = Self;
+    type Scope = SingleComponent<BoolComponent>;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibilityAfterFirst;
+
+impl VisibilityFilter for ComponentVisibilityAfterFirst {
+    type ClientComponent = Self;
+    type Scope = SingleComponent<BoolComponent>;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibilityAlwaysPresent;
+
+impl VisibilityFilter for ComponentVisibilityAlwaysPresent {
+    type ClientComponent = Self;
+    type Scope = SingleComponent<BoolComponent>;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
 
 /// Deserializes [`OriginalComponent`], but inserts it as [`ReplacedComponent`].
 fn replace(
