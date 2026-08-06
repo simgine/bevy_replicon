@@ -293,14 +293,17 @@ fn hidden_entity() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
-        .spawn((
-            Replicated,
-            EntityVisibility,
-            EntityVisibilityAfterFirst,
-            EntityVisibilityAlwaysPresent,
-        ))
+        .spawn((Replicated, EntityVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAfterFirst))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAlwaysPresent))
         .id();
 
     server_app.update();
@@ -308,7 +311,9 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().despawn(server_entity);
+    server_app.world_mut().despawn(server_entity1);
+    server_app.world_mut().despawn(server_entity2);
+    server_app.world_mut().despawn(server_entity3);
 
     server_app.update();
 

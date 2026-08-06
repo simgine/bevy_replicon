@@ -184,9 +184,9 @@ fn on_remove<F: VisibilityFilter>(
     }
 
     if remove.trigger().new_archetype.is_none() {
-        for mut visibility in &mut clients {
-            visibility.remove_despawned(remove.entity);
-        }
+        // The entity was despawned and will be removed from the visibility list
+        // during despawn collection. We keep it for now because we need to know
+        // whether replication for the entity was paused.
         return;
     }
 
@@ -212,9 +212,9 @@ fn on_client_remove<F: VisibilityFilter>(
     };
 
     if remove.trigger().new_archetype.is_none() {
-        for (entity, _) in &entities {
-            visibility.remove_despawned(entity);
-        }
+        // The entity was despawned and will be removed from the visibility list
+        // during despawn collection. We keep it for now because we need to know
+        // whether replication for the entity was paused.
         return;
     }
 

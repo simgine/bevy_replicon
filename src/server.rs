@@ -408,6 +408,7 @@ fn prepare_messages(
 
 /// Collects and writes any new entity mappings that happened in this tick.
 fn collect_mappings(
+    despawn_buffer: Res<DespawnBuffer>,
     registry: Res<FilterRegistry>,
     mut serialized: ResMut<SerializedData>,
     entities: Query<(Entity, &Signature), With<Replicated>>,
@@ -426,7 +427,7 @@ fn collect_mappings(
             let Ok((_, mut message, ticks, visibility)) = clients.get_mut(client) else {
                 continue;
             };
-            if should_send_mapping(entity, &registry, &visibility, &ticks) {
+            if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client}`"
                 );
@@ -436,7 +437,7 @@ fn collect_mappings(
             }
         } else {
             for (client, mut message, ticks, visibility) in &mut clients {
-                if should_send_mapping(entity, &registry, &visibility, &ticks) {
+                if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                     trace!("writing mapping `{entity}` to 0x{hash:016x} for client `{client}`");
                     let mapping_range =
                         serialized.write_cached_mapping(&mut mapping_range, entity, hash)?;
@@ -451,13 +452,16 @@ fn collect_mappings(
 
 fn should_send_mapping(
     entity: Entity,
+    despawn_buffer: &DespawnBuffer,
     registry: &FilterRegistry,
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
+    // Since despawns processed later, we need to explicitly check for them.
     if visibility
         .get(entity)
         .hides_entity(registry, ScopeLifetime::AfterFirstVisibility)
+        || despawn_buffer.contains(&entity)
     {
         return false;
     }
@@ -476,18 +480,20 @@ fn collect_despawns(
         &mut Updates,
         &mut ClientTicks,
         &mut PriorityMap,
-        &ClientVisibility,
+        &mut ClientVisibility,
     )>,
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
-        for (client, mut message, mut ticks, mut priority, _) in &mut clients {
-            if ticks.entities.remove(&entity).is_some() {
-                // Write despawn only if the entity was previously sent because
-                // spawn and despawn could happen during the same tick.
+        for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
+            let hidden_lifetime = visibility.get(entity).hidden_entity_lifetime(&registry);
+            if ticks.entities.remove(&entity).is_some() && hidden_lifetime.is_none() {
+                // Write despawn only if the entity is not currently hidden and was
+                // previously sent because spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client}`");
                 message.add_despawn(entity_range.clone());
             }
+            visibility.remove_despawned(entity);
             priority.remove(&entity);
         }
     }
@@ -541,8 +547,17 @@ fn collect_removals(
 
         for &(component_index, fns_id) in remove_ids {
             let mut fns_id_range = None;
-            for (client, mut message, mut ticks, _) in &mut clients {
-                // Only send removals for components that were previously sent.
+            for (client, mut message, mut ticks, visibility) in &mut clients {
+                let hidden_lifetime = visibility
+                    .get(entity)
+                    .hidden_component_lifetime(&filter_registry, component_index);
+                if hidden_lifetime.is_some() {
+                    // Ignore hidden entities.
+                    continue;
+                }
+
+                // Only send removals for components that were previously sent
+                // because insertion and removal could happen during the same tick
                 // If the entity was despawned or lost visibility, it was removed
                 // from ticks earlier during despawn collection.
                 let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {

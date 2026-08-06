@@ -528,15 +528,17 @@ fn hidden_entity() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
-        .spawn((
-            Replicated,
-            EntityVisibility,
-            EntityVisibilityAfterFirst,
-            EntityVisibilityAlwaysPresent,
-            A,
-        ))
+        .spawn((Replicated, EntityVisibility, A))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAfterFirst, A))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAlwaysPresent, A))
         .id();
 
     server_app.update();
@@ -546,7 +548,15 @@ fn hidden_entity() {
 
     server_app
         .world_mut()
-        .entity_mut(server_entity)
+        .entity_mut(server_entity1)
+        .remove::<A>();
+    server_app
+        .world_mut()
+        .entity_mut(server_entity2)
+        .remove::<A>();
+    server_app
+        .world_mut()
+        .entity_mut(server_entity3)
         .remove::<A>();
 
     server_app.update();
@@ -578,15 +588,17 @@ fn hidden_component() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
-        .spawn((
-            Replicated,
-            ComponentVisibility,
-            ComponentVisibilityAfterFirst,
-            ComponentVisibilityAlwaysPresent,
-            A,
-        ))
+        .spawn((Replicated, ComponentVisibility, A))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibilityAfterFirst, A))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibilityAlwaysPresent, A))
         .id();
 
     server_app.update();
@@ -596,7 +608,15 @@ fn hidden_component() {
 
     server_app
         .world_mut()
-        .entity_mut(server_entity)
+        .entity_mut(server_entity1)
+        .remove::<A>();
+    server_app
+        .world_mut()
+        .entity_mut(server_entity2)
+        .remove::<A>();
+    server_app
+        .world_mut()
+        .entity_mut(server_entity3)
         .remove::<A>();
 
     server_app.update();
