@@ -718,14 +718,17 @@ fn hidden_entity() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
-        .spawn((
-            Replicated,
-            EntityVisibility,
-            EntityVisibilityAfterFirst,
-            EntityVisibilityAlwaysPresent,
-        ))
+        .spawn((Replicated, EntityVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAfterFirst))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAlwaysPresent))
         .id();
 
     server_app.update();
@@ -733,7 +736,9 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().entity_mut(server_entity).insert(A);
+    server_app.world_mut().entity_mut(server_entity1).insert(A);
+    server_app.world_mut().entity_mut(server_entity2).insert(A);
+    server_app.world_mut().entity_mut(server_entity3).insert(A);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -766,14 +771,17 @@ fn hidden_component() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
-        .spawn((
-            Replicated,
-            ComponentVisibility,
-            ComponentVisibilityAfterFirst,
-            ComponentVisibilityAlwaysPresent,
-        ))
+        .spawn((Replicated, ComponentVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibilityAfterFirst))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibilityAlwaysPresent))
         .id();
 
     server_app.update();
@@ -781,7 +789,9 @@ fn hidden_component() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().entity_mut(server_entity).insert(A);
+    server_app.world_mut().entity_mut(server_entity1).insert(A);
+    server_app.world_mut().entity_mut(server_entity2).insert(A);
+    server_app.world_mut().entity_mut(server_entity3).insert(A);
 
     server_app.update();
 

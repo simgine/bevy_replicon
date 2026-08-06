@@ -723,7 +723,10 @@ fn collect_changes(
                         continue;
                     }
 
-                    if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
+                    let entity_ticks = client_ticks.entities.get(&entity.id());
+                    let new_for_client = entity_ticks.is_none();
+
+                    if let Some(entity_ticks) = entity_ticks
                         && entity_ticks.components.contains(component_index)
                     {
                         let base_priority = priority_map
@@ -769,7 +772,9 @@ fn collect_changes(
                             };
                             mutations.add_component(component_range);
                         }
-                    } else if hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent) {
+                    } else if hidden_lifetime
+                        .is_none_or(|l| l == ScopeLifetime::AlwaysPresent && new_for_client)
+                    {
                         trace!(
                             "writing `{:?}` insertion for `{}` for client `{client}`",
                             rule.fns_id,
