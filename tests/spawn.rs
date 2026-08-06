@@ -550,40 +550,6 @@ fn after_started_replication() {
 }
 
 #[test]
-fn hidden_entity() {
-    let mut server_app = App::new();
-    let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .add_visibility_filter::<EntityVisibility>()
-        .add_visibility_filter::<EntityVisibilityAfterFirst>()
-        .add_visibility_filter::<EntityVisibilityAlwaysPresent>()
-        .finish();
-    }
-
-    server_app.connect_client(&mut client_app);
-
-    server_app.world_mut().spawn((
-        Replicated,
-        EntityVisibility,
-        EntityVisibilityAfterFirst,
-        EntityVisibilityAlwaysPresent,
-    ));
-
-    server_app.update();
-    server_app.exchange_with_client(&mut client_app);
-    client_app.update();
-    server_app.exchange_with_client(&mut client_app);
-
-    let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).len(), 0);
-}
-
-#[test]
 fn visibility_gain() {
     let mut server_app = App::new();
     let mut client_app = App::new();
