@@ -801,7 +801,7 @@ fn collect_changes(
 
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
-                let has_insertions = updates.changed_entity_added() && hidden_lifetime.is_none();
+                let has_insertions = updates.changed_entity_added();
                 let has_removals = removal_buffer.contains_key(&entity.id());
                 let starts_replication = new_for_client
                     && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
@@ -825,7 +825,7 @@ fn collect_changes(
                     );
                 }
 
-                if starts_replication && !updates.changed_entity_added() {
+                if starts_replication && !has_insertions {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
                     // Force-write new entity even if it doesn't have any components.
