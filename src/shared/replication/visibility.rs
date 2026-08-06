@@ -358,12 +358,20 @@ pub enum ScopeLifetime {
     /// It's not spawned/inserted until it first becomes visible. After
     /// that, it remains present when hidden, but receives changes only while
     /// visible.
+    ///
+    /// When visibility is regained, existing components receive their latest
+    /// state. However, component removals and entity despawns that happen while
+    /// hidden won't be reapplied, so the client may retain stale components
+    /// or entities.
     AfterFirstVisibility,
 
     /// The scope is always present, regardless of visibility.
     ///
     /// It's spawned/inserted regardless of the visibility, but receives changes
     /// only while visible.
+    ///
+    /// As with [`Self::AfterFirstVisibility`], removals and despawns that happen
+    /// while hidden are not reapplied.
     AlwaysPresent,
 }
 
