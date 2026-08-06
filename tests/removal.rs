@@ -565,7 +565,7 @@ fn hidden_entity() {
     assert_eq!(
         messages.drain_sent().len(),
         0,
-        "client shouldn't receive removal for a hidden entity"
+        "client shouldn't receive removals for hidden entities"
     );
 }
 
@@ -625,7 +625,7 @@ fn hidden_component() {
     assert_eq!(
         messages.drain_sent().len(),
         0,
-        "client shouldn't receive removal for a hidden component"
+        "client shouldn't receive removals for hidden components"
     );
 }
 

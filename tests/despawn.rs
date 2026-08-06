@@ -321,7 +321,7 @@ fn hidden_entity() {
     assert_eq!(
         messages.drain_sent().len(),
         0,
-        "client shouldn't receive anything for a hidden entity"
+        "client shouldn't receive despawns for hidden entities"
     );
 }
 
