@@ -356,14 +356,14 @@ pub enum ScopeLifetime {
     /// The scope remains present after becoming visible for the first time.
     ///
     /// It's not spawned/inserted until it first becomes visible. After
-    /// that, it remains present when hidden, but receives updates only while
+    /// that, it remains present when hidden, but receives changes only while
     /// visible.
     AfterFirstVisibility,
 
     /// The scope is always present, regardless of visibility.
     ///
-    /// It's spawned/inserted regardless of the visibility, but receives updates only while
-    /// visible.
+    /// It's spawned/inserted regardless of the visibility, but receives changes
+    /// only while visible.
     AlwaysPresent,
 }
 
