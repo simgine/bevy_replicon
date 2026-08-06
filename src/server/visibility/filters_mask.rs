@@ -58,7 +58,7 @@ impl FiltersMask {
         })
     }
 
-    /// Returns the shortest lifetime that hide the entity.
+    /// Returns the shortest lifetime that hides the entity.
     ///
     /// Returns [`None`] if no filter hides it.
     pub(crate) fn hidden_entity_lifetime(
@@ -83,7 +83,7 @@ impl FiltersMask {
             .map(|bit| registry.scope(bit))
     }
 
-    /// Returns the shortest lifetime that hide the component.
+    /// Returns the shortest lifetime that hides the component.
     ///
     /// Returns [`None`] if no filter hides the component.
     ///
