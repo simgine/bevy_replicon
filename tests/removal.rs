@@ -869,7 +869,7 @@ fn visibility_lose() {
     assert_eq!(
         components.iter(client_app.world()).len(),
         2,
-        "client should receive removal only for the entity \
+        "client should receive removal only for the component \
         with `WhileVisible` lifetime"
     );
 }
