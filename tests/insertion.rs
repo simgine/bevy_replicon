@@ -711,14 +711,24 @@ fn hidden_entity() {
         ))
         .replicate::<A>()
         .add_visibility_filter::<EntityVisibility>()
+        .add_visibility_filter::<EntityVisibilityAfterFirst>()
+        .add_visibility_filter::<EntityVisibilityAlwaysPresent>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
         .spawn((Replicated, EntityVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAfterFirst))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibilityAlwaysPresent))
         .id();
 
     server_app.update();
@@ -726,7 +736,9 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().entity_mut(server_entity).insert(A);
+    server_app.world_mut().entity_mut(server_entity1).insert(A);
+    server_app.world_mut().entity_mut(server_entity2).insert(A);
+    server_app.world_mut().entity_mut(server_entity3).insert(A);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -736,7 +748,7 @@ fn hidden_entity() {
     assert_eq!(
         messages.drain_sent().len(),
         0,
-        "client shouldn't receive insertion for a hidden entity"
+        "client shouldn't receive insertions for hidden entities"
     );
 }
 
@@ -752,14 +764,24 @@ fn hidden_component() {
         ))
         .replicate::<A>()
         .add_visibility_filter::<ComponentVisibility>()
+        .add_visibility_filter::<ComponentVisibilityAfterFirst>()
+        .add_visibility_filter::<ComponentVisibilityAlwaysPresent>()
         .finish();
     }
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity = server_app
+    let server_entity1 = server_app
         .world_mut()
         .spawn((Replicated, ComponentVisibility))
+        .id();
+    let server_entity2 = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibilityAfterFirst))
+        .id();
+    let server_entity3 = server_app
+        .world_mut()
+        .spawn((Replicated, ComponentVisibilityAlwaysPresent))
         .id();
 
     server_app.update();
@@ -767,7 +789,9 @@ fn hidden_component() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
-    server_app.world_mut().entity_mut(server_entity).insert(A);
+    server_app.world_mut().entity_mut(server_entity1).insert(A);
+    server_app.world_mut().entity_mut(server_entity2).insert(A);
+    server_app.world_mut().entity_mut(server_entity3).insert(A);
 
     server_app.update();
 
@@ -775,7 +799,7 @@ fn hidden_component() {
     assert_eq!(
         messages.drain_sent().len(),
         0,
-        "client shouldn't receive insertion for a hidden component"
+        "client shouldn't receive insertions for hidden components"
     );
 }
 
@@ -825,6 +849,8 @@ fn visibility_gain() {
         ))
         .replicate::<A>()
         .add_visibility_filter::<ComponentVisibility>()
+        .add_visibility_filter::<ComponentVisibilityAfterFirst>()
+        .add_visibility_filter::<ComponentVisibilityAlwaysPresent>()
         .finish();
     }
 
@@ -833,6 +859,12 @@ fn visibility_gain() {
     server_app
         .world_mut()
         .spawn((Replicated, A, ComponentVisibility));
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, ComponentVisibilityAfterFirst));
+    server_app
+        .world_mut()
+        .spawn((Replicated, A, ComponentVisibilityAlwaysPresent));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -840,19 +872,24 @@ fn visibility_gain() {
     server_app.exchange_with_client(&mut client_app);
 
     let mut components = client_app.world_mut().query::<&A>();
-    assert_eq!(components.iter(client_app.world()).len(), 0);
+    assert_eq!(
+        components.iter(client_app.world()).len(),
+        1,
+        "client should receive the entity with `AlwaysPresent` lifetime"
+    );
 
     let client = **client_app.world().resource::<TestClientEntity>();
-    server_app
-        .world_mut()
-        .entity_mut(client)
-        .insert(ComponentVisibility);
+    server_app.world_mut().entity_mut(client).insert((
+        ComponentVisibility,
+        ComponentVisibilityAfterFirst,
+        ComponentVisibilityAlwaysPresent,
+    ));
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
 
-    assert_eq!(components.iter(client_app.world()).len(), 1);
+    assert_eq!(components.iter(client_app.world()).len(), 3);
 }
 
 #[derive(Component, Deserialize, Serialize)]
@@ -900,11 +937,67 @@ impl VisibilityFilter for EntityVisibility {
 
 #[derive(Component)]
 #[component(immutable)]
+struct EntityVisibilityAfterFirst;
+
+impl VisibilityFilter for EntityVisibilityAfterFirst {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct EntityVisibilityAlwaysPresent;
+
+impl VisibilityFilter for EntityVisibilityAlwaysPresent {
+    type ClientComponent = Self;
+    type Scope = Entity;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
 struct ComponentVisibility;
 
 impl VisibilityFilter for ComponentVisibility {
     type ClientComponent = Self;
     type Scope = SingleComponent<A>;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibilityAfterFirst;
+
+impl VisibilityFilter for ComponentVisibilityAfterFirst {
+    type ClientComponent = Self;
+    type Scope = SingleComponent<A>;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
+
+    fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
+        component.is_some()
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct ComponentVisibilityAlwaysPresent;
+
+impl VisibilityFilter for ComponentVisibilityAlwaysPresent {
+    type ClientComponent = Self;
+    type Scope = SingleComponent<A>;
+    const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
 
     fn is_visible(&self, _client: Entity, component: Option<&Self::ClientComponent>) -> bool {
         component.is_some()

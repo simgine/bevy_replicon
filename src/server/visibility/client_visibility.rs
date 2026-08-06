@@ -61,6 +61,7 @@ impl ClientVisibility {
     ```
     use bevy::prelude::*;
     use bevy_replicon::{
+        prelude::*,
         server::visibility::{
             client_visibility::ClientVisibility, filters_mask::FilterBit, registry::FilterRegistry,
         },
@@ -108,7 +109,7 @@ impl ClientVisibility {
         fn from_world(world: &mut World) -> Self {
             let bit = world.resource_scope(|world, mut filter_registry: Mut<FilterRegistry>| {
                 world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
-                    filter_registry.register_scope::<(Health, Stats)>(world, &mut registry)
+                    filter_registry.register_scope::<(Health, Stats)>(world, &mut registry, ScopeLifetime::WhileVisible)
                 })
             });
             Self(bit)
@@ -131,7 +132,7 @@ impl ClientVisibility {
         fn from_world(world: &mut World) -> Self {
             let bit = world.resource_scope(|world, mut filter_registry: Mut<FilterRegistry>| {
                 world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
-                    filter_registry.register_scope::<Entity>(world, &mut registry)
+                    filter_registry.register_scope::<Entity>(world, &mut registry, ScopeLifetime::WhileVisible)
                 })
             });
             Self(bit)

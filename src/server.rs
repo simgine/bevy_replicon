@@ -408,6 +408,7 @@ fn prepare_messages(
 
 /// Collects and writes any new entity mappings that happened in this tick.
 fn collect_mappings(
+    despawn_buffer: Res<DespawnBuffer>,
     registry: Res<FilterRegistry>,
     mut serialized: ResMut<SerializedData>,
     entities: Query<(Entity, &Signature), With<Replicated>>,
@@ -426,7 +427,7 @@ fn collect_mappings(
             let Ok((_, mut message, ticks, visibility)) = clients.get_mut(client) else {
                 continue;
             };
-            if should_send_mapping(entity, &registry, &visibility, &ticks) {
+            if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                 trace!(
                     "writing mapping `{entity}` to 0x{hash:016x} dedicated for client `{client}`"
                 );
@@ -436,7 +437,7 @@ fn collect_mappings(
             }
         } else {
             for (client, mut message, ticks, visibility) in &mut clients {
-                if should_send_mapping(entity, &registry, &visibility, &ticks) {
+                if should_send_mapping(entity, &despawn_buffer, &registry, &visibility, &ticks) {
                     trace!("writing mapping `{entity}` to 0x{hash:016x} for client `{client}`");
                     let mapping_range =
                         serialized.write_cached_mapping(&mut mapping_range, entity, hash)?;
@@ -451,11 +452,17 @@ fn collect_mappings(
 
 fn should_send_mapping(
     entity: Entity,
+    despawn_buffer: &DespawnBuffer,
     registry: &FilterRegistry,
     visibility: &ClientVisibility,
     ticks: &ClientTicks,
 ) -> bool {
-    if visibility.get(entity).is_hidden(registry) {
+    // Since despawns processed later, we need to explicitly check for them.
+    if visibility
+        .get(entity)
+        .hides_entity(registry, ScopeLifetime::AfterFirstVisibility)
+        || despawn_buffer.contains(&entity)
+    {
         return false;
     }
 
@@ -473,18 +480,20 @@ fn collect_despawns(
         &mut Updates,
         &mut ClientTicks,
         &mut PriorityMap,
-        &ClientVisibility,
+        &mut ClientVisibility,
     )>,
 ) -> Result<()> {
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
-        for (client, mut message, mut ticks, mut priority, _) in &mut clients {
-            if ticks.entities.remove(&entity).is_some() {
-                // Write despawn only if the entity was previously sent because
-                // spawn and despawn could happen during the same tick.
+        for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
+            let hidden_lifetime = visibility.get(entity).hidden_entity_lifetime(&registry);
+            if ticks.entities.remove(&entity).is_some() && hidden_lifetime.is_none() {
+                // Write despawn only if the entity is not currently hidden and was
+                // previously sent because spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client}`");
                 message.add_despawn(entity_range.clone());
             }
+            visibility.remove_despawned(entity);
             priority.remove(&entity);
         }
     }
@@ -492,7 +501,7 @@ fn collect_despawns(
     for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
-            if !filter_mask.is_hidden(&registry) {
+            if !filter_mask.hides_entity(&registry, ScopeLifetime::WhileVisible) {
                 continue;
             }
 
@@ -538,8 +547,17 @@ fn collect_removals(
 
         for &(component_index, fns_id) in remove_ids {
             let mut fns_id_range = None;
-            for (client, mut message, mut ticks, _) in &mut clients {
-                // Only send removals for components that were previously sent.
+            for (client, mut message, mut ticks, visibility) in &mut clients {
+                let hidden_lifetime = visibility
+                    .get(entity)
+                    .hidden_component_lifetime(&filter_registry, component_index);
+                if hidden_lifetime.is_some() {
+                    // Ignore hidden entities.
+                    continue;
+                }
+
+                // Only send removals for components that were previously sent
+                // because insertion and removal could happen during the same tick
                 // If the entity was despawned or lost visibility, it was removed
                 // from ticks earlier during despawn collection.
                 let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
@@ -563,7 +581,7 @@ fn collect_removals(
 
     for (client, mut message, mut ticks, mut visibility) in &mut clients {
         for (entity, filter_mask) in visibility.drain_lost() {
-            if filter_mask.is_hidden(&filter_registry) {
+            if filter_mask.hides_entity(&filter_registry, ScopeLifetime::WhileVisible) {
                 // Was processed earlier during collecting despawns.
                 continue;
             }
@@ -613,7 +631,7 @@ fn collect_removals(
                 Ok(())
             };
 
-            for scope in filter_mask.scopes(&filter_registry) {
+            for scope in filter_mask.scopes(&filter_registry, ScopeLifetime::WhileVisible) {
                 match scope {
                     VisibilityScope::Entity => {
                         unreachable!("entity filters are processed during despawn collection")
@@ -713,14 +731,17 @@ fn collect_changes(
                 for (client, mut updates, mut mutations, client_ticks, priority_map, visibility) in
                     &mut clients
                 {
-                    if visibility
+                    let hidden_lifetime = visibility
                         .get(entity.id())
-                        .is_component_hidden(&filter_registry, component_index)
-                    {
+                        .hidden_component_lifetime(&filter_registry, component_index);
+                    if hidden_lifetime == Some(ScopeLifetime::WhileVisible) {
                         continue;
                     }
 
-                    if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
+                    let entity_ticks = client_ticks.entities.get(&entity.id());
+                    let new_for_client = entity_ticks.is_none();
+
+                    if let Some(entity_ticks) = entity_ticks
                         && entity_ticks.components.contains(component_index)
                     {
                         let base_priority = priority_map
@@ -730,7 +751,8 @@ fn collect_changes(
                             .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
-                        if rule.mode != ReplicationMode::Once
+                        if hidden_lifetime.is_none()
+                            && rule.mode != ReplicationMode::Once
                             && base_priority * tick_diff as f32 >= 1.0
                             && ticks.is_changed(entity_ticks.system_tick, **change_tick)
                         {
@@ -765,7 +787,9 @@ fn collect_changes(
                             };
                             mutations.add_component(component_range);
                         }
-                    } else {
+                    } else if hidden_lifetime
+                        .is_none_or(|l| l == ScopeLifetime::AlwaysPresent && new_for_client)
+                    {
                         trace!(
                             "writing `{:?}` insertion for `{}` for client `{client}`",
                             rule.fns_id,
@@ -788,16 +812,21 @@ fn collect_changes(
             }
 
             for (client, mut updates, mut mutations, mut ticks, _, visibility) in &mut clients {
-                if visibility.get(entity.id()).is_hidden(&filter_registry) {
+                let hidden_lifetime = visibility
+                    .get(entity.id())
+                    .hidden_entity_lifetime(&filter_registry);
+                if hidden_lifetime == Some(ScopeLifetime::WhileVisible) {
                     continue;
                 }
 
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
-                if new_for_client
-                    || updates.changed_entity_added()
-                    || removal_buffer.contains_key(&entity.id())
-                {
+                let has_insertions = updates.changed_entity_added();
+                let has_removals = removal_buffer.contains_key(&entity.id());
+                let starts_replication = new_for_client
+                    && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
+
+                if starts_replication || has_insertions || has_removals {
                     // If there is any insertion, removal, or it's a new entity for a client, include all mutations
                     // into update message and bump the last acknowledged tick to keep entity updates atomic.
                     if mutations.entity_added() {
@@ -816,7 +845,7 @@ fn collect_changes(
                     );
                 }
 
-                if new_for_client && !updates.changed_entity_added() {
+                if starts_replication && !has_insertions {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
                     // Force-write new entity even if it doesn't have any components.

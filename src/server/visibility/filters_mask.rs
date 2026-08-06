@@ -3,7 +3,10 @@ use core::iter;
 use bevy::prelude::*;
 
 use super::registry::FilterRegistry;
-use crate::shared::replication::{registry::ComponentIndex, visibility::VisibilityScope};
+use crate::{
+    prelude::*,
+    shared::replication::{registry::ComponentIndex, visibility::VisibilityScope},
+};
 
 /// Bitset of visibility filters for an entity for a client.
 ///
@@ -42,33 +45,68 @@ impl FiltersMask {
         })
     }
 
-    /// Returns `true` if the entity is hidden by any of the filters.
-    pub(crate) fn is_hidden(&self, registry: &FilterRegistry) -> bool {
-        self.iter()
-            .any(|bit| matches!(registry.scope(bit), VisibilityScope::Entity))
+    /// Returns `true` if the entity is hidden by any of the filters
+    /// with at most `max_lifetime`.
+    pub(crate) fn hides_entity(
+        &self,
+        registry: &FilterRegistry,
+        max_lifetime: ScopeLifetime,
+    ) -> bool {
+        self.iter().any(|bit| {
+            matches!(registry.scope(bit), VisibilityScope::Entity)
+                && registry.lifetime(bit) <= max_lifetime
+        })
     }
 
-    /// Returns an iterator over the scope of each set filter.
+    /// Returns the shortest lifetime that hides the entity.
+    ///
+    /// Returns [`None`] if no filter hides it.
+    pub(crate) fn hidden_entity_lifetime(
+        &self,
+        registry: &FilterRegistry,
+    ) -> Option<ScopeLifetime> {
+        self.iter()
+            .filter(|bit| matches!(registry.scope(*bit), VisibilityScope::Entity))
+            .map(|bit| registry.lifetime(bit))
+            .min()
+    }
+
+    /// Returns an iterator over scopes hidden by filters
+    /// with at most `max_lifetime`.
     pub(crate) fn scopes(
         self,
         registry: &FilterRegistry,
+        max_lifetime: ScopeLifetime,
     ) -> impl Iterator<Item = &VisibilityScope> {
-        self.iter().map(|bit| registry.scope(bit))
+        self.iter()
+            .filter(move |&bit| registry.lifetime(bit) <= max_lifetime)
+            .map(|bit| registry.scope(bit))
     }
 
-    /// Returns `true` if the given component is hidden by any of the filters.
+    /// Returns the shortest lifetime that hides the component.
+    ///
+    /// Returns [`None`] if no filter hides the component.
     ///
     /// Entity filters are treated as hiding all components.
-    pub(crate) fn is_component_hidden(
+    pub(crate) fn hidden_component_lifetime(
         &self,
         registry: &FilterRegistry,
         index: ComponentIndex,
-    ) -> bool {
-        self.iter().any(|bit| match registry.scope(bit) {
-            VisibilityScope::Entity => true,
-            VisibilityScope::Components(component_mask) => component_mask.contains(index),
-            VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
-        })
+    ) -> Option<ScopeLifetime> {
+        self.iter()
+            .filter_map(|bit| {
+                let is_hidden = match registry.scope(bit) {
+                    VisibilityScope::Entity => true,
+                    VisibilityScope::Components(component_mask) => component_mask.contains(index),
+                    VisibilityScope::AllExcept(component_mask) => !component_mask.contains(index),
+                };
+                if is_hidden {
+                    Some(registry.lifetime(bit))
+                } else {
+                    None
+                }
+            })
+            .max_by(|a, b| a.cmp(b).reverse())
     }
 }
 

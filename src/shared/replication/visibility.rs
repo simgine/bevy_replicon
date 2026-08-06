@@ -141,6 +141,73 @@ pub trait VisibilityFilter: Component<Mutability = Immutable> {
     type Scope: FilterScope;
 
     /**
+    Controls when a [`Self::Scope`] is present on a client.
+
+    - For an entity scope, this describes when the entity is spawned or despawned.
+    - For a component scope, it describes when the components are inserted or removed.
+
+    Changes are replicated only while the scope is visible.
+
+    # Examples
+
+    Keep a previously discovered entity on the client when it leaves
+    the client's field of view.
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component)]
+    #[component(immutable)]
+    struct VisibilityPosition(Vec2);
+
+    impl VisibilityFilter for VisibilityPosition {
+        type ClientComponent = ClientView;
+        type Scope = Entity;
+        const LIFETIME: ScopeLifetime = ScopeLifetime::AfterFirstVisibility;
+
+        fn is_visible(
+            &self,
+            _client: Entity,
+            component: Option<&Self::ClientComponent>,
+        ) -> bool {
+            component.is_some_and(|view| {
+                self.0.distance_squared(view.position) <= view.radius.powi(2)
+            })
+        }
+    }
+
+    #[derive(Component)]
+    #[component(immutable)]
+    struct ClientView {
+        position: Vec2,
+        radius: f32,
+    }
+    ```
+
+    Replicate an entity to all clients except its owner.
+    The owner receives only the initial state, but simulates on its own.
+
+    ```
+    # use bevy::prelude::*;
+    # use bevy_replicon::prelude::*;
+    #[derive(Component)]
+    #[component(immutable)]
+    struct OwnedBy(Entity);
+
+    impl VisibilityFilter for OwnedBy {
+        type ClientComponent = AuthorizedClient;
+        type Scope = Entity;
+        const LIFETIME: ScopeLifetime = ScopeLifetime::AlwaysPresent;
+
+        fn is_visible(&self, client: Entity, _: Option<&Self::ClientComponent>) -> bool {
+            self.0 != client
+        }
+    }
+    ```
+     */
+    const LIFETIME: ScopeLifetime = ScopeLifetime::WhileVisible;
+
+    /**
     Returns `true` if a client should see [`Self::Scope`] for an entity with this component
     based on [`Self::ClientComponent`] .
 
@@ -269,6 +336,43 @@ pub enum VisibilityScope {
     Components(ComponentMask),
     /// All components on the entity, except these.
     AllExcept(ComponentMask),
+}
+
+/// Controls when a [`VisibilityScope`] is present on a client.
+///
+/// See also [`VisibilityFilter::Scope`] and
+/// [`FilterRegistry::register_scope`](crate::server::visibility::registry::FilterRegistry::register_scope).
+#[derive(PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
+pub enum ScopeLifetime {
+    /// Inserted/spawned when it becomes visible and despawns when loses
+    /// visibility.
+    ///
+    /// The scope is present only while it is visible.
+    ///
+    /// It's spawned/inserted when it becomes visible, and despawned/removed
+    /// when it becomes hidden.
+    WhileVisible,
+
+    /// The scope remains present after becoming visible for the first time.
+    ///
+    /// It's not spawned/inserted until it first becomes visible. After
+    /// that, it remains present when hidden, but receives changes only while
+    /// visible.
+    ///
+    /// When visibility is regained, existing components receive their latest
+    /// state. However, component removals and entity despawns that happen while
+    /// hidden won't be reapplied, so the client may retain stale components
+    /// or entities.
+    AfterFirstVisibility,
+
+    /// The scope is always present, regardless of visibility.
+    ///
+    /// It's spawned/inserted regardless of the visibility, but receives changes
+    /// only while visible.
+    ///
+    /// As with [`Self::AfterFirstVisibility`], removals and despawns that happen
+    /// while hidden are not reapplied.
+    AlwaysPresent,
 }
 
 /// Associates the type with a visibility scope.
