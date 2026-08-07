@@ -33,9 +33,6 @@ use xxhash_rust::xxh3::Xxh3Default;
 #[derive(Component, Reflect, Debug, Clone, Copy)]
 #[component(on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
-    /// Hash supplied directly by the user.
-    precomputed_hash: Option<u64>,
-
     /// User-defined value added to the hash.
     salt: Option<u64>,
 
@@ -46,10 +43,18 @@ pub struct Signature {
     /// Relevant client.
     client: Option<Entity>,
 
-    /// Resulting hash.
-    ///
+    /// Precomputed or resolved hash.
+    hash: SignatureHash,
+}
+
+#[derive(Reflect, Debug, Clone, Copy)]
+enum SignatureHash {
+    /// Needs to be calculated when added to an entity.
+    Unresolved,
+    /// Supplied by the user and should not be calculated.
+    Precomputed(u64),
     /// Calculated when added to an entity.
-    hash: u64,
+    Resolved(u64),
 }
 
 impl Signature {
@@ -134,11 +139,10 @@ impl Signature {
     #[must_use]
     pub fn of<C: Component + Hash>() -> Self {
         Self {
-            precomputed_hash: None,
             salt: None,
             fns: &[hash::<C>],
             client: None,
-            hash: 0,
+            hash: SignatureHash::Unresolved,
         }
     }
 
@@ -228,11 +232,10 @@ impl Signature {
     #[must_use]
     pub fn of_n<S: SignatureComponents>() -> Self {
         Self {
-            precomputed_hash: None,
             salt: None,
             fns: S::HASH_FNS,
             client: None,
-            hash: 0,
+            hash: SignatureHash::Unresolved,
         }
     }
 
@@ -243,11 +246,10 @@ impl Signature {
     #[must_use]
     pub fn from_precomputed_hash(hash: u64) -> Self {
         Self {
-            precomputed_hash: Some(hash),
             salt: None,
             fns: &[],
             client: None,
-            hash: 0,
+            hash: SignatureHash::Precomputed(hash),
         }
     }
 
@@ -262,8 +264,8 @@ impl Signature {
         let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         value.hash(&mut hasher);
 
-        self.precomputed_hash = None;
         self.salt = Some(hasher.finish());
+        self.hash = SignatureHash::Unresolved;
         self
     }
 
@@ -281,11 +283,16 @@ impl Signature {
     }
 
     pub(crate) fn hash(&self) -> u64 {
-        self.hash
+        match self.hash {
+            SignatureHash::Precomputed(hash) | SignatureHash::Resolved(hash) => hash,
+            SignatureHash::Unresolved => {
+                unreachable!("signature hash should be resolved on insertion")
+            }
+        }
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
-        if let Some(hash) = self.precomputed_hash {
+        if let SignatureHash::Precomputed(hash) = self.hash {
             return hash;
         }
 
@@ -314,11 +321,10 @@ impl<T: Hash> From<T> for Signature {
         value.hash(&mut hasher);
 
         Self {
-            precomputed_hash: None,
             salt: Some(hasher.finish()),
             fns: &[],
             client: None,
-            hash: 0,
+            hash: SignatureHash::Unresolved,
         }
     }
 }
@@ -330,7 +336,7 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
 
     // Re-borrow due to borrow-checker.
     let mut signature = entity.get_mut::<Signature>().unwrap();
-    signature.hash = hash;
+    signature.hash = SignatureHash::Resolved(hash);
 
     if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
         map.insert(ctx.entity, hash);
@@ -445,6 +451,22 @@ mod tests {
             world.entity(entity).get::<Signature>().unwrap().hash(),
             HASH
         );
+    }
+
+    #[test]
+    fn resolved_hash_is_recomputed() {
+        let mut world = World::new();
+        let entity1 = world.spawn(C(true)).id();
+        world.entity_mut(entity1).insert(Signature::of::<C>());
+
+        let resolved_signature = *world.entity(entity1).get::<Signature>().unwrap();
+        let hash1 = resolved_signature.hash();
+
+        let entity2 = world.spawn(C(false)).id();
+        world.entity_mut(entity2).insert(resolved_signature);
+        let hash2 = world.entity(entity2).get::<Signature>().unwrap().hash();
+
+        assert_ne!(hash1, hash2);
     }
 
     #[test]
