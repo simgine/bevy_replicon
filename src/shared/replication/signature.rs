@@ -19,19 +19,23 @@ use xxhash_rust::xxh3::Xxh3Default;
 /// If there is no mapping, it spawns a new entity and creates a new mapping to it.
 ///
 /// To re-use a previously spawned entity on the client, insert this component on both
-/// server and client. On insertion it will calculate a hash and on replication client
-/// will try to match. If the hash matches, the replication will continue to previously
-/// spawned entity.
+/// server and client. On insertion it will calculate a hash or use a precomputed one,
+/// and on replication client will try to match. If the hash matches, the replication
+/// will continue to previously spawned entity.
 ///
-/// The hash can be calculated from components on the entity, a user-defined struct, or both.
-/// The user needs to use something that is unique for each entity, but identical for the
-/// same entity on both client and server.
+/// The hash can be calculated from components on the entity, a user-defined struct, or both,
+/// or it can be provided directly via [`Self::from_precomputed_hash`]. The user needs to use
+/// something that is unique for each entity, but identical for the same entity on both client
+/// and server.
 ///
 /// Signatures can also be relevant only to a specific client. In this case, the signature
 /// will be sent only to that client.
 #[derive(Component, Reflect, Debug, Clone, Copy)]
 #[component(on_add = register_hash, on_remove = unregister_hash)]
 pub struct Signature {
+    /// Hash supplied directly by the user.
+    precomputed_hash: Option<u64>,
+
     /// User-defined value added to the hash.
     salt: Option<u64>,
 
@@ -130,6 +134,7 @@ impl Signature {
     #[must_use]
     pub fn of<C: Component + Hash>() -> Self {
         Self {
+            precomputed_hash: None,
             salt: None,
             fns: &[hash::<C>],
             client: None,
@@ -223,8 +228,24 @@ impl Signature {
     #[must_use]
     pub fn of_n<S: SignatureComponents>() -> Self {
         Self {
+            precomputed_hash: None,
             salt: None,
             fns: S::HASH_FNS,
+            client: None,
+            hash: 0,
+        }
+    }
+
+    /// Creates a new instance with a precomputed hash.
+    ///
+    /// The provided hash is used directly without hashing any values or components.
+    /// Calling [`Self::with_salt`] afterward replaces it with a calculated hash.
+    #[must_use]
+    pub fn from_precomputed_hash(hash: u64) -> Self {
+        Self {
+            precomputed_hash: Some(hash),
+            salt: None,
+            fns: &[],
             client: None,
             hash: 0,
         }
@@ -241,6 +262,7 @@ impl Signature {
         let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         value.hash(&mut hasher);
 
+        self.precomputed_hash = None;
         self.salt = Some(hasher.finish());
         self
     }
@@ -263,6 +285,10 @@ impl Signature {
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
+        if let Some(hash) = self.precomputed_hash {
+            return hash;
+        }
+
         let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         if let Some(salt) = self.salt {
             salt.hash(&mut hasher);
@@ -288,6 +314,7 @@ impl<T: Hash> From<T> for Signature {
         value.hash(&mut hasher);
 
         Self {
+            precomputed_hash: None,
             salt: Some(hasher.finish()),
             fns: &[],
             client: None,
@@ -405,6 +432,19 @@ mod tests {
     fn no_panic_without_map() {
         let mut world = World::new();
         world.spawn(Signature::from(0)).despawn();
+    }
+
+    #[test]
+    fn precomputed_hash() {
+        const HASH: u64 = 12;
+
+        let mut world = World::new();
+        let entity = world.spawn(Signature::from_precomputed_hash(HASH)).id();
+
+        assert_eq!(
+            world.entity(entity).get::<Signature>().unwrap().hash(),
+            HASH
+        );
     }
 
     #[test]
