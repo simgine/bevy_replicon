@@ -276,12 +276,8 @@ impl Signature {
     }
 
     pub(crate) fn hash(&self) -> u64 {
-        match self.hash {
-            Some(hash) => hash,
-            None => {
-                unreachable!("signature hash should be resolved on insertion")
-            }
-        }
+        self.hash
+            .expect("signature hash is only available after insertion into an entity")
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
