@@ -27,6 +27,8 @@ use xxhash_rust::xxh3::Xxh3Default;
 /// The user needs to use something that is unique for each entity, but identical for the
 /// same entity on both client and server.
 ///
+/// You can also provide the hash yourself via [`Self::from_hash`].
+///
 /// Signatures can also be relevant only to a specific client. In this case, the signature
 /// will be sent only to that client.
 #[derive(Component, Reflect, Debug, Clone, Copy)]
@@ -44,8 +46,8 @@ pub struct Signature {
 
     /// Resulting hash.
     ///
-    /// Calculated when added to an entity.
-    hash: u64,
+    /// Calculated when added to an entity or set directly via [`Self::from_hash`].
+    hash: Option<u64>,
 }
 
 impl Signature {
@@ -133,7 +135,7 @@ impl Signature {
             salt: None,
             fns: &[hash::<C>],
             client: None,
-            hash: 0,
+            hash: None,
         }
     }
 
@@ -226,7 +228,21 @@ impl Signature {
             salt: None,
             fns: S::HASH_FNS,
             client: None,
-            hash: 0,
+            hash: None,
+        }
+    }
+
+    /// Creates a new instance with a precomputed hash.
+    ///
+    /// The provided hash is used directly without hashing any values or components.
+    /// Calling [`Self::with_salt`] afterward replaces it with a calculated hash.
+    #[must_use]
+    pub fn from_hash(hash: u64) -> Self {
+        Self {
+            salt: None,
+            fns: &[],
+            client: None,
+            hash: Some(hash),
         }
     }
 
@@ -242,6 +258,7 @@ impl Signature {
         value.hash(&mut hasher);
 
         self.salt = Some(hasher.finish());
+        self.hash = None;
         self
     }
 
@@ -260,9 +277,14 @@ impl Signature {
 
     pub(crate) fn hash(&self) -> u64 {
         self.hash
+            .expect("signature hash is only available after insertion into an entity")
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
+        if let Some(hash) = self.hash {
+            return hash;
+        }
+
         let mut hasher = DeterministicHasher::<Xxh3Default>::default();
         if let Some(salt) = self.salt {
             salt.hash(&mut hasher);
@@ -291,7 +313,7 @@ impl<T: Hash> From<T> for Signature {
             salt: Some(hasher.finish()),
             fns: &[],
             client: None,
-            hash: 0,
+            hash: None,
         }
     }
 }
@@ -303,7 +325,7 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
 
     // Re-borrow due to borrow-checker.
     let mut signature = entity.get_mut::<Signature>().unwrap();
-    signature.hash = hash;
+    signature.hash = Some(hash);
 
     if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
         map.insert(ctx.entity, hash);
@@ -405,6 +427,19 @@ mod tests {
     fn no_panic_without_map() {
         let mut world = World::new();
         world.spawn(Signature::from(0)).despawn();
+    }
+
+    #[test]
+    fn from_hash() {
+        const HASH: u64 = 12;
+
+        let mut world = World::new();
+        let entity = world.spawn(Signature::from_hash(HASH)).id();
+
+        assert_eq!(
+            world.entity(entity).get::<Signature>().unwrap().hash(),
+            HASH
+        );
     }
 
     #[test]
