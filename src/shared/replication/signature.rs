@@ -24,7 +24,7 @@ use xxhash_rust::xxh3::Xxh3Default;
 /// will continue to previously spawned entity.
 ///
 /// The hash can be calculated from components on the entity, a user-defined struct, or both,
-/// or it can be provided directly via [`Self::from_precomputed_hash`]. The user needs to use
+/// or it can be provided directly via [`Self::from_hash`]. The user needs to use
 /// something that is unique for each entity, but identical for the same entity on both client
 /// and server.
 ///
@@ -234,7 +234,7 @@ impl Signature {
     /// The provided hash is used directly without hashing any values or components.
     /// Calling [`Self::with_salt`] afterward replaces it with a calculated hash.
     #[must_use]
-    pub fn from_precomputed_hash(hash: u64) -> Self {
+    pub fn from_hash(hash: u64) -> Self {
         Self {
             salt: None,
             fns: &[],
@@ -431,11 +431,11 @@ mod tests {
     }
 
     #[test]
-    fn precomputed_hash() {
+    fn from_hash() {
         const HASH: u64 = 12;
 
         let mut world = World::new();
-        let entity = world.spawn(Signature::from_precomputed_hash(HASH)).id();
+        let entity = world.spawn(Signature::from_hash(HASH)).id();
 
         assert_eq!(
             world.entity(entity).get::<Signature>().unwrap().hash(),

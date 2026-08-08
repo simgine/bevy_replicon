@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Signature::from_precomputed_hash` to create a signature from a hash without hashing it again.
+- `Signature::from_hash` to create a signature from a hash without hashing it again.
 - `VisibilityFilter::LIFETIME` to control when a visibility scope is present on a client. You can now avoid removing scopes when visibility is lost or replicate their initial state even when they are not visible.
 - `ReplicationUserdata` and `UserdataReceived` to attach custom data to replication messages.
 - `DiffIndex::wrapping_cmp` to compare indices.
