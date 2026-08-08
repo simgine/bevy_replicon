@@ -44,7 +44,9 @@ pub struct Signature {
     /// Relevant client.
     client: Option<Entity>,
 
-    /// Precomputed or resolved hash.
+    /// Resulting hash.
+    ///
+    /// Calculated when added to an entity or set directly via [`Self::from_hash`].
     hash: Option<u64>,
 }
 
