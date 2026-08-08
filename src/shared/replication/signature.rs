@@ -19,14 +19,15 @@ use xxhash_rust::xxh3::Xxh3Default;
 /// If there is no mapping, it spawns a new entity and creates a new mapping to it.
 ///
 /// To re-use a previously spawned entity on the client, insert this component on both
-/// server and client. On insertion it will calculate a hash or use a precomputed one,
-/// and on replication client will try to match. If the hash matches, the replication
-/// will continue to previously spawned entity.
+/// server and client. On insertion it will calculate a hash and on replication client
+/// will try to match. If the hash matches, the replication will continue to previously
+/// spawned entity.
 ///
-/// The hash can be calculated from components on the entity, a user-defined struct, or both,
-/// or it can be provided directly via [`Self::from_hash`]. The user needs to use
-/// something that is unique for each entity, but identical for the same entity on both client
-/// and server.
+/// The hash can be calculated from components on the entity, a user-defined struct, or both.
+/// The user needs to use something that is unique for each entity, but identical for the
+/// same entity on both client and server.
+///
+/// You can also provide the hash yourself via [`Self::from_hash`].
 ///
 /// Signatures can also be relevant only to a specific client. In this case, the signature
 /// will be sent only to that client.
