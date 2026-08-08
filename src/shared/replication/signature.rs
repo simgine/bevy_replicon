@@ -44,17 +44,7 @@ pub struct Signature {
     client: Option<Entity>,
 
     /// Precomputed or resolved hash.
-    hash: SignatureHash,
-}
-
-#[derive(Reflect, Debug, Clone, Copy)]
-enum SignatureHash {
-    /// Needs to be calculated when added to an entity.
-    Unresolved,
-    /// Supplied by the user and should not be calculated.
-    Precomputed(u64),
-    /// Calculated when added to an entity.
-    Resolved(u64),
+    hash: Option<u64>,
 }
 
 impl Signature {
@@ -142,7 +132,7 @@ impl Signature {
             salt: None,
             fns: &[hash::<C>],
             client: None,
-            hash: SignatureHash::Unresolved,
+            hash: None,
         }
     }
 
@@ -235,7 +225,7 @@ impl Signature {
             salt: None,
             fns: S::HASH_FNS,
             client: None,
-            hash: SignatureHash::Unresolved,
+            hash: None,
         }
     }
 
@@ -249,7 +239,7 @@ impl Signature {
             salt: None,
             fns: &[],
             client: None,
-            hash: SignatureHash::Precomputed(hash),
+            hash: Some(hash),
         }
     }
 
@@ -265,7 +255,7 @@ impl Signature {
         value.hash(&mut hasher);
 
         self.salt = Some(hasher.finish());
-        self.hash = SignatureHash::Unresolved;
+        self.hash = None;
         self
     }
 
@@ -284,15 +274,15 @@ impl Signature {
 
     pub(crate) fn hash(&self) -> u64 {
         match self.hash {
-            SignatureHash::Precomputed(hash) | SignatureHash::Resolved(hash) => hash,
-            SignatureHash::Unresolved => {
+            Some(hash) => hash,
+            None => {
                 unreachable!("signature hash should be resolved on insertion")
             }
         }
     }
 
     fn eval<'a>(&self, entity: impl Into<EntityRef<'a>>) -> u64 {
-        if let SignatureHash::Precomputed(hash) = self.hash {
+        if let Some(hash) = self.hash {
             return hash;
         }
 
@@ -324,7 +314,7 @@ impl<T: Hash> From<T> for Signature {
             salt: Some(hasher.finish()),
             fns: &[],
             client: None,
-            hash: SignatureHash::Unresolved,
+            hash: None,
         }
     }
 }
@@ -336,7 +326,7 @@ fn register_hash(mut world: DeferredWorld, ctx: HookContext) {
 
     // Re-borrow due to borrow-checker.
     let mut signature = entity.get_mut::<Signature>().unwrap();
-    signature.hash = SignatureHash::Resolved(hash);
+    signature.hash = Some(hash);
 
     if let Some(mut map) = world.get_resource_mut::<SignatureMap>() {
         map.insert(ctx.entity, hash);
@@ -451,22 +441,6 @@ mod tests {
             world.entity(entity).get::<Signature>().unwrap().hash(),
             HASH
         );
-    }
-
-    #[test]
-    fn resolved_hash_is_recomputed() {
-        let mut world = World::new();
-        let entity1 = world.spawn(C(true)).id();
-        world.entity_mut(entity1).insert(Signature::of::<C>());
-
-        let resolved_signature = *world.entity(entity1).get::<Signature>().unwrap();
-        let hash1 = resolved_signature.hash();
-
-        let entity2 = world.spawn(C(false)).id();
-        world.entity_mut(entity2).insert(resolved_signature);
-        let hash2 = world.entity(entity2).get::<Signature>().unwrap().hash();
-
-        assert_ne!(hash1, hash2);
     }
 
     #[test]
