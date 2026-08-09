@@ -363,6 +363,23 @@ pub enum ScopeLifetime {
     /// state. However, component removals and entity despawns that happen while
     /// hidden won't be reapplied, so the client may retain stale components
     /// or entities.
+    ///
+    /// If you want to send a despawn or removal even to clients that don't see
+    /// the scope, you can make it temporarily visible by removing the filter
+    /// component (even in the same frame):
+    ///
+    /// ```
+    /// # use bevy::prelude::*;
+    /// # let mut world = World::new();
+    /// # let mut entity = world.spawn_empty();
+    /// entity.remove::<ComponentThatAffectsVisibility>();
+    /// entity.despawn();
+    /// # #[derive(Component)]
+    /// # struct ComponentThatAffectsVisibility;
+    /// ```
+    ///
+    /// Clients for which the scope was hidden will receive only
+    /// the despawn or removal, without the latest state.
     AfterFirstVisibility,
 
     /// The scope is always present, regardless of visibility.
