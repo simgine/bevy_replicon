@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.1] - 2026-08-09
+
 ### Fixed
 
 - Gracefully handle removals and mutations for unknown or invalid entities.
@@ -1149,7 +1151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.42.0..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.42.1..HEAD
+[0.42.1]: https://github.com/simgine/bevy_replicon/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/simgine/bevy_replicon/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/simgine/bevy_replicon/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/simgine/bevy_replicon/compare/v0.40.4...v0.41.0
