@@ -366,6 +366,9 @@ fn visibility_lose() {
     let mut remote = client_app.world_mut().query::<&Remote>();
     assert_eq!(remote.iter(client_app.world()).len(), 3);
 
+    let mut hidden = client_app.world_mut().query::<&RemoteHidden>();
+    assert_eq!(hidden.iter(client_app.world()).len(), 0);
+
     server_app.world_mut().entity_mut(client).remove::<(
         EntityVisibility,
         EntityVisibilityAfterFirst,
@@ -381,6 +384,28 @@ fn visibility_lose() {
         2,
         "client should receive despawn only for the entity \
         with `WhileVisible` lifetime"
+    );
+
+    assert_eq!(
+        hidden.iter(client_app.world()).len(),
+        2,
+        "entities with persistent lifetimes should be marked as hidden"
+    );
+
+    server_app.world_mut().entity_mut(client).insert((
+        EntityVisibility,
+        EntityVisibilityAfterFirst,
+        EntityVisibilityAlwaysPresent,
+    ));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    assert_eq!(remote.iter(client_app.world()).len(), 3);
+    assert_eq!(
+        hidden.iter(client_app.world()).len(),
+        0,
+        "regaining visibility should remove `RemoteHidden`"
     );
 }
 
@@ -422,6 +447,8 @@ fn visibility_lose_with_component_scope() {
 
     let mut components = client_app.world_mut().query::<&TestComponent>();
     assert_eq!(components.iter(client_app.world()).len(), 1);
+    let mut hidden = client_app.world_mut().query::<&RemoteHidden>();
+    assert_eq!(hidden.iter(client_app.world()).len(), 0);
 
     server_app
         .world_mut()
@@ -433,6 +460,11 @@ fn visibility_lose_with_component_scope() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 0);
+    assert_eq!(
+        hidden.iter(client_app.world()).len(),
+        0,
+        "component visibility shouldn't mark the entity as hidden"
+    );
 }
 
 #[test]

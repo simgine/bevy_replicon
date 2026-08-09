@@ -501,16 +501,32 @@ fn collect_despawns(
     for (client, mut message, mut ticks, mut priority, visibility) in clients {
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
-            if !filter_mask.hides_entity(&registry, ScopeLifetime::WhileVisible) {
+            let Some(hidden_lifetime) = filter_mask.hidden_entity_lifetime(&registry) else {
+                continue;
+            };
+
+            if hidden_lifetime == ScopeLifetime::WhileVisible {
+                if ticks.entities.remove(&entity).is_some() {
+                    trace!("writing visibility lost for `{entity}` for client `{client}`");
+                    let entity_range = serialized.write_entity(entity)?;
+                    message.add_despawn(entity_range);
+                }
+                priority.remove(&entity);
                 continue;
             }
 
-            if ticks.entities.remove(&entity).is_some() {
-                trace!("writing visibility lost for `{entity}` for client `{client}`");
-                let entity_range = serialized.write_entity(entity)?;
-                message.add_despawn(entity_range);
+            let Some(entity_ticks) = ticks.entities.get_mut(&entity) else {
+                // `AfterFirstVisibility` entities may be hidden before the client has seen them.
+                continue;
+            };
+            if entity_ticks.remote_hidden {
+                continue;
             }
-            priority.remove(&entity);
+
+            trace!("writing hidden marker for `{entity}` for client `{client}`");
+            let entity_range = serialized.write_entity(entity)?;
+            message.add_hidden(entity_range);
+            entity_ticks.remote_hidden = true;
         }
     }
 
@@ -821,15 +837,22 @@ fn collect_changes(
 
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
+                let resumes_replication = hidden_lifetime.is_none()
+                    && matches!(
+                        &entity_ticks,
+                        Entry::Occupied(entry) if entry.get().remote_hidden
+                    );
                 let has_insertions = updates.changed_entity_added();
                 let has_removals = removal_buffer.contains_key(&entity.id());
                 let starts_replication = new_for_client
                     && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
+                let has_mutations = mutations.entity_added();
 
-                if starts_replication || has_insertions || has_removals {
-                    // If there is any insertion, removal, or it's a new entity for a client, include all mutations
-                    // into update message and bump the last acknowledged tick to keep entity updates atomic.
-                    if mutations.entity_added() {
+                if starts_replication || resumes_replication || has_insertions || has_removals {
+                    // If there is any insertion, removal, the entity starts replication, or it
+                    // resumes after being hidden, include all mutations into the update message
+                    // and bump the last acknowledged tick to keep entity updates atomic.
+                    if has_mutations {
                         trace!(
                             "merging mutations for `{}` with updates for client `{client}`",
                             entity.id()
@@ -845,10 +868,20 @@ fn collect_changes(
                     );
                 }
 
-                if starts_replication && !has_insertions {
+                if resumes_replication {
+                    ticks
+                        .entities
+                        .get_mut(&entity.id())
+                        .expect("resumed entity should already be tracked")
+                        .remote_hidden = false;
+                }
+
+                if (starts_replication || resumes_replication) && !has_insertions && !has_mutations
+                {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
-                    // Force-write new entity even if it doesn't have any components.
+                    // Force-write new entities and visibility resumes even when there are no
+                    // components. On resume this also clears `RemoteHidden` on the client.
                     let entity_range =
                         serialized.write_cached_entity(&mut entity_range, entity.id())?;
                     updates.add_changed_entity(entity_range);

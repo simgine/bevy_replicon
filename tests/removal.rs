@@ -876,6 +876,9 @@ fn visibility_lose() {
     let mut components = client_app.world_mut().query::<&A>();
     assert_eq!(components.iter(client_app.world()).len(), 3);
 
+    let mut hidden = client_app.world_mut().query::<&RemoteHidden>();
+    assert_eq!(hidden.iter(client_app.world()).len(), 0);
+
     server_app.world_mut().entity_mut(client).remove::<(
         ComponentVisibility,
         ComponentVisibilityAfterFirst,
@@ -891,6 +894,12 @@ fn visibility_lose() {
         2,
         "client should receive removal only for the component \
         with `WhileVisible` lifetime"
+    );
+
+    assert_eq!(
+        hidden.iter(client_app.world()).len(),
+        0,
+        "component visibility shouldn't mark the entity as hidden"
     );
 }
 
