@@ -486,10 +486,9 @@ fn collect_despawns(
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
         for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
-            let hidden_lifetime = visibility.get(entity).hidden_entity_lifetime(&registry);
-            if ticks.entities.remove(&entity).is_some() && hidden_lifetime.is_none() {
-                // Write despawn only if the entity is not currently hidden and was
-                // previously sent because spawn and despawn could happen during the same tick.
+            if ticks.entities.remove(&entity).is_some() {
+                // Write despawn only if the entity was previously sent because
+                // spawn and despawn could happen during the same tick.
                 trace!("writing despawn for `{entity}` for client `{client}`");
                 message.add_despawn(entity_range.clone());
             }

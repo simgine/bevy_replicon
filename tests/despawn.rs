@@ -311,17 +311,22 @@ fn hidden_entity() {
     client_app.update();
     server_app.exchange_with_client(&mut client_app);
 
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 3);
+
     server_app.world_mut().despawn(server_entity1);
     server_app.world_mut().despawn(server_entity2);
     server_app.world_mut().despawn(server_entity3);
 
     server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
 
-    let mut messages = server_app.world_mut().resource_mut::<ServerMessages>();
     assert_eq!(
-        messages.drain_sent().len(),
-        0,
-        "client shouldn't receive despawns for hidden entities"
+        remote.iter(client_app.world()).len(),
+        2,
+        "client should receive despawn only for the entity \
+        with `WhileVisible` lifetime"
     );
 }
 
