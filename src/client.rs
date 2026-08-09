@@ -466,7 +466,7 @@ fn apply_despawn(
         params.storage.entities.remove(&client_entity);
 
         if let Ok(client_entity) = world.get_entity_mut(client_entity) {
-            trace!("applying despawn for `{}`", client_entity.id());
+            debug!("applying despawn for `{}`", client_entity.id());
             let ctx = DespawnCtx { message_tick };
             (params.registry.despawn)(&ctx, client_entity);
         }
