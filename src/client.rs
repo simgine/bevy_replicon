@@ -436,9 +436,8 @@ fn apply_entity_mapping(
     let hash = u64::from_le_bytes(postcard_utils::from_buf(message)?); // Hash uses fixint encoding.
 
     let Some(client_entity) = params.signature_map.get(hash) else {
-        debug!(
-            "skipping unknown hash 0x{hash:016x} for `{server_entity}` (client entity may have been despawned already)"
-        );
+        // Client entity may have been despawned already.
+        debug!("skipping unknown hash 0x{hash:016x} for `{server_entity}`");
         return Ok(());
     };
 
@@ -730,8 +729,9 @@ fn apply_mutations(
     let data_size: usize = postcard_utils::from_buf(message)?;
 
     let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
-        // Mutation could arrive after a despawn from update message.
-        debug!("ignoring mutations received for unknown server's `{server_entity}`");
+        // Mutation could arrive after a despawn from update message
+        // or client could predict the despawn.
+        debug!("ignoring mutations for unknown server's `{server_entity}`");
         message.advance(data_size);
         return Ok(());
     };
