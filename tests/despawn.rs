@@ -285,7 +285,6 @@ fn hidden_entity() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .add_visibility_filter::<EntityVisibility>()
         .add_visibility_filter::<EntityVisibilityAfterFirst>()
         .add_visibility_filter::<EntityVisibilityAlwaysPresent>()
         .finish();
@@ -293,15 +292,17 @@ fn hidden_entity() {
 
     server_app.connect_client(&mut client_app);
 
-    let server_entity1 = server_app
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
         .world_mut()
-        .spawn((Replicated, EntityVisibility))
-        .id();
-    let server_entity2 = server_app
+        .entity_mut(client)
+        .insert((EntityVisibilityAfterFirst, EntityVisibilityAlwaysPresent));
+
+    let server_entity1 = server_app
         .world_mut()
         .spawn((Replicated, EntityVisibilityAfterFirst))
         .id();
-    let server_entity3 = server_app
+    let server_entity2 = server_app
         .world_mut()
         .spawn((Replicated, EntityVisibilityAlwaysPresent))
         .id();
@@ -312,11 +313,22 @@ fn hidden_entity() {
     server_app.exchange_with_client(&mut client_app);
 
     let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).len(), 3);
+    assert_eq!(remote.iter(client_app.world()).len(), 2);
+
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<(EntityVisibilityAfterFirst, EntityVisibilityAlwaysPresent)>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert_eq!(remote.iter(client_app.world()).len(), 2);
 
     server_app.world_mut().despawn(server_entity1);
     server_app.world_mut().despawn(server_entity2);
-    server_app.world_mut().despawn(server_entity3);
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
@@ -324,9 +336,8 @@ fn hidden_entity() {
 
     assert_eq!(
         remote.iter(client_app.world()).len(),
-        2,
-        "client should receive despawn only for the entity \
-        with `WhileVisible` lifetime"
+        0,
+        "client should receive despawns even for hidden entities"
     );
 }
 
