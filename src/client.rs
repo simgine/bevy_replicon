@@ -484,19 +484,20 @@ fn apply_removals(
     let server_entity = postcard_utils::entity_from_buf(message)?;
     let data_size: usize = postcard_utils::from_buf(message)?;
 
-    // Server never sends removals for entities that weren't received by the client.
-    let client_entity = *params
-        .entity_map
-        .to_client()
-        .get(&server_entity)
-        .ok_or_else(|| format!("received removal for unknown server's `{server_entity}`"))?;
+    let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
+        // Client could predict despawn.
+        debug!("ignoring removals for unknown server's `{server_entity}`");
+        message.advance(data_size);
+        return Ok(());
+    };
 
     let Ok(mut client_entity) = world
         .get_entity_mut(client_entity)
         .map(|entity| DeferredEntity::new(entity, params.scratch))
     else {
-        // Client could predict despawn.
-        debug!("ignoring removals for despawned `{client_entity}`");
+        // Entity could've been disabled while despawned, which doesn't remove it from the entity mapping.
+        debug!("ignoring removals for invalid `{client_entity}`");
+        params.entity_map.remove_by_client(client_entity);
         message.advance(data_size);
         return Ok(());
     };
@@ -745,8 +746,9 @@ fn apply_mutations(
         .get_entity_mut(client_entity)
         .map(|entity| DeferredEntity::new(entity, params.scratch))
     else {
-        // Client could predict despawn.
-        debug!("ignoring mutations for despawned `{client_entity}`");
+        // Entity could've been disabled while despawned, which doesn't remove it from the entity mapping.
+        debug!("ignoring mutations for invalid `{client_entity}`");
+        params.entity_map.remove_by_client(client_entity);
         message.advance(data_size);
         return Ok(());
     };

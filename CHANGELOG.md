@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Gracefully handle removals and mutations for unknown or invalid entities.
+
 ## [0.42.0] - 2026-08-08
 
 ### Added
