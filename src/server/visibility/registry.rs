@@ -37,6 +37,11 @@ impl FilterRegistry {
         }
     }
 
+    /// Returns a filter bit for a registered visibility filter.
+    pub fn get_bit<F: VisibilityFilter>(&self) -> Option<FilterBit> {
+        self.bits.get_type::<F>().copied()
+    }
+
     /// Registers a new visibility scope and returns the [`FilterBit`] assigned to it.
     ///
     /// The returned bit should be managed manually via

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `FilterRegistry::get_bit` to retrieve a bit by type from the filter registry (can also be useful for checking if a `VisibilityFilter` has been registered).
+
 ## [0.42.1] - 2026-08-09
 
 ### Fixed
