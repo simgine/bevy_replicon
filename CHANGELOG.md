@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.2] - 2026-08-14
+
 ### Added
 
 - `FilterRegistry::get_bit` to retrieve a bit by type from the filter registry (can also be useful for checking if a `VisibilityFilter` has been registered).
@@ -1155,7 +1157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.42.1..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.42.2..HEAD
+[0.42.2]: https://github.com/simgine/bevy_replicon/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/simgine/bevy_replicon/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/simgine/bevy_replicon/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/simgine/bevy_replicon/compare/v0.41.0...v0.41.1
