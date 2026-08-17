@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- If the server sends an entity Update that contains a Marker component, the Marker will be applied when the Update message is received on the client. (Previously, Marker components were only 
+  applied if they were present on the receiver entity when the Update message was received)
+
 ## [0.42.2] - 2026-08-14
 
 ### Added

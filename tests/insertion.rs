@@ -439,6 +439,43 @@ fn marker() {
 }
 
 #[test]
+fn marker_from_same_update() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .register_marker::<ReplaceMarker>()
+        // Register the regular component first to verify that receive markers are reordered.
+        .replicate::<Original>()
+        .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
+        .replicate::<ReplaceMarker>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+    server_app
+        .world_mut()
+        .spawn((Replicated, Original, ReplaceMarker));
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let entity = client_app
+        .world_mut()
+        .query_filtered::<EntityRef, With<Remote>>()
+        .single(client_app.world())
+        .unwrap();
+    assert!(entity.contains::<ReplaceMarker>());
+    assert!(entity.contains::<Replaced>());
+    assert!(!entity.contains::<Original>());
+}
+
+#[test]
 fn group() {
     let mut server_app = App::new();
     let mut client_app = App::new();
@@ -913,7 +950,7 @@ struct A;
 #[derive(Component, Deserialize, Serialize)]
 struct B;
 
-#[derive(Component)]
+#[derive(Component, Deserialize, Serialize)]
 struct ReplaceMarker;
 
 #[derive(Component, Deserialize, Serialize)]
@@ -1017,7 +1054,7 @@ impl VisibilityFilter for AllExceptVisibility {
     }
 }
 
-/// Deserializes [`OriginalComponent`], but ignores it and inserts [`ReplacedComponent`].
+/// Deserializes [`Original`], but ignores it and inserts [`Replaced`].
 fn replace(
     ctx: &mut WriteCtx,
     rule_fns: &RuleFns<Original>,

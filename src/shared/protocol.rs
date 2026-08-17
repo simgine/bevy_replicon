@@ -68,6 +68,17 @@ impl ProtocolHasher {
         self.hash::<B>(ProtocolPart::ReplicateBundle);
     }
 
+    pub(crate) fn register_marker<M>(&mut self, priority: usize, need_history: bool) {
+        debug!(
+            "registering receive marker `{}` with priority {priority} and need_history {need_history}",
+            ShortName::of::<M>()
+        );
+        self.hash::<M>(ProtocolPart::ReceiveMarker {
+            priority: priority as u64,
+            need_history,
+        });
+    }
+
     pub(crate) fn add_client_message<E>(&mut self) {
         debug!("adding client message `{}`", ShortName::of::<E>());
         self.hash::<E>(ProtocolPart::ClientMessage);
@@ -139,6 +150,7 @@ enum ProtocolPart {
     IndependentEvent,
     SharedMessage,
     SharedEvent,
+    ReceiveMarker { priority: u64, need_history: bool },
 }
 
 /// Hash of all registered events and replication rules.
@@ -193,6 +205,28 @@ mod tests {
 
         let mut hasher2 = ProtocolHasher::default();
         hasher2.replicate::<StructA>(0);
+
+        assert_ne!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn wrong_marker_config() {
+        let mut hasher1 = ProtocolHasher::default();
+        hasher1.register_marker::<StructA>(0, false);
+
+        let mut hasher2 = ProtocolHasher::default();
+        hasher2.register_marker::<StructA>(1, false);
+
+        assert_ne!(hasher1.finish(), hasher2.finish());
+    }
+
+    #[test]
+    fn wrong_marker_type() {
+        let mut hasher1 = ProtocolHasher::default();
+        hasher1.register_marker::<StructA>(0, false);
+
+        let mut hasher2 = ProtocolHasher::default();
+        hasher2.register_marker::<StructB>(0, false);
 
         assert_ne!(hasher1.finish(), hasher2.finish());
     }

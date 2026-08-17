@@ -3,6 +3,8 @@ use core::cmp::Reverse;
 use bevy::{ecs::component::ComponentId, prelude::*};
 use log::debug;
 
+use crate::shared::protocol::ProtocolHasher;
+
 use super::registry::{
     ReplicationRegistry,
     receive_fns::{MutWrite, RemoveFn, WriteFn},
@@ -20,6 +22,9 @@ pub trait AppMarkerExt {
     /// Can be used to override how this component or other components will be written or removed
     /// based on marker-component presence.
     /// For details see [`Self::set_marker_fns`].
+    ///
+    /// Marker registration is part of the protocol and should be performed in the same order
+    /// on the client and server.
     ///
     /// This function registers markers with default [`MarkerConfig`].
     /// See also [`Self::register_marker_with`].
@@ -183,6 +188,9 @@ impl AppMarkerExt for App {
 
     fn register_marker_with<M: Component>(&mut self, config: MarkerConfig) -> &mut Self {
         debug!("registering marker `{}`", ShortName::of::<M>());
+        self.world_mut()
+            .resource_mut::<ProtocolHasher>()
+            .register_marker::<M>(config.priority, config.need_history);
         let component_id = self.world_mut().register_component::<M>();
         let mut receive_markers = self.world_mut().resource_mut::<ReceiveMarkers>();
         let marker_id = receive_markers.insert(ReceiveMarker {
@@ -260,12 +268,17 @@ impl ReceiveMarkers {
     /// Returns marker ID from its component ID.
     fn marker_id(&self, component_id: ComponentId) -> ReceiveMarkerIndex {
         let index = self
-            .0
-            .iter()
-            .position(|marker| marker.component_id == component_id)
+            .marker_index(component_id)
             .unwrap_or_else(|| panic!("marker {component_id:?} wasn't registered"));
 
         ReceiveMarkerIndex(index)
+    }
+
+    /// Returns the marker's position in priority order.
+    pub(crate) fn marker_index(&self, component_id: ComponentId) -> Option<usize> {
+        self.0
+            .iter()
+            .position(|marker| marker.component_id == component_id)
     }
 
     pub(super) fn iter_require_history(&self) -> impl Iterator<Item = bool> + '_ {
@@ -331,6 +344,22 @@ impl EntityMarkers {
         }
     }
 
+    /// Includes a marker component that is about to be inserted on the entity.
+    ///
+    /// Returns `true` if `component_id` belongs to a registered marker.
+    pub(crate) fn include(&mut self, markers: &ReceiveMarkers, component_id: ComponentId) -> bool {
+        let Some(index) = markers.marker_index(component_id) else {
+            return false;
+        };
+
+        self.markers[index] = true;
+        if markers.0[index].config.need_history {
+            self.need_history = true;
+        }
+
+        true
+    }
+
     /// Returns a slice of which markers are present on an entity.
     ///
     /// Indices corresponds markers in to [`ReceiveMarkers`].
@@ -384,6 +413,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<ReceiveMarkers>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ProtocolHasher>()
             .register_marker::<MarkerA>()
             .register_marker_with::<MarkerB>(MarkerConfig {
                 priority: 2,
@@ -402,6 +432,34 @@ mod tests {
             .map(|marker| marker.config.priority)
             .collect();
         assert_eq!(priorities, [2, 1, 0, 0]);
+    }
+
+    #[test]
+    fn include() {
+        let mut app = App::new();
+        app.init_resource::<ReceiveMarkers>()
+            .init_resource::<ReplicationRegistry>()
+            .init_resource::<ProtocolHasher>()
+            .register_marker_with::<Marker>(MarkerConfig {
+                need_history: true,
+                ..Default::default()
+            });
+
+        let marker_id = app.world_mut().register_component::<Marker>();
+        let component_id = app.world_mut().register_component::<TestComponent>();
+        let markers = app.world().resource::<ReceiveMarkers>();
+        let mut entity_markers = EntityMarkers {
+            markers: vec![false; markers.0.len()],
+            need_history: false,
+        };
+
+        assert!(!entity_markers.include(markers, component_id));
+        assert_eq!(entity_markers.markers(), [false]);
+        assert!(!entity_markers.need_history());
+
+        assert!(entity_markers.include(markers, marker_id));
+        assert_eq!(entity_markers.markers(), [true]);
+        assert!(entity_markers.need_history());
     }
 
     #[derive(Component)]

@@ -12,7 +12,10 @@ use log::trace;
 
 use crate::{
     prelude::*,
-    shared::replication::rules::{ReplicationRules, component::ComponentRule},
+    shared::replication::{
+        receive_markers::ReceiveMarkers,
+        rules::{ReplicationRules, component::ComponentRule},
+    },
 };
 
 #[derive(Resource)]
@@ -31,7 +34,12 @@ pub(super) struct ReplicatedArchetypes {
 }
 
 impl ReplicatedArchetypes {
-    pub(super) fn update(&mut self, archetypes: &Archetypes, rules: &ReplicationRules) {
+    pub(super) fn update(
+        &mut self,
+        archetypes: &Archetypes,
+        rules: &ReplicationRules,
+        receive_markers: &ReceiveMarkers,
+    ) {
         let old_generation = mem::replace(&mut self.generation, archetypes.generation());
 
         for archetype in archetypes[old_generation..]
@@ -58,6 +66,12 @@ impl ReplicatedArchetypes {
                     replicated_archetype.components.push((component, storage));
                 }
             }
+
+            // Incoming receive markers need to be processed before other components so they can
+            // affect which receive functions are selected for the rest of the entity update.
+            replicated_archetype.components.sort_by_key(|(rule, _)| {
+                receive_markers.marker_index(rule.id).unwrap_or(usize::MAX)
+            });
 
             self.ids_map.insert(archetype.id(), self.list.len());
             self.list.push(replicated_archetype);
@@ -260,10 +274,12 @@ mod tests {
     }
 
     fn update_archetypes(app: &mut App) {
+        app.init_resource::<ReceiveMarkers>();
         app.world_mut()
             .resource_scope(|world, mut archetypes: Mut<ReplicatedArchetypes>| {
                 let rules = world.resource::<ReplicationRules>();
-                archetypes.update(world.archetypes(), rules);
+                let receive_markers = world.resource::<ReceiveMarkers>();
+                archetypes.update(world.archetypes(), rules, receive_markers);
             });
     }
 
