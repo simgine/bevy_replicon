@@ -137,7 +137,8 @@ mod tests {
     fn empty() {
         let mut app = App::new();
         app.init_resource::<ReplicatedArchetypes>()
-            .init_resource::<ReplicationRules>();
+            .init_resource::<ReplicationRules>()
+            .init_resource::<ReceiveMarkers>();
 
         app.world_mut().spawn_empty();
         update_archetypes(&mut app);
@@ -150,7 +151,8 @@ mod tests {
     fn no_components() {
         let mut app = App::new();
         app.init_resource::<ReplicatedArchetypes>()
-            .init_resource::<ReplicationRules>();
+            .init_resource::<ReplicationRules>()
+            .init_resource::<ReceiveMarkers>();
 
         app.world_mut().spawn(Replicated);
         update_archetypes(&mut app);
@@ -168,6 +170,7 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ReceiveMarkers>()
             .replicate::<A>();
 
         app.world_mut().spawn((Replicated, A));
@@ -186,6 +189,7 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ReceiveMarkers>()
             .replicate_bundle::<(A, B)>();
 
         app.world_mut().spawn((Replicated, A, B));
@@ -204,6 +208,7 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ReceiveMarkers>()
             .replicate_bundle::<(A, B)>();
 
         app.world_mut().spawn((Replicated, A));
@@ -222,6 +227,7 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ReceiveMarkers>()
             .replicate::<A>()
             .replicate_bundle::<(A, B)>();
 
@@ -241,6 +247,7 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ReceiveMarkers>()
             .replicate::<A>()
             .replicate::<B>()
             .replicate_bundle::<(A, B)>();
@@ -261,6 +268,7 @@ mod tests {
             .init_resource::<ReplicationRules>()
             .init_resource::<ProtocolHasher>()
             .init_resource::<ReplicationRegistry>()
+            .init_resource::<ReceiveMarkers>()
             .replicate_bundle::<(A, B)>()
             .replicate_bundle::<(A, C)>();
 
@@ -274,7 +282,6 @@ mod tests {
     }
 
     fn update_archetypes(app: &mut App) {
-        app.init_resource::<ReceiveMarkers>();
         app.world_mut()
             .resource_scope(|world, mut archetypes: Mut<ReplicatedArchetypes>| {
                 let rules = world.resource::<ReplicationRules>();

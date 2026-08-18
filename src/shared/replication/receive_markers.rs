@@ -275,6 +275,9 @@ impl ReceiveMarkers {
     }
 
     /// Returns the marker's position in priority order.
+    ///
+    /// The number of markers is expected to be small, so linear search through an array
+    /// should be faster than using a HashMap.
     pub(crate) fn marker_index(&self, component_id: ComponentId) -> Option<usize> {
         self.0
             .iter()
