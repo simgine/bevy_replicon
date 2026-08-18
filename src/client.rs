@@ -588,10 +588,20 @@ fn apply_changes(
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
     let mut data = message.split_to(data_size);
+    // The server sorts incoming markers from highest to lowest priority before all other
+    // components. Only the first component needs to be checked because, if it's a marker,
+    // lower-priority markers can't affect receive-function selection.
+    let mut first_component = true;
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
         let spawner = BufferedSpawner::new(entity_allocator, params.entity_buffer);
         let fns_id = postcard_utils::from_buf(data)?;
         let (_, component_id, fns) = params.registry.get(fns_id);
+        if first_component {
+            params
+                .entity_markers
+                .include(params.receive_markers, component_id);
+            first_component = false;
+        }
         let mut ctx = WriteCtx {
             entity: client_entity.id(),
             component_id,

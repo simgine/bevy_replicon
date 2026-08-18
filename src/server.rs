@@ -38,6 +38,7 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, EntityTicks},
+            receive_markers::ReceiveMarkers,
             registry::{
                 ComponentIndex, ReplicationRegistry, component_mask::ComponentMask,
                 ctx::SerializeCtx,
@@ -305,6 +306,7 @@ fn buffer_removals(
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     rules: Res<ReplicationRules>,
     registry: Option<Res<ReplicationRegistry>>,
+    receive_markers: Option<Res<ReceiveMarkers>>,
     mut removals: ResMut<RemovalBuffer>,
 ) {
     if *state != ServerState::Running {
@@ -318,11 +320,13 @@ fn buffer_removals(
     }
 
     // Observers can't use run conditions. We return early on the client, but system parameters
-    // are validated before the observer runs. Because of this, the registry may not be present
-    // in the world during replication receive, so it needs to be optional.
+    // are validated before the observer runs. Because of this, resources removed during
+    // replication receive may not be present, so they need to be optional.
     let registry = registry.expect("registry should always exist on the server");
+    let receive_markers =
+        receive_markers.expect("receive markers should always exist on the server");
 
-    replicated_archetypes.update(archetypes, &rules);
+    replicated_archetypes.update(archetypes, &rules, &receive_markers);
     let location = entities.get_spawned(remove.entity).unwrap();
     let Some(archetype) = replicated_archetypes.get(location.archetype_id) else {
         // `Replicated` component is missing.
@@ -525,6 +529,7 @@ fn collect_removals(
     entities: &Entities,
     removal_buffer: Res<RemovalBuffer>,
     rules: Res<ReplicationRules>,
+    receive_markers: Res<ReceiveMarkers>,
     registry: Res<ReplicationRegistry>,
     filter_registry: Res<FilterRegistry>,
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
@@ -537,7 +542,7 @@ fn collect_removals(
         &mut ClientVisibility,
     )>,
 ) -> Result<()> {
-    replicated_archetypes.update(archetypes, &rules);
+    replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
     for (&entity, remove_ids) in removal_buffer.iter() {
         let mut entity_range = None;
@@ -674,6 +679,7 @@ fn collect_changes(
     type_registry: Res<AppTypeRegistry>,
     related_entities: Res<RelatedEntities>,
     rules: Res<ReplicationRules>,
+    receive_markers: Res<ReceiveMarkers>,
     mut replication_storage: ResMut<ReplicationStorage>,
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
@@ -687,7 +693,7 @@ fn collect_changes(
         &mut ClientVisibility,
     )>,
 ) -> Result<()> {
-    replicated_archetypes.update(archetypes, &rules);
+    replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
     for replicated_archetype in replicated_archetypes.iter() {
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
