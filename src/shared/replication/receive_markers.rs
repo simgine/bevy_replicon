@@ -3,12 +3,11 @@ use core::cmp::Reverse;
 use bevy::{ecs::component::ComponentId, prelude::*};
 use log::debug;
 
-use crate::shared::protocol::ProtocolHasher;
-
 use super::registry::{
     ReplicationRegistry,
     receive_fns::{MutWrite, RemoveFn, WriteFn},
 };
+use crate::shared::protocol::ProtocolHasher;
 
 /// Marker-based replication receive functions for [`App`].
 ///
