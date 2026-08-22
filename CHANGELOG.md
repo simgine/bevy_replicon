@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Marker components are now part of the protocol (should be registered on both, client and server) and taken into account if they're is included as a part of the entity update.
 
+## [0.42.3] - 2026-08-22
+
 ### Fixed
 
 - Make sure that `ServerMutateTicks.last_confirmed_tick` cannot go backwards.
@@ -1165,7 +1167,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.42.2..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.42.3..HEAD
+[0.42.3]: https://github.com/simgine/bevy_replicon/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/simgine/bevy_replicon/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/simgine/bevy_replicon/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/simgine/bevy_replicon/compare/v0.41.1...v0.42.0
