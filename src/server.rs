@@ -1029,6 +1029,18 @@ struct DespawnBuffer(Vec<Entity>);
 #[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
 pub struct AuthorizedClient;
 
+/// Marker component for a local client running the server itself.
+///
+/// Messaging backends are responsible for inserting this component on the hosting client entity.
+/// Needs to be inserted with [NetworkId](`crate::shared::backend::connected_client::NetworkId`)
+/// if the backend provides support for it.
+///
+/// See also [`ConnectedClient`].
+#[derive(Component, Reflect, Default, Debug)]
+#[component(immutable)]
+#[reflect(Component, Default, Debug)]
+pub struct HostClient;
+
 /// Controls how often mutations are sent for a replicated entity.
 ///
 /// Applies to all authorized clients unless overridden by the client's [`PriorityMap`].
