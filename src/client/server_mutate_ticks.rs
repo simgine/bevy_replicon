@@ -21,6 +21,7 @@ pub struct ServerMutateTicks {
     last_tick: RepliconTick,
 
     /// The latest server tick reported as fully received.
+    ///
     /// This can never go backwards, it represents a 'frontier' where the state on the
     /// server is guaranteed to be fully received by the client.
     last_confirmed_tick: Option<RepliconTick>,
