@@ -20,7 +20,10 @@ pub struct ServerMutateTicks {
     /// The last received server tick with mutation.
     last_tick: RepliconTick,
 
-    /// The last server tick reported as fully received.
+    /// The latest server tick reported as fully received.
+    ///
+    /// This can never go backwards, it represents a 'frontier' where the state on the
+    /// server is guaranteed to be fully received by the client.
     last_confirmed_tick: Option<RepliconTick>,
 }
 
@@ -148,7 +151,9 @@ impl ServerMutateTicks {
     }
 
     pub(super) fn set_last_confirmed_tick(&mut self, tick: RepliconTick) {
-        self.last_confirmed_tick = Some(tick);
+        if self.last_confirmed_tick.is_none_or(|t| t.is_older(tick)) {
+            self.last_confirmed_tick = Some(tick);
+        }
     }
 }
 

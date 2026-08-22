@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Marker components are now part of the protocol (should be registered on both, client and server) and taken into account if they're is included as a part of the entity update.
 
+### Fixed
+
+- Make sure that `ServerMutateTicks.last_confirmed_tick` cannot go backwards.
+
 ## [0.42.2] - 2026-08-14
 
 ### Added
