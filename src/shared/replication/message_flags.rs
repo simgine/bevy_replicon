@@ -10,8 +10,9 @@ bitflags! {
         const USERDATA = 0b00000001;
         const MAPPINGS = 0b00000010;
         const DESPAWNS = 0b00000100;
-        const REMOVALS = 0b00001000;
-        const CHANGES = 0b00010000;
+        const HIDDEN = 0b00001000;
+        const REMOVALS = 0b00010000;
+        const CHANGES = 0b00100000;
     }
 }
 
