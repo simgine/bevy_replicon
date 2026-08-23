@@ -217,6 +217,14 @@ impl Plugin for ServerPlugin {
     }
 
     fn finish(&self, app: &mut App) {
+        app.world_mut().resource_scope(
+            |world, mut replicated_archetypes: Mut<ReplicatedArchetypes>| {
+                let rules = world.resource::<ReplicationRules>();
+                let receive_markers = world.resource::<ReceiveMarkers>();
+                replicated_archetypes.finalize(rules, receive_markers);
+            },
+        );
+
         // Multiple rules can include components with the same ID,
         // we collect them here to deduplicate.
         let rules = app.world().resource::<ReplicationRules>();
@@ -695,9 +703,9 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
-    for replicated_archetype in replicated_archetypes.iter() {
+    for (archetype_id, replicated_archetype) in replicated_archetypes.iter() {
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
-        let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
+        let archetype = unsafe { archetypes.get(archetype_id).unwrap_unchecked() };
 
         for entity in archetype.entities() {
             let mut entity_range = None;

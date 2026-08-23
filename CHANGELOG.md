@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Marker components are now part of the protocol (should be registered on both, client and server) and taken into account if they're is included as a part of the entity update.
+- Optimized the replication archetype cache by reusing the cached data for archetypes that have the same set of replication related components
 
 ## [0.42.3] - 2026-08-22
 
