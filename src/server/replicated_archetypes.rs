@@ -1,11 +1,17 @@
-use core::mem;
+use core::{
+    hash::{BuildHasher, Hash, Hasher},
+    mem,
+};
 
 use bevy::{
     ecs::{
         archetype::{Archetype, ArchetypeGeneration, ArchetypeId, Archetypes},
         component::{ComponentId, StorageType},
     },
-    platform::collections::HashMap,
+    platform::{
+        collections::{HashMap, HashSet},
+        hash::{FixedHasher, NoOpHash},
+    },
     prelude::*,
 };
 use log::trace;
@@ -30,7 +36,7 @@ pub(super) struct ReplicatedArchetypes {
     key_components: Option<Box<[ComponentId]>>,
 
     /// Maps replication-relevant archetype components to an index in [`Self::list`].
-    key_map: HashMap<ReplicationArchetypeKey, usize>,
+    key_map: HashMap<ReplicationArchetypeKey, usize, NoOpHash>,
 
     /// Maps Bevy archetype IDs to an index in [`Self::list`].
     ids_map: HashMap<ArchetypeId, usize>,
@@ -40,24 +46,32 @@ pub(super) struct ReplicatedArchetypes {
 }
 
 impl ReplicatedArchetypes {
-    pub(super) fn finalize(&mut self, rules: &ReplicationRules, receive_markers: &ReceiveMarkers) {
+    /// Finalizes the components used to distinguish replication archetypes.
+    ///
+    /// # Arguments
+    ///
+    /// * `components` - Deduplicated component IDs from all replication rules.
+    /// * `rules` - Replication rules whose filter components should also affect the key.
+    /// * `receive_markers` - Marker component IDs that can alter receive behavior.
+    pub(super) fn finalize(
+        &mut self,
+        mut components: HashSet<ComponentId>,
+        rules: &ReplicationRules,
+        receive_markers: &ReceiveMarkers,
+    ) {
         assert!(
             self.key_components.is_none(),
             "replicated archetypes should be finalized only once"
         );
 
-        let mut components = Vec::new();
         for rule in rules.iter() {
-            components.extend(rule.components.iter().map(|component| component.id));
             for filter in &rule.filters {
                 filter.push_components(&mut components);
             }
         }
         components.extend(receive_markers.component_ids());
-        components.sort_unstable();
-        components.dedup();
 
-        self.key_components = Some(components.into_boxed_slice());
+        self.key_components = Some(components.into_iter().collect());
     }
 
     pub(super) fn update(
@@ -150,32 +164,32 @@ impl FromWorld for ReplicatedArchetypes {
     }
 }
 
-/// Presence of all components that can affect replication metadata for an archetype.
+/// Hash of all components whose presence affects replication metadata for an archetype.
 #[derive(PartialEq, Eq, Hash)]
-struct ReplicationArchetypeKey(Vec<ComponentId>);
+struct ReplicationArchetypeKey(u64);
 
 impl ReplicationArchetypeKey {
     fn new(archetype: &Archetype, key_components: &[ComponentId]) -> Self {
-        Self(
-            key_components
-                .iter()
-                .copied()
-                .filter(|&id| archetype.contains(id))
-                .collect(),
-        )
+        let mut hasher = FixedHasher.build_hasher();
+        for id in key_components.iter().filter(|&&id| archetype.contains(id)) {
+            id.hash(&mut hasher);
+        }
+        Self(hasher.finish())
     }
 }
 
 /// Collects filter components whose presence can affect a replication archetype key.
 trait FilterRuleKeyExt {
     /// Appends component IDs referenced by this filter, including nested [`FilterRule::Or`]s.
-    fn push_components(&self, components: &mut Vec<ComponentId>);
+    fn push_components(&self, components: &mut HashSet<ComponentId>);
 }
 
 impl FilterRuleKeyExt for FilterRule {
-    fn push_components(&self, components: &mut Vec<ComponentId>) {
+    fn push_components(&self, components: &mut HashSet<ComponentId>) {
         match self {
-            Self::With(id) | Self::Without(id) => components.push(*id),
+            Self::With(id) | Self::Without(id) => {
+                components.insert(*id);
+            }
             Self::Or(filters) => {
                 for filter in filters {
                     filter.push_components(components);
@@ -447,7 +461,12 @@ mod tests {
                 let rules = world.resource::<ReplicationRules>();
                 let receive_markers = world.resource::<ReceiveMarkers>();
                 if archetypes.key_components.is_none() {
-                    archetypes.finalize(rules, receive_markers);
+                    let replicated_ids = rules
+                        .iter()
+                        .flat_map(|rule| &rule.components)
+                        .map(|component| component.id)
+                        .collect();
+                    archetypes.finalize(replicated_ids, rules, receive_markers);
                 }
                 archetypes.update(world.archetypes(), rules, receive_markers);
             });

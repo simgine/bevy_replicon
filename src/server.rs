@@ -217,14 +217,6 @@ impl Plugin for ServerPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        app.world_mut().resource_scope(
-            |world, mut replicated_archetypes: Mut<ReplicatedArchetypes>| {
-                let rules = world.resource::<ReplicationRules>();
-                let receive_markers = world.resource::<ReceiveMarkers>();
-                replicated_archetypes.finalize(rules, receive_markers);
-            },
-        );
-
         // Multiple rules can include components with the same ID,
         // we collect them here to deduplicate.
         let rules = app.world().resource::<ReplicationRules>();
@@ -237,11 +229,19 @@ impl Plugin for ServerPlugin {
         // Removal observer without any components will trigger on any removal.
         if !replicated_ids.is_empty() {
             let mut remove_observer = Observer::new(buffer_removals);
-            for id in replicated_ids {
+            for &id in &replicated_ids {
                 remove_observer = remove_observer.with_component(id);
             }
             app.world_mut().spawn(remove_observer);
         }
+
+        app.world_mut().resource_scope(
+            move |world, mut replicated_archetypes: Mut<ReplicatedArchetypes>| {
+                let rules = world.resource::<ReplicationRules>();
+                let receive_markers = world.resource::<ReceiveMarkers>();
+                replicated_archetypes.finalize(replicated_ids, rules, receive_markers);
+            },
+        );
 
         app.world_mut()
             .resource_scope(|world, mut messages: Mut<ServerMessages>| {
