@@ -283,6 +283,10 @@ impl ReceiveMarkers {
             .position(|marker| marker.component_id == component_id)
     }
 
+    pub(crate) fn component_ids(&self) -> impl Iterator<Item = ComponentId> + '_ {
+        self.0.iter().map(|marker| marker.component_id)
+    }
+
     pub(super) fn iter_require_history(&self) -> impl Iterator<Item = bool> + '_ {
         self.0.iter().map(|marker| marker.config.need_history)
     }

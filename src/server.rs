@@ -229,11 +229,19 @@ impl Plugin for ServerPlugin {
         // Removal observer without any components will trigger on any removal.
         if !replicated_ids.is_empty() {
             let mut remove_observer = Observer::new(buffer_removals);
-            for id in replicated_ids {
+            for &id in &replicated_ids {
                 remove_observer = remove_observer.with_component(id);
             }
             app.world_mut().spawn(remove_observer);
         }
+
+        app.world_mut().resource_scope(
+            move |world, mut replicated_archetypes: Mut<ReplicatedArchetypes>| {
+                let rules = world.resource::<ReplicationRules>();
+                let receive_markers = world.resource::<ReceiveMarkers>();
+                replicated_archetypes.finalize(replicated_ids, rules, receive_markers);
+            },
+        );
 
         app.world_mut()
             .resource_scope(|world, mut messages: Mut<ServerMessages>| {
@@ -695,9 +703,9 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
-    for replicated_archetype in replicated_archetypes.iter() {
+    for (archetype_id, replicated_archetype) in replicated_archetypes.iter() {
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
-        let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
+        let archetype = unsafe { archetypes.get(archetype_id).unwrap_unchecked() };
 
         for entity in archetype.entities() {
             let mut entity_range = None;
