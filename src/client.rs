@@ -588,8 +588,8 @@ fn apply_changes(
     confirm_tick(&mut client_entity, params.replicated, message_tick);
 
     let mut data = message.split_to(data_size);
-    // The server sorts incoming markers from highest to lowest priority before all other
-    // components. Only the first component needs to be checked because, if it's a marker,
+    // The server sorts incoming same-update markers from highest to lowest priority before all
+    // other components. Only the first component needs to be checked because, if it's a marker,
     // lower-priority markers can't affect receive-function selection.
     let mut first_component = true;
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {

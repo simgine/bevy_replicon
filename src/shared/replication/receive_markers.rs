@@ -22,8 +22,9 @@ pub trait AppMarkerExt {
     /// based on marker-component presence.
     /// For details see [`Self::set_marker_fns`].
     ///
-    /// Marker registration is part of the protocol and should be performed in the same order
-    /// on the client and server.
+    /// Marker registration is part of the protocol only when
+    /// [`MarkerConfig::apply_in_same_update`] is enabled. Other markers can be registered only on
+    /// the client.
     ///
     /// This function registers markers with default [`MarkerConfig`].
     /// See also [`Self::register_marker_with`].
@@ -187,9 +188,11 @@ impl AppMarkerExt for App {
 
     fn register_marker_with<M: Component>(&mut self, config: MarkerConfig) -> &mut Self {
         debug!("registering marker `{}`", ShortName::of::<M>());
-        self.world_mut()
-            .resource_mut::<ProtocolHasher>()
-            .register_marker::<M>(config.priority, config.need_history);
+        if config.apply_in_same_update {
+            self.world_mut()
+                .resource_mut::<ProtocolHasher>()
+                .register_marker::<M>(config.priority, config.need_history);
+        }
         let component_id = self.world_mut().register_component::<M>();
         let mut receive_markers = self.world_mut().resource_mut::<ReceiveMarkers>();
         let marker_id = receive_markers.insert(ReceiveMarker {
@@ -283,6 +286,13 @@ impl ReceiveMarkers {
             .position(|marker| marker.component_id == component_id)
     }
 
+    /// Returns the marker's position if it's configured to apply in the same update.
+    pub(crate) fn same_update_marker_index(&self, component_id: ComponentId) -> Option<usize> {
+        self.0.iter().position(|marker| {
+            marker.component_id == component_id && marker.config.apply_in_same_update
+        })
+    }
+
     pub(super) fn iter_require_history(&self) -> impl Iterator<Item = bool> + '_ {
         self.0.iter().map(|marker| marker.config.need_history)
     }
@@ -319,6 +329,23 @@ pub struct MarkerConfig {
     ///
     /// By default set to `false`.
     pub need_history: bool,
+
+    /// Makes a replicated marker take effect before other components from the same entity update
+    /// are applied.
+    ///
+    /// When enabled, the sender orders this marker before other replicated components, allowing
+    /// its receive functions to be selected for the rest of the update. The marker registration
+    /// becomes part of the protocol and must use the same configuration and registration order on
+    /// the client and server.
+    ///
+    /// This option doesn't replicate the marker component by itself. A replication rule for the
+    /// marker must be registered separately.
+    ///
+    /// When disabled, the marker isn't added to the protocol or prioritized by the server, so it
+    /// can be registered only on the client.
+    ///
+    /// By default set to `false`.
+    pub apply_in_same_update: bool,
 }
 
 /// Stores which markers are present on an entity.
@@ -346,11 +373,12 @@ impl EntityMarkers {
         }
     }
 
-    /// Includes a marker component that is about to be inserted on the entity.
+    /// Includes a same-update marker component that is about to be inserted on the entity.
     ///
-    /// Returns `true` if `component_id` belongs to a registered marker.
+    /// Returns `true` if `component_id` belongs to a marker configured with
+    /// [`MarkerConfig::apply_in_same_update`].
     pub(crate) fn include(&mut self, markers: &ReceiveMarkers, component_id: ComponentId) -> bool {
-        let Some(index) = markers.marker_index(component_id) else {
+        let Some(index) = markers.same_update_marker_index(component_id) else {
             return false;
         };
 
@@ -437,6 +465,34 @@ mod tests {
     }
 
     #[test]
+    fn protocol_includes_only_same_update_markers() {
+        let mut app = App::new();
+        app.init_resource::<ReceiveMarkers>()
+            .init_resource::<ReplicationRegistry>()
+            .init_resource::<ProtocolHasher>()
+            .register_marker_with::<MarkerA>(MarkerConfig {
+                need_history: true,
+                ..Default::default()
+            })
+            .register_marker_with::<MarkerB>(MarkerConfig {
+                priority: 2,
+                apply_in_same_update: true,
+                ..Default::default()
+            });
+
+        let markers = app.world().resource::<ReceiveMarkers>();
+        let marker_a_id = app.world().component_id::<MarkerA>().unwrap();
+        let marker_b_id = app.world().component_id::<MarkerB>().unwrap();
+        assert_eq!(markers.same_update_marker_index(marker_a_id), None);
+        assert!(markers.same_update_marker_index(marker_b_id).is_some());
+
+        let actual = app.world_mut().remove_resource::<ProtocolHasher>().unwrap();
+        let mut expected = ProtocolHasher::default();
+        expected.register_marker::<MarkerB>(2, false);
+        assert_eq!(actual.finish(), expected.finish());
+    }
+
+    #[test]
     fn include() {
         let mut app = App::new();
         app.init_resource::<ReceiveMarkers>()
@@ -444,6 +500,7 @@ mod tests {
             .init_resource::<ProtocolHasher>()
             .register_marker_with::<Marker>(MarkerConfig {
                 need_history: true,
+                apply_in_same_update: true,
                 ..Default::default()
             });
 

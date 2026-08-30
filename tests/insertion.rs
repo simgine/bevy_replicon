@@ -6,6 +6,7 @@ use bevy_replicon::{
     shared::{
         replication::{
             deferred_entity::DeferredEntity,
+            receive_markers::MarkerConfig,
             registry::{ctx::WriteCtx, receive_fns},
         },
         server_entity_map::ServerEntityMap,
@@ -389,11 +390,19 @@ fn receive_fns() {
 }
 
 #[test]
-fn marker() {
+fn client_only_marker() {
     let mut server_app = App::new();
     let mut client_app = App::new();
-    for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((
+    server_app
+        .add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<Original>()
+        .finish();
+    client_app
+        .add_plugins((
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
@@ -402,7 +411,6 @@ fn marker() {
         .replicate::<Original>()
         .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
         .finish();
-    }
 
     server_app.connect_client(&mut client_app);
 
@@ -448,7 +456,10 @@ fn marker_from_same_update() {
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
-        .register_marker::<ReplaceMarker>()
+        .register_marker_with::<ReplaceMarker>(MarkerConfig {
+            apply_in_same_update: true,
+            ..Default::default()
+        })
         // Register the regular component first to verify that receive markers are reordered.
         .replicate::<Original>()
         .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
