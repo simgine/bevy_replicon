@@ -393,24 +393,20 @@ fn receive_fns() {
 fn client_only_marker() {
     let mut server_app = App::new();
     let mut client_app = App::new();
-    server_app
-        .add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .replicate::<Original>()
-        .finish();
-    client_app
-        .add_plugins((
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
             MinimalPlugins,
             StatesPlugin,
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker::<ReplaceMarker>()
-        .replicate::<Original>()
-        .set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>)
-        .finish();
+        .replicate::<Original>();
+    }
+
+    client_app.set_marker_fns::<ReplaceMarker, _>(replace, receive_fns::default_remove::<Replaced>);
+
+    server_app.finish();
+    client_app.finish();
 
     server_app.connect_client(&mut client_app);
 
