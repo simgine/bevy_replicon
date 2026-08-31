@@ -67,8 +67,7 @@ impl ReplicatedArchetypes {
                 }
             }
 
-            // Incoming same-update markers need to be processed before other components so they
-            // can affect which receive functions are selected for the rest of the entity update.
+            // Incoming receive markers that take effect in the same update should be processed first.
             replicated_archetype.components.sort_by_key(|(rule, _)| {
                 receive_markers
                     .same_update_marker_index(rule.id)

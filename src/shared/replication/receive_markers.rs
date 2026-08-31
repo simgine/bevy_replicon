@@ -22,9 +22,9 @@ pub trait AppMarkerExt {
     /// based on marker-component presence.
     /// For details see [`Self::set_marker_fns`].
     ///
-    /// Marker registration is part of the protocol only when
-    /// [`MarkerConfig::affects_same_update`] is enabled. Other markers can be registered only on
-    /// the client.
+    /// By default, markers need to be registered only on the client. However, if
+    /// [`MarkerConfig::affects_same_update`] is enabled, marker registration becomes part of the
+    /// protocol and should be performed in the same order on the client and server.
     ///
     /// This function registers markers with default [`MarkerConfig`].
     /// See also [`Self::register_marker_with`].
@@ -334,7 +334,7 @@ pub struct MarkerConfig {
     /// are applied.
     ///
     /// When enabled, the sender orders this marker before other replicated components, allowing
-    /// its receive functions to be selected for the rest of the update. The marker registration
+    /// its receive functions to be selected for the rest of the update. Marker registration
     /// becomes part of the protocol and must use the same configuration and registration order on
     /// the client and server.
     ///
@@ -342,7 +342,7 @@ pub struct MarkerConfig {
     /// marker must be registered separately.
     ///
     /// When disabled, the marker isn't added to the protocol or prioritized by the server, so it
-    /// can be registered only on the client.
+    /// only needs to be registered on the client.
     ///
     /// By default set to `false`.
     pub affects_same_update: bool,
@@ -373,7 +373,7 @@ impl EntityMarkers {
         }
     }
 
-    /// Includes a same-update marker component that is about to be inserted on the entity.
+    /// Includes a marker component that is about to be inserted on the entity.
     ///
     /// Returns `true` if `component_id` belongs to a marker configured with
     /// [`MarkerConfig::affects_same_update`].
