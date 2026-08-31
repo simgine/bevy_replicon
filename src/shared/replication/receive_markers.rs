@@ -465,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn protocol_includes_only_same_update_markers() {
+    fn affects_same_update() {
         let mut app = App::new();
         app.init_resource::<ReceiveMarkers>()
             .init_resource::<ReplicationRegistry>()
@@ -489,7 +489,11 @@ mod tests {
         let actual = app.world_mut().remove_resource::<ProtocolHasher>().unwrap();
         let mut expected = ProtocolHasher::default();
         expected.register_marker::<MarkerB>(2, false);
-        assert_eq!(actual.finish(), expected.finish());
+        assert_eq!(
+            actual.finish(),
+            expected.finish(),
+            "should include only the marker that affects the same update"
+        );
     }
 
     #[test]
