@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Changelog
 
 - Include receive markers in the protocol only when `MarkerConfig::affects_same_update` is enabled, allowing other markers to be registered only on clients.
 
