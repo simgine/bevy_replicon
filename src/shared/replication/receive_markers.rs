@@ -23,7 +23,7 @@ pub trait AppMarkerExt {
     /// For details see [`Self::set_marker_fns`].
     ///
     /// Marker registration is part of the protocol only when
-    /// [`MarkerConfig::apply_in_same_update`] is enabled. Other markers can be registered only on
+    /// [`MarkerConfig::affects_same_update`] is enabled. Other markers can be registered only on
     /// the client.
     ///
     /// This function registers markers with default [`MarkerConfig`].
@@ -188,7 +188,7 @@ impl AppMarkerExt for App {
 
     fn register_marker_with<M: Component>(&mut self, config: MarkerConfig) -> &mut Self {
         debug!("registering marker `{}`", ShortName::of::<M>());
-        if config.apply_in_same_update {
+        if config.affects_same_update {
             self.world_mut()
                 .resource_mut::<ProtocolHasher>()
                 .register_marker::<M>(config.priority, config.need_history);
@@ -289,7 +289,7 @@ impl ReceiveMarkers {
     /// Returns the marker's position if it's configured to apply in the same update.
     pub(crate) fn same_update_marker_index(&self, component_id: ComponentId) -> Option<usize> {
         self.0.iter().position(|marker| {
-            marker.component_id == component_id && marker.config.apply_in_same_update
+            marker.component_id == component_id && marker.config.affects_same_update
         })
     }
 
@@ -345,7 +345,7 @@ pub struct MarkerConfig {
     /// can be registered only on the client.
     ///
     /// By default set to `false`.
-    pub apply_in_same_update: bool,
+    pub affects_same_update: bool,
 }
 
 /// Stores which markers are present on an entity.
@@ -376,7 +376,7 @@ impl EntityMarkers {
     /// Includes a same-update marker component that is about to be inserted on the entity.
     ///
     /// Returns `true` if `component_id` belongs to a marker configured with
-    /// [`MarkerConfig::apply_in_same_update`].
+    /// [`MarkerConfig::affects_same_update`].
     pub(crate) fn include(&mut self, markers: &ReceiveMarkers, component_id: ComponentId) -> bool {
         let Some(index) = markers.same_update_marker_index(component_id) else {
             return false;
@@ -476,7 +476,7 @@ mod tests {
             })
             .register_marker_with::<MarkerB>(MarkerConfig {
                 priority: 2,
-                apply_in_same_update: true,
+                affects_same_update: true,
                 ..Default::default()
             });
 
@@ -500,7 +500,7 @@ mod tests {
             .init_resource::<ProtocolHasher>()
             .register_marker_with::<Marker>(MarkerConfig {
                 need_history: true,
-                apply_in_same_update: true,
+                affects_same_update: true,
                 ..Default::default()
             });
 

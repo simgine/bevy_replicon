@@ -457,7 +457,7 @@ fn marker_from_same_update() {
             RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
         ))
         .register_marker_with::<ReplaceMarker>(MarkerConfig {
-            apply_in_same_update: true,
+            affects_same_update: true,
             ..Default::default()
         })
         // Register the regular component first to verify that receive markers are reordered.
