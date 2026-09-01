@@ -153,7 +153,7 @@ jobs:
       # We're running into a space limit,
       # which causes `ld` to terminate with a bus error.
       - name: Free disk space
-        uses: endersonmenezes/free-disk-space@v3
+        uses: endersonmenezes/free-disk-space@v4
         with:
           remove_android: true
           rm_cmd: "rmz"
