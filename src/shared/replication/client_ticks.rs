@@ -119,6 +119,9 @@ pub(crate) struct EntityTicks {
     /// The list of components that were replicated on this tick.
     pub(crate) components: ComponentMask,
 
+    /// Whether a hidden marker was sent for this entity.
+    pub(crate) remote_hidden: bool,
+
     /// Last acknowledged diff cursor for components.
     ///
     /// This is separate from [`Self::server_tick`]: the server tick controls change
@@ -143,6 +146,7 @@ impl EntityTicks {
             server_tick,
             system_tick,
             components,
+            remote_hidden: false,
             diff_cursors: Default::default(),
         }
     }

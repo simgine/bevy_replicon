@@ -329,6 +329,15 @@ fn apply_update_message(
                     stats.despawns += len;
                 }
             }
+            UpdateFlags::HIDDEN => {
+                let len = apply_array(array_kind, message, |message| {
+                    apply_hide_marker(world, params, message)
+                })
+                .map_err(|e| format!("unable to apply hidden markers: {e}"))?;
+                if let Some(stats) = &mut params.stats {
+                    stats.hidden += len;
+                }
+            }
             UpdateFlags::REMOVALS => {
                 let len = apply_array(array_kind, message, |message| {
                     apply_removals(world, params, message, message_tick)
@@ -471,6 +480,23 @@ fn apply_despawn(
         }
     }
 
+    Ok(())
+}
+
+fn apply_hide_marker(
+    world: &mut World,
+    params: &mut ReceiveParams,
+    message: &mut Bytes,
+) -> Result<()> {
+    let server_entity = postcard_utils::entity_from_buf(message)?;
+
+    let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
+        debug!("skipping hide marker for unknown server's `{server_entity}`");
+        return Ok(());
+    };
+
+    debug!("marking `{client_entity}` as hidden");
+    world.entity_mut(client_entity).insert(RemoteHidden);
     Ok(())
 }
 
@@ -701,6 +727,7 @@ fn confirm_tick(
     } else {
         entity.insert(ConfirmHistory::new(tick));
     }
+    entity.remove::<RemoteHidden>();
     replicated.write(EntityReplicated {
         entity: entity.id(),
         tick,
@@ -778,6 +805,7 @@ fn apply_mutations(
     let new_tick = message_tick.is_newer(history.last_tick());
     if new_tick {
         history.set_last_tick(message_tick);
+        client_entity.remove::<RemoteHidden>();
     } else {
         if !params.entity_markers.need_history() {
             trace!("ignoring outdated mutations for `{}`", client_entity.id());
@@ -966,6 +994,8 @@ pub struct ClientReplicationStats {
     pub mappings: usize,
     /// Incremented per entity despawn.
     pub despawns: usize,
+    /// Incremented per entity hide.
+    pub hidden: usize,
     /// Replication messages received.
     pub messages: usize,
     /// Replication bytes received in message payloads (without internal messaging plugin data).
@@ -993,6 +1023,13 @@ pub struct ClientReplicationStats {
 #[derive(Component, Default, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Remote;
+
+/// Marker that indicates that the entity lost visibility.
+///
+/// Applicable only for entities with lifetime != `ScopeLifetime::WhileVisible`.
+#[derive(Component, Default, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+pub struct RemoteHidden;
 
 /// Triggered when user-defined bytes are received in a replication message.
 ///

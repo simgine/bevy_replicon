@@ -48,6 +48,13 @@ pub(crate) struct Updates {
     /// May not be equal to the length of [`Self::despawns`] since adjacent ranges are merged together.
     despawns_len: usize,
 
+    /// Entities that lost visibility but remain present on the client.
+    hidden: Vec<Range<usize>>,
+    /// Number of hidden entities.
+    ///
+    /// May not be equal to the length of [`Self::hidden`] since adjacent ranges are merged together.
+    hidden_len: usize,
+
     /// Component removals that happened in this tick.
     ///
     /// Serialized as a list of pairs of entity chunk and a multiple chunks with
@@ -99,6 +106,18 @@ impl Updates {
             }
         }
         self.despawns.push(entity);
+    }
+
+    pub(crate) fn add_hidden(&mut self, entity: Range<usize>) {
+        self.hidden_len += 1;
+        if let Some(last) = self.hidden.last_mut() {
+            // Append to previous range if possible.
+            if last.end == entity.start {
+                last.end = entity.end;
+                return;
+            }
+        }
+        self.hidden.push(entity);
     }
 
     /// Updates internal state to start writing removed components for an entity.
@@ -201,6 +220,7 @@ impl Updates {
     pub(crate) fn is_empty(&self) -> bool {
         self.changes.is_empty()
             && self.despawns.is_empty()
+            && self.hidden.is_empty()
             && self.removals.is_empty()
             && self.mappings.is_empty()
     }
@@ -252,6 +272,12 @@ impl Updates {
                     }
                     message_size += self.despawns.iter().map(Range::len).sum::<usize>();
                 }
+                UpdateFlags::HIDDEN => {
+                    if flag != last_flag {
+                        message_size += serialized_size(&self.hidden_len)?;
+                    }
+                    message_size += self.hidden.iter().map(Range::len).sum::<usize>();
+                }
                 UpdateFlags::REMOVALS => {
                     if flag != last_flag {
                         message_size += serialized_size(&self.removals.len())?;
@@ -299,6 +325,14 @@ impl Updates {
                         message.extend_from_slice(&serialized[range.clone()]);
                     }
                 }
+                UpdateFlags::HIDDEN => {
+                    if flag != last_flag {
+                        postcard_utils::to_extend_mut(&self.hidden_len, &mut message)?;
+                    }
+                    for range in &self.hidden {
+                        message.extend_from_slice(&serialized[range.clone()]);
+                    }
+                }
                 UpdateFlags::REMOVALS => {
                     if flag != last_flag {
                         postcard_utils::to_extend_mut(&self.removals.len(), &mut message)?;
@@ -341,6 +375,9 @@ impl Updates {
         if !self.despawns.is_empty() {
             flags |= UpdateFlags::DESPAWNS;
         }
+        if !self.hidden.is_empty() {
+            flags |= UpdateFlags::HIDDEN;
+        }
         if !self.removals.is_empty() {
             flags |= UpdateFlags::REMOVALS;
         }
@@ -362,6 +399,8 @@ impl Updates {
         self.mappings_len = 0;
         self.despawns.clear();
         self.despawns_len = 0;
+        self.hidden.clear();
+        self.hidden_len = 0;
         self.changes.clear();
         self.removals.clear();
     }

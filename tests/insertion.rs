@@ -922,6 +922,9 @@ fn visibility_gain() {
         "client should receive the entity with `AlwaysPresent` lifetime"
     );
 
+    let mut hidden = client_app.world_mut().query::<&RemoteHidden>();
+    assert_eq!(hidden.iter(client_app.world()).len(), 0);
+
     let client = **client_app.world().resource::<TestClientEntity>();
     server_app.world_mut().entity_mut(client).insert((
         ComponentVisibility,
@@ -934,6 +937,11 @@ fn visibility_gain() {
     client_app.update();
 
     assert_eq!(components.iter(client_app.world()).len(), 3);
+    assert_eq!(
+        hidden.iter(client_app.world()).len(),
+        0,
+        "component visibility shouldn't mark the entity as hidden"
+    );
 }
 
 #[derive(Component, Deserialize, Serialize)]
