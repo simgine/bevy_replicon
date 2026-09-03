@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changes
+
+- ClientVisilibity::get is now public and be used to access the `FiltersMask` bitmask of an entity.
+
 ## [0.44.0] - 2026-09-01
 
 ### Changed
