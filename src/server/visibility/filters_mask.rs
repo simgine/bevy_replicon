@@ -12,7 +12,7 @@ use crate::{
 ///
 /// If the bit is set, it means that this filter hides its associated data.
 #[derive(Default, Reflect, Debug, PartialEq, Clone, Copy)]
-pub(crate) struct FiltersMask(u32);
+pub struct FiltersMask(u32);
 
 impl FiltersMask {
     pub(super) fn insert(&mut self, bit: FilterBit) {
@@ -23,16 +23,18 @@ impl FiltersMask {
         self.0 &= !(1 << *bit);
     }
 
-    pub(super) fn contains(&self, bit: FilterBit) -> bool {
+    /// Returns `true` if the given filter hides the entity's data.
+    pub fn contains(&self, bit: FilterBit) -> bool {
         (self.0 & (1 << *bit)) != 0
     }
 
-    pub(super) fn is_empty(&self) -> bool {
+    /// Returns `true` if no filter hides the entity's data.
+    pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
 
     /// Returns an iterator over all set bits, in ascending bit order.
-    fn iter(self) -> impl Iterator<Item = FilterBit> {
+    pub fn iter(self) -> impl Iterator<Item = FilterBit> {
         let mut mask = self.0;
         iter::from_fn(move || {
             if mask == 0 {
@@ -118,7 +120,7 @@ impl FilterBit {
     /// Creates a new instance for the given bit index.
     ///
     /// Valid values are in the range `[0, 32)` that map directly to bits in [`FiltersMask`].
-    pub(super) fn new(value: u8) -> Self {
+    pub fn new(value: u8) -> Self {
         debug_assert!(value < 32, "filter bit must be less than {}", u32::BITS);
         Self(value)
     }

@@ -165,7 +165,7 @@ impl ClientVisibility {
     }
 
     /// Returns bits for all filters that affect visibility of the given entity.
-    pub(crate) fn get(&self, entity: Entity) -> FiltersMask {
+    pub fn get(&self, entity: Entity) -> FiltersMask {
         self.hidden.get(&entity).copied().unwrap_or_default()
     }
 }
