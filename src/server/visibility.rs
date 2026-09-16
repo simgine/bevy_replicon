@@ -109,15 +109,15 @@ impl AppVisibilityExt for App {
 fn update_for_new_clients<F: VisibilityFilter>(
     insert: On<Insert, ClientVisibility>,
     registry: Res<FilterRegistry>,
-    mut clients: Query<&mut ClientVisibility, Without<F::ClientComponent>>,
+    mut clients: Query<(&mut ClientVisibility, Option<&F::ClientComponent>)>,
     entities: Query<(Entity, &F)>,
 ) {
-    if let Ok(mut visibility) = clients.get_mut(insert.entity) {
+    if let Ok((mut visibility, client_component)) = clients.get_mut(insert.entity) {
         let bit = registry.bit::<F>();
         for (entity, component) in &entities {
-            let visible = component.is_visible(insert.entity, None);
+            let visible = component.is_visible(insert.entity, client_component);
             debug!(
-                "evaluating missing `{}` for new client `{}` for entity `{entity}` to `{visible}`",
+                "evaluating `{}` for new client `{}` for entity `{entity}` to `{visible}`",
                 ShortName::of::<F>(),
                 insert.entity,
             );
@@ -317,6 +317,40 @@ mod tests {
         assert!(
             visibility2
                 .get(entity2)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
+    }
+
+    #[test]
+    fn components_before_client_visibility_added() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<SelfFilter>();
+
+        let entity = app.world_mut().spawn(SelfFilter).id();
+        let client1 = app.world_mut().spawn(SelfFilter).id();
+        app.world_mut()
+            .entity_mut(client1)
+            .insert(ClientVisibility::default());
+
+        let client2 = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(client2)
+            .insert(ClientVisibility::default());
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility = app.world().get::<ClientVisibility>(client1).unwrap();
+        assert!(
+            !visibility
+                .get(entity)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
+
+        let visibility = app.world().get::<ClientVisibility>(client2).unwrap();
+        assert!(
+            visibility
+                .get(entity)
                 .hides_entity(registry, ScopeLifetime::WhileVisible)
         );
     }

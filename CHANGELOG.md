@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Visibility filters inserted on the client before ClientVisibility is added are now properly handled once ClientVisibility is added.
+
 ## [0.44.1] - 2026-09-14
 
 ### Added
