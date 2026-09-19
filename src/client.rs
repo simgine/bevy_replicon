@@ -605,7 +605,7 @@ fn apply_removals(
     let Some(&client_entity) = params.entity_map.to_client().get(&server_entity) else {
         // Client could predict despawn.
         debug!("ignoring removals for unknown server's `{server_entity}`");
-        message.advance(data_size);
+        advance_checked(message, data_size)?;
         return Ok(());
     };
 
@@ -616,7 +616,7 @@ fn apply_removals(
         // Entity could've been disabled while despawned, which doesn't remove it from the entity mapping.
         debug!("ignoring removals for invalid `{client_entity}`");
         params.entity_map.remove_by_client(client_entity);
-        message.advance(data_size);
+        advance_checked(message, data_size)?;
         return Ok(());
     };
 
@@ -679,7 +679,7 @@ fn apply_changes(
             let Ok(client_entity) = world.get_entity_mut(entry.get()) else {
                 // Client could predict despawn.
                 debug!("ignoring changes for despawned `{}`", entry.get());
-                message.advance(data_size);
+                advance_checked(message, data_size)?;
                 return Ok(());
             };
 
@@ -749,6 +749,24 @@ fn apply_changes(
         .entity_buffer
         .spawn(unsafe { client_entity.world_mut() });
     client_entity.flush();
+
+    Ok(())
+}
+
+/// Advances the message cursor past a block of the announced size.
+///
+/// [`Bytes::advance`] panics if the count exceeds the remaining length, so the
+/// size read from the message is checked against it first.
+fn advance_checked(message: &mut Bytes, size: usize) -> Result<()> {
+    if size > message.len() {
+        return Err(format!(
+            "data size ({size}) exceeds remaining message length ({})",
+            message.len()
+        )
+        .into());
+    }
+
+    message.advance(size);
 
     Ok(())
 }
@@ -868,7 +886,7 @@ fn apply_mutations(
         // Mutation could arrive after a despawn from update message
         // or client could predict the despawn.
         debug!("ignoring mutations for unknown server's `{server_entity}`");
-        message.advance(data_size);
+        advance_checked(message, data_size)?;
         return Ok(());
     };
 
@@ -884,7 +902,7 @@ fn apply_mutations(
         // Entity could've been disabled while despawned, which doesn't remove it from the entity mapping.
         debug!("ignoring mutations for invalid `{client_entity}`");
         params.entity_map.remove_by_client(client_entity);
-        message.advance(data_size);
+        advance_checked(message, data_size)?;
         return Ok(());
     };
 
@@ -906,7 +924,7 @@ fn apply_mutations(
     } else {
         if !params.entity_markers.need_history() {
             trace!("ignoring outdated mutations for `{}`", client_entity.id());
-            message.advance(data_size);
+            advance_checked(message, data_size)?;
             return Ok(());
         }
 
@@ -916,7 +934,7 @@ fn apply_mutations(
                 "discarding {ago} ticks old mutations for `{}`",
                 client_entity.id()
             );
-            message.advance(data_size);
+            advance_checked(message, data_size)?;
             return Ok(());
         }
 
