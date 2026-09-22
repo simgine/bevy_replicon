@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.2] - 2026-09-22
+
 ### Fixed
 
 - Visibility filters inserted on the client before ClientVisibility is added are now properly handled once ClientVisibility is added.
@@ -1196,7 +1198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.44.1..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.44.2..HEAD
+[0.44.2]: https://github.com/simgine/bevy_replicon/compare/v0.44.1...v0.44.2
 [0.44.1]: https://github.com/simgine/bevy_replicon/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/simgine/bevy_replicon/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/simgine/bevy_replicon/compare/v0.42.3...v0.43.0
