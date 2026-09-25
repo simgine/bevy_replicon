@@ -1,5 +1,9 @@
 use bevy::{
-    ecs::system::{FilteredResourcesMutParamBuilder, FilteredResourcesParamBuilder, ParamBuilder},
+    ecs::{
+        resource::ResourceEntities,
+        system::{ParamBuilder, QueryParamBuilder},
+        world::{FilteredEntityMut, FilteredEntityRef},
+    },
     prelude::*,
 };
 
@@ -7,6 +11,7 @@ use super::server_tick::ServerTick;
 use crate::{
     prelude::*,
     shared::{
+        get_resource_by_id, get_resource_entity_mut, get_resource_mut_by_id,
         message::{
             ctx::{ServerReceiveCtx, ServerSendCtx},
             registry::RemoteMessageRegistry,
@@ -35,11 +40,14 @@ impl Plugin for ServerMessagePlugin {
 
         if registry.has_any_client() {
             let receive_fn = (
-                FilteredResourcesMutParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for message in registry.iter_all_client() {
-                        builder.add_write_by_id(message.from_messages_id());
+                        builder.optional(|builder| {
+                            builder.mut_id(message.from_messages_id());
+                        });
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
@@ -58,11 +66,14 @@ impl Plugin for ServerMessagePlugin {
 
         if registry.has_client_events() {
             let trigger_fn = (
-                FilteredResourcesMutParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for event in registry.iter_client_events() {
-                        builder.add_write_by_id(event.message().from_messages_id());
+                        builder.optional(|builder| {
+                            builder.mut_id(event.message().from_messages_id());
+                        });
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
             )
@@ -80,11 +91,14 @@ impl Plugin for ServerMessagePlugin {
 
         if registry.has_any_shared() {
             let receive_shared_fn = (
-                FilteredResourcesMutParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for message in registry.iter_all_shared() {
-                        builder.add_write_by_id(message.shared_messages_id());
+                        builder.optional(|builder| {
+                            builder.mut_id(message.shared_messages_id());
+                        });
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
@@ -103,11 +117,14 @@ impl Plugin for ServerMessagePlugin {
 
         if registry.has_shared_events() {
             let trigger_shared_fn = (
-                FilteredResourcesMutParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for event in registry.iter_shared_events() {
-                        builder.add_write_by_id(event.message().shared_messages_id());
+                        builder.optional(|builder| {
+                            builder.mut_id(event.message().shared_messages_id());
+                        });
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
             )
@@ -124,11 +141,14 @@ impl Plugin for ServerMessagePlugin {
 
         if registry.has_any_server() {
             let send_or_buffer_fn = (
-                FilteredResourcesParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for message in registry.iter_all_server() {
-                        builder.add_read_by_id(message.to_messages_id());
+                        builder.optional(|builder| {
+                            builder.ref_id(message.to_messages_id());
+                        });
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
                 ParamBuilder,
@@ -140,16 +160,21 @@ impl Plugin for ServerMessagePlugin {
                 .build_system(send_or_buffer);
 
             let send_locally_fn = (
-                FilteredResourcesMutParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for message in registry.iter_all_server() {
-                        builder.add_write_by_id(message.to_messages_id());
+                        builder.optional(|builder| {
+                            builder.mut_id(message.to_messages_id());
+                        });
                     }
                 }),
-                FilteredResourcesMutParamBuilder::new(|builder| {
+                QueryParamBuilder::new(|builder| {
                     for message in registry.iter_all_server() {
-                        builder.add_write_by_id(message.messages_id());
+                        builder.optional(|builder| {
+                            builder.mut_id(message.messages_id());
+                        });
                     }
                 }),
+                ParamBuilder,
                 ParamBuilder,
             )
                 .build_state(app.world_mut())
@@ -175,13 +200,14 @@ impl Plugin for ServerMessagePlugin {
 }
 
 fn send_or_buffer(
-    to_messages: FilteredResources,
+    to_messages: Query<FilteredEntityRef>,
     mut server_messages: ResMut<ServerMessages>,
     mut message_buffer: ResMut<MessageBuffer>,
     mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     message_registry: Res<RemoteMessageRegistry>,
     clients: Query<Entity, With<ConnectedClient>>,
+    resource_entities: &ResourceEntities,
 ) {
     message_buffer.start_tick();
     let mut ctx = ServerSendCtx {
@@ -190,9 +216,9 @@ fn send_or_buffer(
     };
 
     for message in message_registry.iter_all_server() {
-        let to_messages = to_messages
-            .get_by_id(message.to_messages_id())
-            .expect("to clients messages resource should be accessible");
+        let to_messages =
+            get_resource_by_id(message.to_messages_id(), &to_messages, resource_entities)
+                .expect("to clients messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
         unsafe {
@@ -218,11 +244,12 @@ fn send_buffered(
 }
 
 fn receive(
-    mut from_messages: FilteredResourcesMut,
+    mut from_messages: Query<FilteredEntityMut>,
     mut server_messages: ResMut<ServerMessages>,
     mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     message_registry: Res<RemoteMessageRegistry>,
+    resource_entities: &ResourceEntities,
 ) {
     let mut ctx = ServerReceiveCtx {
         storage: &mut storage,
@@ -230,8 +257,14 @@ fn receive(
     };
 
     for message in message_registry.iter_all_client() {
+        let mut from_messages = get_resource_entity_mut(
+            message.from_messages_id(),
+            &mut from_messages,
+            resource_entities,
+        );
         let from_messages = from_messages
-            .get_mut_by_id(message.from_messages_id())
+            .as_mut()
+            .and_then(|entity| get_resource_mut_by_id(message.from_messages_id(), entity))
             .expect("from clients messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
@@ -240,11 +273,12 @@ fn receive(
 }
 
 fn receive_shared(
-    mut shared_messages: FilteredResourcesMut,
+    mut shared_messages: Query<FilteredEntityMut>,
     mut server_messages: ResMut<ServerMessages>,
     mut storage: ResMut<ReplicationStorage>,
     type_registry: Res<AppTypeRegistry>,
     message_registry: Res<RemoteMessageRegistry>,
+    resource_entities: &ResourceEntities,
 ) {
     let mut ctx = ServerReceiveCtx {
         storage: &mut storage,
@@ -252,8 +286,14 @@ fn receive_shared(
     };
 
     for message in message_registry.iter_all_shared() {
+        let mut shared_messages = get_resource_entity_mut(
+            message.shared_messages_id(),
+            &mut shared_messages,
+            resource_entities,
+        );
         let shared_messages = shared_messages
-            .get_mut_by_id(message.shared_messages_id())
+            .as_mut()
+            .and_then(|entity| get_resource_mut_by_id(message.shared_messages_id(), entity))
             .expect("shared messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
@@ -262,13 +302,20 @@ fn receive_shared(
 }
 
 fn trigger(
-    mut from_messages: FilteredResourcesMut,
+    mut from_messages: Query<FilteredEntityMut>,
     mut commands: Commands,
     registry: Res<RemoteMessageRegistry>,
+    resource_entities: &ResourceEntities,
 ) {
     for event in registry.iter_client_events() {
+        let mut from_messages = get_resource_entity_mut(
+            event.message().from_messages_id(),
+            &mut from_messages,
+            resource_entities,
+        );
         let from_messages = from_messages
-            .get_mut_by_id(event.message().from_messages_id())
+            .as_mut()
+            .and_then(|entity| get_resource_mut_by_id(event.message().from_messages_id(), entity))
             .expect("from clients messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this message data.
         unsafe { event.trigger(&mut commands, from_messages.into_inner()) };
@@ -276,13 +323,20 @@ fn trigger(
 }
 
 fn trigger_shared(
-    mut shared_messages: FilteredResourcesMut,
+    mut shared_messages: Query<FilteredEntityMut>,
     mut commands: Commands,
     registry: Res<RemoteMessageRegistry>,
+    resource_entities: &ResourceEntities,
 ) {
     for event in registry.iter_shared_events() {
+        let mut shared_messages = get_resource_entity_mut(
+            event.message().shared_messages_id(),
+            &mut shared_messages,
+            resource_entities,
+        );
         let shared_messages = shared_messages
-            .get_mut_by_id(event.message().shared_messages_id())
+            .as_mut()
+            .and_then(|entity| get_resource_mut_by_id(event.message().shared_messages_id(), entity))
             .expect("shared messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this event data.
         unsafe { event.trigger(&mut commands, shared_messages.into_inner()) };
@@ -290,16 +344,27 @@ fn trigger_shared(
 }
 
 fn send_locally(
-    mut to_messages: FilteredResourcesMut,
-    mut messages: FilteredResourcesMut,
+    mut to_messages: Query<FilteredEntityMut>,
+    mut messages: Query<FilteredEntityMut>,
     registry: Res<RemoteMessageRegistry>,
+    resource_entities: &ResourceEntities,
 ) {
     for message in registry.iter_all_server() {
+        let mut to_messages = get_resource_entity_mut(
+            message.to_messages_id(),
+            &mut to_messages,
+            resource_entities,
+        );
         let to_messages = to_messages
-            .get_mut_by_id(message.to_messages_id())
+            .as_mut()
+            .and_then(|entity| get_resource_mut_by_id(message.to_messages_id(), entity))
             .expect("to messages resource should be accessible");
+
+        let mut messages =
+            get_resource_entity_mut(message.messages_id(), &mut messages, resource_entities);
         let messages = messages
-            .get_mut_by_id(message.messages_id())
+            .as_mut()
+            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
