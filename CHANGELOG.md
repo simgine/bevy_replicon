@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Diff replication no longer falls back to a full snapshot when the retained history contains exactly all the diffs a client needs.
+
 ## [0.44.2] - 2026-09-22
 
 ### Fixed
