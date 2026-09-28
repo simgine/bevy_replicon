@@ -6,16 +6,7 @@ pub mod replication;
 pub mod replicon_tick;
 pub mod server_entity_map;
 
-use bevy::{
-    ecs::{
-        change_detection::MutUntyped,
-        component::ComponentId,
-        resource::ResourceEntities,
-        world::{FilteredEntityMut, FilteredEntityRef},
-    },
-    prelude::*,
-    ptr::Ptr,
-};
+use bevy::prelude::*;
 
 use crate::prelude::*;
 use backend::connected_client::NetworkIdMap;
@@ -163,48 +154,4 @@ pub enum AuthMethod {
     ///
     /// The user is responsible for manually inserting [`AuthorizedClient`] on the server.
     Custom,
-}
-
-/// Fetches the resource with `resource_id` from `query`.
-///
-/// Returns [`None`] if the resource doesn't exist.
-pub(crate) fn get_resource_by_id<'q>(
-    resource_id: ComponentId,
-    query: &'q Query<'_, '_, FilteredEntityRef<'_, '_>>,
-    resource_entities: &ResourceEntities,
-) -> Option<Ptr<'q>> {
-    resource_entities
-        .get(resource_id)
-        .and_then(|entity| query.get(entity).ok())
-        .and_then(|entity| entity.get_by_id(resource_id))
-}
-
-/// Fetches the resource entity for `resource_id` from `query`.
-///
-/// Returns [`None`] if the resource doesn't exist.
-// Because of lifetime issues, we need to store the `FilteredEntityMut` returned by the queries.
-// TODO: Replace these two functions with one that uses `FilteredEntityMut::into_mut_by_id` when
-// it's upstream.
-pub(crate) fn get_resource_entity_mut<'q, 's>(
-    resource_id: ComponentId,
-    query: &'q mut Query<'_, 's, FilteredEntityMut>,
-    resource_entities: &ResourceEntities,
-) -> Option<FilteredEntityMut<'q, 's>> {
-    resource_entities
-        .get(resource_id)
-        .and_then(|entity| query.get_mut(entity).ok())
-}
-
-/// Fetches the resource with `resource_id` from `entity_mut`.
-///
-/// Returns [`None`] if the entity doesn't hold the resource, or the query didn't have mutable
-/// access to the resource.
-// Because of lifetime issues, we need to store the `FilteredEntityMut` returned by the queries.
-// TODO: Replace these two functions with one that uses `FilteredEntityMut::into_mut_by_id` when
-// it's upstream.
-pub(crate) fn get_resource_mut_by_id<'e>(
-    resource_id: ComponentId,
-    entity_mut: &'e mut FilteredEntityMut<'_, '_>,
-) -> Option<MutUntyped<'e>> {
-    entity_mut.get_mut_by_id(resource_id)
 }

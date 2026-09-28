@@ -11,7 +11,6 @@ use super::ServerUpdateTick;
 use crate::{
     prelude::*,
     shared::{
-        get_resource_by_id, get_resource_entity_mut, get_resource_mut_by_id,
         message::{
             ctx::{ClientReceiveCtx, ClientSendCtx},
             registry::RemoteMessageRegistry,
@@ -318,13 +317,15 @@ fn send(
     };
 
     for message in registry.iter_all_client() {
-        let messages = get_resource_by_id(message.messages_id(), &messages, resource_entities)
+        let messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| messages.get(entity).ok())
+            .and_then(|entity| entity.get_by_id(message.messages_id()))
             .expect("messages resource should be accessible");
-        let mut reader =
-            get_resource_entity_mut(message.reader_id(), &mut readers, resource_entities);
-        let reader = reader
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.reader_id(), entity))
+        let reader = resource_entities
+            .get(message.reader_id())
+            .and_then(|entity| readers.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.reader_id()))
             .expect("message reader resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
@@ -357,20 +358,15 @@ fn send_shared(
     };
 
     for message in registry.iter_all_shared() {
-        let mut messages =
-            get_resource_entity_mut(message.messages_id(), &mut messages, resource_entities);
-        let messages = messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
+        let messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.messages_id()))
             .expect("messages resource should be accessible");
-        let mut shared_messages = get_resource_entity_mut(
-            message.shared_messages_id(),
-            &mut shared_messages,
-            resource_entities,
-        );
-        let shared_messages = shared_messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.shared_messages_id(), entity))
+        let shared_messages = resource_entities
+            .get(message.shared_messages_id())
+            .and_then(|entity| shared_messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.shared_messages_id()))
             .expect("shared messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
@@ -404,16 +400,15 @@ fn receive(
     };
 
     for message in message_registry.iter_all_server() {
-        let mut messages =
-            get_resource_entity_mut(message.messages_id(), &mut messages, resource_entities);
-        let messages = messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
+        let messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.messages_id()))
             .expect("messages resource should be accessible");
-        let mut queue = get_resource_entity_mut(message.queue_id(), &mut queues, resource_entities);
-        let queue = queue
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.queue_id(), entity))
+        let queue = resource_entities
+            .get(message.queue_id())
+            .and_then(|entity| queues.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.queue_id()))
             .expect("queue resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
@@ -436,14 +431,10 @@ fn trigger(
     resource_entities: &ResourceEntities,
 ) {
     for event in registry.iter_server_events() {
-        let mut messages = get_resource_entity_mut(
-            event.message().messages_id(),
-            &mut messages,
-            resource_entities,
-        );
-        let messages = messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(event.message().messages_id(), entity))
+        let messages = resource_entities
+            .get(event.message().messages_id())
+            .and_then(|entity| messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(event.message().messages_id()))
             .expect("messages resource should be accessible");
         event.trigger(&mut commands, messages.into_inner());
     }
@@ -456,14 +447,10 @@ fn trigger_shared(
     resource_entities: &ResourceEntities,
 ) {
     for event in registry.iter_shared_events() {
-        let mut shared_messages = get_resource_entity_mut(
-            event.message().shared_messages_id(),
-            &mut shared_messages,
-            resource_entities,
-        );
-        let shared_messages = shared_messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(event.message().shared_messages_id(), entity))
+        let shared_messages = resource_entities
+            .get(event.message().shared_messages_id())
+            .and_then(|entity| shared_messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(event.message().shared_messages_id()))
             .expect("shared messages resource should be accessible");
         // SAFETY: passed pointer was obtained using this event data.
         unsafe { event.trigger(&mut commands, shared_messages.into_inner()) };
@@ -477,21 +464,16 @@ fn send_locally(
     resource_entities: &ResourceEntities,
 ) {
     for message in registry.iter_all_client() {
-        let mut from_messages = get_resource_entity_mut(
-            message.from_messages_id(),
-            &mut from_messages,
-            resource_entities,
-        );
-        let from_messages = from_messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.from_messages_id(), entity))
+        let from_messages = resource_entities
+            .get(message.from_messages_id())
+            .and_then(|entity| from_messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.from_messages_id()))
             .expect("from clients messages resource should be accessible");
 
-        let mut messages =
-            get_resource_entity_mut(message.messages_id(), &mut messages, resource_entities);
-        let messages = messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
+        let messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.messages_id()))
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
@@ -506,21 +488,16 @@ fn send_shared_locally(
     resource_entities: &ResourceEntities,
 ) {
     for message in registry.iter_all_shared() {
-        let mut shared_messages = get_resource_entity_mut(
-            message.shared_messages_id(),
-            &mut shared_messages,
-            resource_entities,
-        );
-        let shared_messages = shared_messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.shared_messages_id(), entity))
+        let shared_messages = resource_entities
+            .get(message.shared_messages_id())
+            .and_then(|entity| shared_messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.shared_messages_id()))
             .expect("shared messages resource should be accessible");
 
-        let mut messages =
-            get_resource_entity_mut(message.messages_id(), &mut messages, resource_entities);
-        let messages = messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
+        let messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.messages_id()))
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointers were obtained using this message data.
@@ -536,11 +513,10 @@ fn reset(
     resource_entities: &ResourceEntities,
 ) {
     for message in registry.iter_all_client() {
-        let mut messages =
-            get_resource_entity_mut(message.messages_id(), &mut messages, resource_entities);
-        let messages = messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
+        let messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.messages_id()))
             .expect("messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
@@ -548,10 +524,10 @@ fn reset(
     }
 
     for message in registry.iter_all_server() {
-        let mut queue = get_resource_entity_mut(message.queue_id(), &mut queues, resource_entities);
-        let queue = queue
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.queue_id(), entity))
+        let queue = resource_entities
+            .get(message.queue_id())
+            .and_then(|entity| queues.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.queue_id()))
             .expect("queue resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
@@ -559,14 +535,10 @@ fn reset(
     }
 
     for message in registry.iter_all_shared() {
-        let mut shared_messages = get_resource_entity_mut(
-            message.messages_id(),
-            &mut shared_messages,
-            resource_entities,
-        );
-        let shared_messages = shared_messages
-            .as_mut()
-            .and_then(|entity| get_resource_mut_by_id(message.messages_id(), entity))
+        let shared_messages = resource_entities
+            .get(message.messages_id())
+            .and_then(|entity| shared_messages.get_mut(entity).ok())
+            .and_then(|entity| entity.into_mut_by_id(message.messages_id()))
             .expect("shared messages resource should be accessible");
 
         // SAFETY: passed pointer was obtained using this message data.
