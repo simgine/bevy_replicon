@@ -243,12 +243,12 @@ impl Plugin for ServerPlugin {
     }
 }
 
-fn handle_connect(add: On<Add, ConnectedClient>, mut message_buffer: ResMut<MessageBuffer>) {
+fn handle_connect(add: On<Add<ConnectedClient>>, mut message_buffer: ResMut<MessageBuffer>) {
     debug!("client `{}` connected", add.entity);
     message_buffer.exclude_client(add.entity);
 }
 
-fn handle_disconnect(remove: On<Remove, ConnectedClient>, mut messages: ResMut<ServerMessages>) {
+fn handle_disconnect(remove: On<Remove<ConnectedClient>>, mut messages: ResMut<ServerMessages>) {
     debug!("client `{}` disconnected", remove.entity);
     messages.remove_client(remove.entity);
 }
@@ -299,7 +299,7 @@ pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
 }
 
 fn buffer_removals(
-    remove: On<Remove>,
+    remove: On<Remove<()>>,
     entities: &Entities,
     archetypes: &Archetypes,
     state: Res<State<ServerState>>,
@@ -341,7 +341,7 @@ fn buffer_removals(
 }
 
 fn buffer_despawn(
-    despawn: On<Despawn, Replicated>,
+    despawn: On<Despawn<Replicated>>,
     mut despawn_buffer: ResMut<DespawnBuffer>,
     state: Res<State<ServerState>>,
 ) {
@@ -352,7 +352,7 @@ fn buffer_despawn(
 }
 
 fn cleanup_unreplicated(
-    despawn: On<Despawn, TicksTracked>,
+    despawn: On<Despawn<TicksTracked>>,
     state: Res<State<ServerState>>,
     replicated: Query<&Replicated>,
     mut clients: Query<&mut ClientTicks>,
@@ -950,7 +950,7 @@ fn send_messages(
 // The storage resource may be unavailable while receiving replication, and the
 // client may have marked `Replicated` as a required component for `Remote`.
 // Cleanup is handled manually in the receive logic.
-fn cleanup_storage(remove: On<Remove, Replicated>, mut storage: If<ResMut<ReplicationStorage>>) {
+fn cleanup_storage(remove: On<Remove<Replicated>>, mut storage: If<ResMut<ReplicationStorage>>) {
     storage.entities.remove(&remove.entity);
 }
 

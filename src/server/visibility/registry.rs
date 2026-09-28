@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    utils::{TypeIdMap, TypeIdMapExt},
+    utils::{TypeIdHashMap, TypeIdHashMapExt},
 };
 
 use super::{FilterScope, filters_mask::FilterBit};
@@ -18,7 +18,7 @@ use crate::{
 /// affected by filters.
 #[derive(Resource, Default)]
 pub struct FilterRegistry {
-    bits: TypeIdMap<FilterBit>,
+    bits: TypeIdHashMap<FilterBit>,
     scopes: Vec<(VisibilityScope, ScopeLifetime)>,
 }
 
