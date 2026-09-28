@@ -120,6 +120,10 @@ name = "diff"
 required-features = ["client", "server"]
 
 [[test]]
+name = "diff_buffering"
+required-features = ["client", "server"]
+
+[[test]]
 name = "fns"
 required-features = ["client"]
 

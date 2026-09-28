@@ -123,8 +123,10 @@ impl ComponentFns {
 
     /// Calls the assigned writing or consuming function based on entity markers.
     ///
-    /// Selects the first-found write function like [`Self::write`], but if its marker doesn't require history,
-    /// the consume function will be used instead.
+    /// Selects the first-found write function like [`Self::write`], but if its marker doesn't require history
+    /// or the mutation is outside the history window, the consume function will be used instead.
+    /// Rules that need older mutations use the write function regardless of these conditions,
+    /// but only while the component exists.
     ///
     /// # Safety
     ///
@@ -137,16 +139,24 @@ impl ComponentFns {
         receive_markers: &ReceiveMarkers,
         entity: &mut DeferredEntity,
         message: &mut Bytes,
+        write_history: bool,
     ) -> Result<()> {
-        if let Some(receive_fns) = self
+        let (receive_fns, needs_history) = self
             .markers
             .iter()
             .zip(entity_markers.markers())
             .zip(receive_markers.iter_require_history())
             .filter(|&((_, contains), _)| *contains)
-            .find_map(|((&fns, _), need_history)| fns.map(|fns| (fns, need_history)))
-            .and_then(|(fns, need_history)| need_history.then_some(fns))
-        {
+            .find_map(|((&fns, _), needs_history)| fns.map(|fns| (fns, needs_history)))
+            .unwrap_or((self.receive, false));
+
+        let write = if rule_fns.needs_history() {
+            // An older mutation must not reinsert a removed component.
+            entity.contains_id(ctx.component_id)
+        } else {
+            write_history && needs_history
+        };
+        if write {
             unsafe { (self.write)(ctx, &receive_fns, rule_fns, entity, message) }
         } else {
             unsafe { (self.consume)(ctx, rule_fns, message) }

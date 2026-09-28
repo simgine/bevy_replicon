@@ -1,5 +1,9 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
-use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
+use bevy_replicon::{
+    prelude::*,
+    shared::backend::channels::ClientChannel,
+    test_app::{ServerTestAppExt, TestClientEntity},
+};
 use serde::{Deserialize, Serialize};
 
 #[test]
@@ -341,6 +345,96 @@ fn snapshot_merged_with_insertion() {
 
     let (points, _) = points_query.single(client_app.world()).unwrap();
     assert_eq!(points.values, [0, 1, 2]);
+    assert_eq!(points.applied_diffs, 1);
+}
+
+#[test]
+fn stale_ack_after_update_snapshot() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_diff::<Points>()
+        .replicate::<Marker>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, Points::new(vec![0])))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut points_query = client_app.world_mut().query::<(&Points, Has<Marker>)>();
+    let (points, _) = points_query.single(client_app.world()).unwrap();
+    assert_eq!(points.values, [0]);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_diff::<Points>(AddPoint(1))
+        .unwrap();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let (points, _) = points_query.single(client_app.world()).unwrap();
+    assert_eq!(points.values, [0, 1]);
+    assert_eq!(points.applied_diffs, 1);
+
+    // Hold the mutation ACK until after the update message advances the snapshot cursor.
+    let (channel, ack) = {
+        let mut messages = client_app.world_mut().resource_mut::<ClientMessages>();
+        let mut sent = messages.drain_sent();
+        let (channel, ack) = sent.next().expect("mutation should be ACKed");
+        assert_eq!(channel, usize::from(ClientChannel::MutationAcks));
+        assert!(sent.next().is_none());
+        (channel, ack)
+    };
+
+    let mut entity = server_app.world_mut().entity_mut(server_entity);
+    entity.get_mut::<Points>().unwrap().values.push(2);
+    // Inserting `Marker` moves the `Points` snapshot into the update message.
+    entity.insert(Marker);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let (points, has_marker) = points_query.single(client_app.world()).unwrap();
+    assert_eq!(points.values, [0, 1, 2]);
+    assert_eq!(points.applied_diffs, 0);
+    assert!(has_marker);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .resource_mut::<ServerMessages>()
+        .insert_received(client, channel, ack);
+    server_app.update();
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .apply_diff::<Points>(AddPoint(3))
+        .unwrap();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let (points, _) = points_query.single(client_app.world()).unwrap();
+    assert_eq!(points.values, [0, 1, 2, 3]);
     assert_eq!(points.applied_diffs, 1);
 }
 

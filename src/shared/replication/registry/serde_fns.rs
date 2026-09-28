@@ -79,6 +79,7 @@ impl<'a> SerdeFns<'a> {
         receive_markers: &ReceiveMarkers,
         entity: &mut DeferredEntity,
         message: &mut Bytes,
+        write_history: bool,
     ) -> Result<()> {
         // SAFETY: `RuleFns` and `ComponentFns` belong to the same type.
         unsafe {
@@ -89,6 +90,7 @@ impl<'a> SerdeFns<'a> {
                 receive_markers,
                 entity,
                 message,
+                write_history,
             )
         }
     }

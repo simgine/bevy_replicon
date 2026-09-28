@@ -11,7 +11,7 @@ use bevy::{
 use log::{debug, trace};
 use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned, ser::SerializeSeq};
 
-use crate::shared::replication::storage::ReplicationStorage;
+use crate::shared::{replication::storage::ReplicationStorage, replicon_tick::RepliconTick};
 use diff_index::DiffIndex;
 
 /**
@@ -393,7 +393,19 @@ impl<T: Serialize> Serialize for DiffIter<'_, T> {
 #[derive(Component, Debug)]
 pub struct DiffBuffer<C: Diffable> {
     last_applied: Option<DiffIndex>,
-    pending: HashMap<DiffIndex, C::Diff>,
+
+    /// Latest message tick used to update the component.
+    ///
+    /// Used to compare snapshots when diff indices have wrapped.
+    last_applied_tick: Option<RepliconTick>,
+
+    /// Tick of the last applied snapshot.
+    ///
+    /// Older mutations and mutations from the same tick are ignored.
+    /// This also prevents mutations from before component reinsertion from being applied.
+    snapshot_tick: Option<RepliconTick>,
+
+    pending: HashMap<DiffIndex, (C::Diff, Option<RepliconTick>)>,
 }
 
 impl<C: Diffable> DiffBuffer<C> {
@@ -402,7 +414,43 @@ impl<C: Diffable> DiffBuffer<C> {
     /// Resets the history.
     pub fn set_last_applied(&mut self, last_applied: DiffIndex) {
         self.last_applied = Some(last_applied);
+        self.last_applied_tick = None;
+        self.snapshot_tick = None;
         self.pending.clear();
+    }
+
+    /// Resets the buffer to the snapshot received when inserting the component.
+    pub(crate) fn reset_snapshot(&mut self, index: DiffIndex, tick: RepliconTick) {
+        self.set_last_applied(index);
+        self.snapshot_tick = Some(tick);
+        self.last_applied_tick = Some(tick);
+    }
+
+    /// Returns `true` if the tick is newer than the last applied snapshot's tick
+    /// or no snapshot tick is stored.
+    pub(crate) fn accepts_tick(&self, tick: RepliconTick) -> bool {
+        self.snapshot_tick.is_none_or(|s| tick.is_newer(s))
+    }
+
+    /// Updates the buffer to a newer snapshot, keeping pending diffs that follow it.
+    ///
+    /// Uses message ticks when available because diff indices may have wrapped.
+    /// Returns `false` if the snapshot is outdated, leaving the buffer unchanged.
+    pub(crate) fn apply_snapshot(&mut self, index: DiffIndex, tick: RepliconTick) -> bool {
+        let advances = match self.last_applied_tick {
+            Some(last) => tick.is_newer(last),
+            None => self.last_applied.is_none_or(|last| index.is_newer(last)),
+        };
+        if !self.accepts_tick(tick) || !advances {
+            return false;
+        }
+        self.last_applied = Some(index);
+        self.last_applied_tick = Some(tick);
+        self.snapshot_tick = Some(tick);
+        self.pending.retain(|pending, (_, message_tick)| {
+            pending.is_newer(index) && message_tick.is_none_or(|message| message.is_newer(tick))
+        });
+        true
     }
 
     /// Queues newly received diffs.
@@ -411,10 +459,42 @@ impl<C: Diffable> DiffBuffer<C> {
     /// until the missing diff is received. Duplicate or already applied
     /// diffs are ignored.
     pub fn push(&mut self, last_index: DiffIndex, diffs: Vec<C::Diff>) {
+        self.push_with_tick(last_index, diffs, None);
+    }
+
+    /// Queues newly received diffs with their message tick.
+    ///
+    /// The tick is used to discard pending diffs older than a snapshot even if diff indices have wrapped.
+    pub(crate) fn push_at(
+        &mut self,
+        last_index: DiffIndex,
+        diffs: Vec<C::Diff>,
+        tick: RepliconTick,
+    ) {
+        if self.accepts_tick(tick) {
+            self.push_with_tick(last_index, diffs, Some(tick));
+        }
+    }
+
+    /// Queues newly received diffs with an optional message tick.
+    ///
+    /// Already applied diffs are ignored. Duplicate pending diffs keep the newest message tick.
+    fn push_with_tick(
+        &mut self,
+        last_index: DiffIndex,
+        diffs: Vec<C::Diff>,
+        tick: Option<RepliconTick>,
+    ) {
         for (offset, diff) in diffs.into_iter().rev().enumerate() {
             let index = last_index - offset as u16;
             if self.last_applied.is_none_or(|last| index.is_newer(last)) {
-                self.pending.insert(index, diff);
+                // An older duplicate must not erase the newer message's chronology.
+                let entry = self.pending.entry(index).or_insert((diff, tick));
+                if let Some(tick) = tick
+                    && entry.1.is_none_or(|existing| tick.is_newer(existing))
+                {
+                    entry.1 = Some(tick);
+                }
             }
         }
     }
@@ -423,8 +503,20 @@ impl<C: Diffable> DiffBuffer<C> {
     pub fn drain_ready(&mut self) -> impl Iterator<Item = C::Diff> + '_ {
         iter::from_fn(move || {
             let index = self.last_applied.map_or(DiffIndex::new(0), |i| i + 1);
-            let diff = self.pending.remove(&index)?;
+            let (diff, tick) = self.pending.remove(&index)?;
             self.last_applied = Some(index);
+            match tick {
+                Some(tick) => {
+                    if self
+                        .last_applied_tick
+                        .is_none_or(|last| tick.is_newer(last))
+                    {
+                        self.last_applied_tick = Some(tick);
+                    }
+                }
+                // Public `push` doesn't provide chronology for the new value.
+                None => self.last_applied_tick = None,
+            }
             Some(diff)
         })
     }
@@ -439,6 +531,8 @@ impl<C: Diffable> Default for DiffBuffer<C> {
     fn default() -> Self {
         Self {
             last_applied: None,
+            last_applied_tick: None,
+            snapshot_tick: None,
             pending: Default::default(),
         }
     }
@@ -665,6 +759,180 @@ mod tests {
             "diff 2 should be ready after receiving diff 1"
         );
         assert_eq!(buffer.last_applied, Some(DiffIndex::new(2)));
+    }
+
+    #[test]
+    fn buffering_with_outdated_snapshot() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(0), RepliconTick::new(1));
+        buffer.push_at(
+            DiffIndex::new(1),
+            vec![ValueDiff::Add(1)],
+            RepliconTick::new(3),
+        );
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(1)]
+        );
+
+        // Even a numerically newer index must not override newer applied state.
+        assert!(!buffer.apply_snapshot(DiffIndex::new(2), RepliconTick::new(2)));
+        assert!(!buffer.apply_snapshot(DiffIndex::new(2), RepliconTick::new(3)));
+        assert_eq!(buffer.last_applied(), Some(DiffIndex::new(1)));
+        assert_eq!(buffer.last_applied_tick, Some(RepliconTick::new(3)));
+    }
+
+    #[test]
+    fn buffering_with_snapshot() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(0), RepliconTick::new(1));
+        buffer.push_at(
+            DiffIndex::new(2),
+            vec![ValueDiff::Add(2)],
+            RepliconTick::new(2),
+        );
+        buffer.push_at(
+            DiffIndex::new(4),
+            vec![ValueDiff::Add(4)],
+            RepliconTick::new(4),
+        );
+        assert_eq!(buffer.drain_ready().count(), 0);
+
+        assert!(buffer.apply_snapshot(DiffIndex::new(3), RepliconTick::new(3)));
+        assert_eq!(buffer.pending.len(), 1);
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(4)]
+        );
+        assert_eq!(buffer.last_applied_tick, Some(RepliconTick::new(4)));
+        assert!(!buffer.apply_snapshot(DiffIndex::new(3), RepliconTick::new(3)));
+    }
+
+    #[test]
+    fn buffering_with_snapshot_beyond_half_range() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(0), RepliconTick::new(1));
+        buffer.push_at(
+            DiffIndex::new(2),
+            vec![ValueDiff::Add(2)],
+            RepliconTick::new(2),
+        );
+
+        let snapshot_index = DiffIndex::new(40_000);
+        assert!(!snapshot_index.is_newer(DiffIndex::new(0)));
+        assert!(DiffIndex::new(2).is_newer(snapshot_index));
+        assert!(buffer.apply_snapshot(snapshot_index, RepliconTick::new(3)));
+        assert!(
+            buffer.pending.is_empty(),
+            "old pending indices may appear newer after wrapping"
+        );
+        assert_eq!(buffer.last_applied(), Some(snapshot_index));
+
+        buffer.push_at(
+            snapshot_index + 1,
+            vec![ValueDiff::Add(1)],
+            RepliconTick::new(4),
+        );
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(1)]
+        );
+    }
+
+    #[test]
+    fn buffering_with_snapshot_after_index_wrap() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(10), RepliconTick::new(1));
+        buffer.push_at(
+            DiffIndex::new(12),
+            vec![ValueDiff::Add(12)],
+            RepliconTick::new(2),
+        );
+        buffer.push_at(
+            DiffIndex::new(13),
+            vec![ValueDiff::Add(13)],
+            RepliconTick::new(4),
+        );
+
+        // After 65,536 changes the cursor is equal, but the snapshot is new.
+        assert!(buffer.apply_snapshot(DiffIndex::new(10), RepliconTick::new(3)));
+        assert!(!buffer.pending.contains_key(&DiffIndex::new(12)));
+        assert!(buffer.pending.contains_key(&DiffIndex::new(13)));
+        assert_eq!(buffer.last_applied_tick, Some(RepliconTick::new(3)));
+        assert_eq!(buffer.drain_ready().count(), 0);
+
+        buffer.push_at(
+            DiffIndex::new(12),
+            vec![ValueDiff::Add(11), ValueDiff::Add(12)],
+            RepliconTick::new(5),
+        );
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(11), ValueDiff::Add(12), ValueDiff::Add(13)],
+        );
+        assert_eq!(buffer.last_applied_tick, Some(RepliconTick::new(5)));
+    }
+
+    #[test]
+    fn buffering_with_duplicate_ticks() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(0), RepliconTick::new(1));
+        for tick in [4, 5, 3] {
+            buffer.push_at(
+                DiffIndex::new(2),
+                vec![ValueDiff::Add(2)],
+                RepliconTick::new(tick),
+            );
+        }
+        buffer.push_at(
+            DiffIndex::new(1),
+            vec![ValueDiff::Add(1)],
+            RepliconTick::new(2),
+        );
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(1), ValueDiff::Add(2)],
+        );
+        assert_eq!(buffer.last_applied_tick, Some(RepliconTick::new(5)));
+        assert!(!buffer.apply_snapshot(DiffIndex::new(3), RepliconTick::new(4)));
+    }
+
+    #[test]
+    fn buffering_with_tick_wrapping() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(0), RepliconTick::new(u32::MAX - 1));
+        buffer.push_at(
+            DiffIndex::new(2),
+            vec![ValueDiff::Add(2)],
+            RepliconTick::new(1),
+        );
+        assert!(buffer.apply_snapshot(DiffIndex::new(1), RepliconTick::new(0)));
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(2)]
+        );
+        assert!(!buffer.apply_snapshot(DiffIndex::new(3), RepliconTick::new(u32::MAX)));
+        assert_eq!(buffer.last_applied_tick, Some(RepliconTick::new(1)));
+    }
+
+    #[test]
+    fn buffering_reset() {
+        let mut buffer = DiffBuffer::<Value>::default();
+        buffer.reset_snapshot(DiffIndex::new(100), RepliconTick::new(100));
+        buffer.set_last_applied(DiffIndex::new(0));
+        assert_eq!(buffer.snapshot_tick, None);
+        assert_eq!(buffer.last_applied_tick, None);
+        buffer.push(
+            DiffIndex::new(2),
+            vec![ValueDiff::Add(1), ValueDiff::Add(2)],
+        );
+        assert_eq!(
+            buffer.drain_ready().collect::<Vec<_>>(),
+            [ValueDiff::Add(1), ValueDiff::Add(2)],
+        );
+        assert_eq!(buffer.last_applied_tick, None);
+        assert!(!buffer.apply_snapshot(DiffIndex::new(1), RepliconTick::new(1)));
+        assert!(buffer.apply_snapshot(DiffIndex::new(3), RepliconTick::new(2)));
     }
 
     #[test]
