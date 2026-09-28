@@ -121,8 +121,10 @@ impl Plugin for ClientPlugin {
 /// update tick has already appeared in an update message, otherwise it will be buffered while waiting.
 /// Since a deferred update does not advance [`ServerUpdateTick`], mutations waiting for its tick stay
 /// buffered as well, even if [`ShouldApplyReplication`] observers would otherwise apply them.
-/// Since component mutations can arrive in any order, they will only be applied if they correspond to a more
-/// recent server tick than the last acked server tick for each entity.
+/// Since component mutations can arrive in any order, mutations are normally only applied if they
+/// correspond to a more recent server tick than the last confirmed tick for each entity, unless a
+/// receive marker requests history. Diff replication also processes older mutations because they
+/// may contain missing diffs.
 ///
 /// Buffered mutate messages are processed last.
 ///
@@ -294,8 +296,8 @@ fn apply_replication(
     // Unlike update messages, we read all mutate messages first, sort them by tick
     // in descending order to ensure that the last mutation will be applied first.
     // Since mutate messages manually split by packet size, we apply all messages,
-    // but skip outdated data per-entity by checking last received tick for it
-    // (unless user requested history via marker).
+    // but skip outdated data per-entity unless a marker or rule needs history.
+    // Older mutations may still contain missing diffs even if they were already acknowledged.
     let update_tick = *world.resource::<ServerUpdateTick>();
     let mutations_count = messages.received_count(ServerChannel::Mutations);
     if mutations_count != 0 {
@@ -919,31 +921,23 @@ fn apply_mutations(
     };
 
     let new_tick = message_tick.is_newer(history.last_tick());
+    let ago = history.last_tick().get().wrapping_sub(message_tick.get());
+    let write_history = !new_tick && params.entity_markers.need_history() && ago < u64::BITS;
     if new_tick {
         history.set_last_tick(message_tick);
-    } else {
-        if !params.entity_markers.need_history() {
-            trace!("ignoring outdated mutations for `{}`", client_entity.id());
-            advance_checked(message, data_size)?;
-            return Ok(());
-        }
-
-        let ago = history.last_tick().get().wrapping_sub(message_tick.get());
-        if ago >= u64::BITS {
-            trace!(
-                "discarding {ago} ticks old mutations for `{}`",
-                client_entity.id()
-            );
-            advance_checked(message, data_size)?;
-            return Ok(());
-        }
-
+    } else if write_history {
         history.set(ago);
+    } else if !params.registry.needs_history() {
+        trace!("ignoring outdated mutations for `{}`", client_entity.id());
+        advance_checked(message, data_size)?;
+        return Ok(());
     }
-    params.replicated.write(EntityReplicated {
-        entity: client_entity.id(),
-        tick: message_tick,
-    });
+    if new_tick || write_history {
+        params.replicated.write(EntityReplicated {
+            entity: client_entity.id(),
+            tick: message_tick,
+        });
+    }
 
     let mut data = message.split_to(data_size);
     let len = apply_array(ArrayKind::Dynamic, &mut data, |data| {
@@ -974,6 +968,7 @@ fn apply_mutations(
                 params.receive_markers,
                 &mut client_entity,
                 data,
+                write_history,
             )?;
         }
 
