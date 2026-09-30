@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Diff replication no longer loses intermediate diffs when a mutation is acknowledged before the state it depends on reaches the client. Such diffs are now buffered and applied in order once that state arrives.
 - Diff replication now tracks client cursors correctly instead of always sending full snapshots.
 - Diff replication no longer falls back to a full snapshot when the retained history contains exactly all the diffs a client needs.
+- Delayed references to despawned entities no longer cause mutations for other entities in the same message to be skipped.
 
 ## [0.44.2] - 2026-09-22
 
