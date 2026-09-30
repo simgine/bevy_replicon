@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Diff replication no longer falls back to a full snapshot when the retained history contains exactly all the diffs a client needs.
+- Delayed references to despawned entities no longer cause mutations for other entities in the same message to be skipped.
 
 ## [0.44.2] - 2026-09-22
 

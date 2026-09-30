@@ -932,6 +932,74 @@ fn with_client_despawn() {
 }
 
 #[test]
+fn with_client_despawn_and_reference() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .replicate::<MappedComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let despawned_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let client_entity =
+        client_app.world().resource::<ServerEntityMap>().to_client()[&despawned_entity];
+    client_app.world_mut().despawn(client_entity);
+
+    // A reference to the despawned entity recreates an empty placeholder.
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(MappedComponent(despawned_entity));
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    for entity in [despawned_entity, server_entity] {
+        server_app
+            .world_mut()
+            .get_mut::<BoolComponent>(entity)
+            .unwrap()
+            .0 = true;
+    }
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = client_app
+        .world_mut()
+        .query::<&BoolComponent>()
+        .single(client_app.world())
+        .unwrap();
+    assert!(
+        component.0,
+        "reference-only entities shouldn't block mutations"
+    );
+}
+
+#[test]
 fn buffering() {
     let mut server_app = App::new();
     let mut client_app = App::new();
