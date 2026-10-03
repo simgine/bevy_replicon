@@ -911,6 +911,18 @@ fn apply_mutations(
         .read(params.receive_markers, &*client_entity);
 
     let Some(mut history) = client_entity.get_mut::<ConfirmHistory>() else {
+        if !client_entity.contains::<Remote>() {
+            // An old mutation can reference an already despawned entity and recreate
+            // it as an empty placeholder. Skip mutations targeting that placeholder
+            // so the remaining entities in the message can still be updated.
+            debug!(
+                "ignoring mutations for uninitialized entity placeholder `{}`",
+                client_entity.id()
+            );
+            advance_checked(message, data_size)?;
+            return Ok(());
+        }
+
         return Err(format!(
             "`{}` missing history component inserted on the first update message",
             client_entity.id()
