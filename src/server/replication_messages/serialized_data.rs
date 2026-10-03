@@ -34,12 +34,21 @@ impl SerializedData {
     pub(crate) fn write_cached_component(
         &mut self,
         ctx: &mut SerializeCtx,
-        cached_range: &mut Option<Range<usize>>,
+        cached: &mut Option<CachedComponent>,
         component: &mut ErasedComponent,
     ) -> Result<Range<usize>> {
-        self.write_cached(cached_range, |serialized| {
-            serialized.write_component(ctx, component)
-        })
+        if let Some(cached) = cached {
+            ctx.diff_cursor = cached.diff_cursor;
+            return Ok(cached.range.clone());
+        }
+
+        ctx.diff_cursor = None;
+        let range = self.write_component(ctx, component)?;
+        *cached = Some(CachedComponent {
+            range: range.clone(),
+            diff_cursor: ctx.diff_cursor,
+        });
+        Ok(range)
     }
 
     pub(crate) fn write_cached_entity(
@@ -143,6 +152,12 @@ impl SerializedData {
         let end = self.len();
         Ok(start..end)
     }
+}
+
+/// Cached snapshot bytes and the cursor needed to track their delivery for each client.
+pub(crate) struct CachedComponent {
+    range: Range<usize>,
+    diff_cursor: Option<DiffIndex>,
 }
 
 /// Wraps a component pointer and its associated functions.

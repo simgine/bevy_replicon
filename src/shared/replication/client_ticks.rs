@@ -157,7 +157,7 @@ impl EntityTicks {
     /// Sets the acknowledged diff cursor for a component.
     ///
     /// If ACKs arrive out of order, older ACKs must be filtered out by the caller.
-    fn set_diff_cursor(&mut self, component: ComponentIndex, cursor: DiffIndex) {
+    pub(crate) fn set_diff_cursor(&mut self, component: ComponentIndex, cursor: DiffIndex) {
         if let Some((_, existing)) = self
             .diff_cursors
             .iter_mut()
