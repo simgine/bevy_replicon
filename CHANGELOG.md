@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.3] - 2026-10-06
+
 ### Fixed
 
 - Diff replication no longer loses intermediate diffs when a mutation is acknowledged before the state it depends on reaches the client. Such diffs are now buffered and applied in order once that state arrives.
@@ -1205,7 +1207,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.44.2..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.44.3..HEAD
+[0.44.3]: https://github.com/simgine/bevy_replicon/compare/v0.44.2...v0.44.3
 [0.44.2]: https://github.com/simgine/bevy_replicon/compare/v0.44.1...v0.44.2
 [0.44.1]: https://github.com/simgine/bevy_replicon/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/simgine/bevy_replicon/compare/v0.43.0...v0.44.0
