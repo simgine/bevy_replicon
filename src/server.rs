@@ -918,7 +918,7 @@ fn send_messages(
     )>,
 ) -> Result<()> {
     let mut server_tick_range = None;
-    for (client, updates, mut mutations, connected, mut ticks) in &mut clients {
+    for (client, mut updates, mut mutations, connected, mut ticks) in &mut clients {
         if !updates.is_empty() {
             ticks.update_tick = **server_tick;
             let server_tick_range =

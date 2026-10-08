@@ -1,9 +1,13 @@
 use core::{mem, ops::Range};
 
 use bevy::prelude::*;
+use bytes::{Bytes, BytesMut};
 use postcard::experimental::serialized_size;
 
-use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::SerializedData};
+use super::{
+    entity_ranges::EntityRanges, message_buffer::MessageBuffer, mutations::Mutations,
+    serialized_data::SerializedData,
+};
 use crate::{
     postcard_utils,
     prelude::*,
@@ -78,6 +82,9 @@ pub(crate) struct Updates {
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_changes`].
     changed_entity_added: bool,
+
+    /// Buffer for latest updates sent so allocations can be reused.
+    sent_message_buffer: MessageBuffer,
 }
 
 impl Updates {
@@ -242,7 +249,7 @@ impl Updates {
     /// Additionally, we don't serialize the size for the last array and
     /// on deserialization just consume all remaining bytes.
     pub(crate) fn send(
-        &self,
+        &mut self,
         messages: &mut ServerMessages,
         client: Entity,
         serialized: &SerializedData,
@@ -293,7 +300,7 @@ impl Updates {
             }
         }
 
-        let mut message = Vec::with_capacity(message_size);
+        let mut message: BytesMut = self.sent_message_buffer.get(message_size);
         postcard_utils::to_extend_mut(&flags, &mut message)?;
         message.extend_from_slice(&serialized[server_tick_range]);
         for (_, flag) in flags.iter_names() {
@@ -346,7 +353,8 @@ impl Updates {
 
         debug_assert_eq!(message.len(), message_size);
 
-        messages.send(client, ServerChannel::Updates, message);
+        let msg: Bytes = self.sent_message_buffer.cache(message);
+        messages.send(client, ServerChannel::Updates, msg);
 
         Ok(())
     }

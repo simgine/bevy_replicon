@@ -1,10 +1,13 @@
 use core::{mem, ops::Range, time::Duration};
 
 use bevy::{ecs::change_detection::Tick, prelude::*};
+use bytes::{Bytes, BytesMut};
 use log::trace;
 use postcard::experimental::{max_size::MaxSize, serialized_size};
 
-use super::{entity_ranges::EntityRanges, serialized_data::SerializedData};
+use super::{
+    entity_ranges::EntityRanges, message_buffer::MessageBuffer, serialized_data::SerializedData,
+};
 use crate::{
     postcard_utils,
     prelude::*,
@@ -41,6 +44,9 @@ pub(crate) struct Mutations {
 
     /// Location of the last written entity since the last call of [`Self::start_entity_mutations`].
     entity_location: Option<EntityLocation>,
+
+    /// Buffer for latest messages sent so allocations can be reused.
+    sent_message_buffer: MessageBuffer,
 }
 
 impl Mutations {
@@ -252,7 +258,7 @@ impl Mutations {
                 // Update message counter size based on actual value.
                 message_size -= MESSAGES_COUNT_MAX_SIZE - serialized_size(&split_buffer.len())?;
             }
-            let mut message = Vec::with_capacity(message_size);
+            let mut message: BytesMut = self.sent_message_buffer.get(message_size);
 
             let flags = if split.chunks_range.is_empty() {
                 base_flags
@@ -281,7 +287,8 @@ impl Mutations {
 
             debug_assert_eq!(message.len(), message_size);
 
-            messages.send(client, ServerChannel::Mutations, message);
+            let msg: Bytes = self.sent_message_buffer.cache(message);
+            messages.send(client, ServerChannel::Mutations, msg);
         }
 
         let len = split_buffer.len();
