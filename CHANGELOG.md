@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Skip entities that a client already has unchanged when collecting replication changes, instead of checking every component for every client each tick.
+
 ## [0.44.3] - 2026-10-06
 
 ### Fixed
