@@ -198,7 +198,7 @@ pub(super) fn receive_replication(
 
 // The storage resource may be unavailable while receiving replication.
 // Cleanup is handled manually in the receive logic.
-fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<ReplicationStorage>>) {
+fn cleanup_storage(remove: On<Remove<Remote>>, mut storage: If<ResMut<ReplicationStorage>>) {
     storage.entities.remove(&remove.entity);
 }
 
@@ -206,7 +206,7 @@ fn cleanup_storage(remove: On<Remove, Remote>, mut storage: If<ResMut<Replicatio
 // so we need to manually remove the entity from the `ServerEntityMap`
 // when it is despawned on the client.
 fn cleanup_entity_map(
-    despawn: On<Despawn, Remote>,
+    despawn: On<Despawn<Remote>>,
     entity_map: Option<ResMut<ServerEntityMap>>,
     mut despawns: ResMut<ReplicatedDespawns>,
 ) {

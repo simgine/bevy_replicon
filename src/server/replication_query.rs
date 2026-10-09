@@ -3,9 +3,11 @@ use bevy::{
         archetype::ArchetypeEntity,
         change_detection::{ComponentTicks, Tick},
         component::{ComponentId, StorageType},
-        query::{FilteredAccess, FilteredAccessSet},
+        query::FilteredAccess,
         storage::TableId,
-        system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamValidationError},
+        system::{
+            ReadOnlySystemParam, SystemAccess, SystemMeta, SystemParam, SystemParamValidationError,
+        },
         world::unsafe_world_cell::UnsafeWorldCell,
     },
     prelude::*,
@@ -118,18 +120,18 @@ unsafe impl SystemParam for ReplicationQuery<'_, '_> {
     fn init_access(
         state: &Self::State,
         system_meta: &mut SystemMeta,
-        component_access_set: &mut FilteredAccessSet,
+        system_access: &mut SystemAccess,
         _world: &mut World,
     ) {
-        let conflicts = component_access_set.get_conflicts_single(&state.component_access);
-        if !conflicts.is_empty() {
-            panic!(
-                "replicated components in system `{}` shouldn't be in conflict with other system parameters",
-                system_meta.name(),
-            );
+        match system_access.try_add(state.component_access.clone()) {
+            Ok(()) => {}
+            Err(_) => {
+                panic!(
+                    "replicated components in system `{}` shouldn't be in conflict with other system parameters",
+                    system_meta.name(),
+                );
+            }
         }
-
-        component_access_set.add(state.component_access.clone());
     }
 
     unsafe fn get_param<'world, 'state>(

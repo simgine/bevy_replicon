@@ -3,7 +3,7 @@ use core::any::Any;
 use bevy::{
     ecs::entity::EntityHashMap,
     prelude::*,
-    utils::{TypeIdMap, TypeIdMapExt},
+    utils::{TypeIdHashMap, TypeIdHashMapExt},
 };
 
 /**
@@ -40,7 +40,7 @@ app.add_observer(store_position_precision)
     .replicate_with(RuleFns::new(serialize_position, deserialize_position));
 
 fn store_position_precision(
-    add: On<Add, Precision>,
+    add: On<Add<Precision>>,
     precision: Query<&Precision>,
     mut storage: ResMut<ReplicationStorage>,
 ) {
@@ -340,7 +340,7 @@ impl ReplicationStorage {
 /// Stores values by their concrete type. Can contain only one value of each type.
 #[derive(Default)]
 pub struct TypeMap {
-    values: TypeIdMap<Box<dyn Any + Send + Sync>>,
+    values: TypeIdHashMap<Box<dyn Any + Send + Sync>>,
 }
 
 impl TypeMap {
