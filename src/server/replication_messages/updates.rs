@@ -11,6 +11,7 @@ use crate::{
     shared::{
         backend::channels::ServerChannel,
         replication::{
+            client_ticks::DiffCursors,
             message_flags::UpdateFlags,
             registry::{ComponentIndex, component_mask::ComponentMask},
         },
@@ -70,6 +71,9 @@ pub(crate) struct Updates {
 
     /// Components written in [`Self::changes`].
     changed_components: ComponentMask,
+
+    /// Diff cursors written for the current entity in [`Self::changes`].
+    changed_diff_cursors: DiffCursors,
 
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_changes`].
@@ -144,6 +148,10 @@ impl Updates {
             self.changed_components.is_empty(),
             "changed components should be taken before next entity is written"
         );
+        debug_assert!(
+            self.changed_diff_cursors.is_empty(),
+            "diff cursors should be taken before next entity is written"
+        );
         self.changed_entity_added = false;
     }
 
@@ -167,6 +175,7 @@ impl Updates {
         &mut self,
         component: Range<usize>,
         index: ComponentIndex,
+        diff_cursor: Option<DiffIndex>,
     ) {
         debug_assert!(self.changed_entity_added);
         let changes = self
@@ -176,12 +185,17 @@ impl Updates {
 
         changes.add_data(component);
         self.changed_components.insert(index);
+        if let Some(cursor) = diff_cursor {
+            self.changed_diff_cursors.push((index, cursor));
+        }
     }
 
     /// Takes last mutated entity with its component chunks from the mutate message.
     pub(crate) fn take_added_entity(&mut self, mutations: &mut Mutations) {
         debug_assert!(mutations.entity_added());
         let entity_mutations = mutations.pop().expect("entity should be written");
+        self.changed_diff_cursors
+            .extend(entity_mutations.diff_cursors);
 
         if !self.changed_entity_added {
             self.changes.push(entity_mutations.ranges);
@@ -196,6 +210,11 @@ impl Updates {
     /// Takes all changed components for the last changed entity that was written.
     pub(crate) fn take_changed_components(&mut self) -> ComponentMask {
         mem::take(&mut self.changed_components)
+    }
+
+    /// Takes the diff cursors for the last changed entity that was written.
+    pub(crate) fn take_changed_diff_cursors(&mut self) -> DiffCursors {
+        mem::take(&mut self.changed_diff_cursors)
     }
 
     pub(crate) fn is_empty(&self) -> bool {

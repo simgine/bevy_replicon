@@ -37,7 +37,7 @@ use crate::{
         backend::channels::ClientChannel,
         message::server_message::message_buffer::MessageBuffer,
         replication::{
-            client_ticks::{ClientTicks, EntityTicks},
+            client_ticks::{ClientTicks, DiffCursors, EntityTicks},
             receive_markers::ReceiveMarkers,
             registry::{
                 ComponentIndex, ReplicationRegistry, component_mask::ComponentMask,
@@ -733,7 +733,7 @@ fn collect_changes(
                     storage: &mut replication_storage,
                 };
 
-                let mut component_range = None;
+                let mut cached_component = None;
                 for (client, mut updates, mut mutations, client_ticks, priority_map, visibility) in
                     &mut clients
                 {
@@ -780,17 +780,16 @@ fn collect_changes(
                                 // Cache only full component snapshots.
                                 serialized.write_cached_component(
                                     &mut ctx,
-                                    &mut component_range,
+                                    &mut cached_component,
                                     &mut component,
                                 )?
                             } else {
                                 ctx.diff_cursor = diff_cursor;
-                                let range = serialized.write_component(&mut ctx, &mut component)?;
-                                if let Some(cursor) = ctx.diff_cursor.take() {
-                                    mutations.add_diff_cursor(component_index, cursor);
-                                }
-                                range
+                                serialized.write_component(&mut ctx, &mut component)?
                             };
+                            if let Some(cursor) = ctx.diff_cursor.take() {
+                                mutations.add_diff_cursor(component_index, cursor);
+                            }
                             mutations.add_component(component_range);
                         }
                     } else if hidden_lifetime
@@ -809,10 +808,14 @@ fn collect_changes(
                         }
                         let component_range = serialized.write_cached_component(
                             &mut ctx,
-                            &mut component_range,
+                            &mut cached_component,
                             &mut component,
                         )?;
-                        updates.add_inserted_component(component_range, component_index);
+                        updates.add_inserted_component(
+                            component_range,
+                            component_index,
+                            ctx.diff_cursor.take(),
+                        );
                     }
                 }
             }
@@ -848,6 +851,7 @@ fn collect_changes(
                         **change_tick,
                         **server_tick,
                         updates.take_changed_components(),
+                        updates.take_changed_diff_cursors(),
                     );
                 }
 
@@ -873,17 +877,25 @@ fn update_ticks(
     system_tick: Tick,
     server_tick: RepliconTick,
     components: ComponentMask,
+    diff_cursors: DiffCursors,
 ) {
-    match entity_ticks {
+    let entity_ticks = match entity_ticks {
         Entry::Occupied(entry) => {
             let entity_ticks = entry.into_mut();
             entity_ticks.system_tick = system_tick;
             entity_ticks.server_tick = server_tick;
             entity_ticks.components |= &components;
+            entity_ticks
         }
         Entry::Vacant(entry) => {
-            entry.insert(EntityTicks::new(server_tick, system_tick, components));
+            entry.insert(EntityTicks::new(server_tick, system_tick, components))
         }
+    };
+
+    // Advance diff cursors immediately since update messages are reliable and the client
+    // applies this update message before mutations that depend on its tick.
+    for (component, cursor) in diff_cursors {
+        entity_ticks.set_diff_cursor(component, cursor);
     }
 }
 

@@ -42,6 +42,9 @@ pub struct ReplicationRegistry {
     ///
     /// Used to initialize new [`ComponentFns`] with the registered number of slots.
     marker_slots: usize,
+
+    /// Whether any rule needs older mutations even without a history marker.
+    needs_history: bool,
 }
 
 impl ReplicationRegistry {
@@ -111,7 +114,9 @@ impl ReplicationRegistry {
         rule_fns: RuleFns<C>,
     ) -> (ComponentId, FnsId) {
         let (index, component_id) = self.init_component_fns::<C>(world);
-        self.rules.push((index, rule_fns.into()));
+        let rule_fns: UntypedRuleFns = rule_fns.into();
+        self.needs_history |= rule_fns.needs_history();
+        self.rules.push((index, rule_fns));
         let fns_id = FnsId(self.rules.len() - 1);
 
         trace!("registering `{fns_id:?}` for `{}`", ShortName::of::<C>());
@@ -158,6 +163,10 @@ impl ReplicationRegistry {
         (*index, *component_id, fns)
     }
 
+    pub(crate) fn needs_history(&self) -> bool {
+        self.needs_history
+    }
+
     /// Returns component ID and its functions from the index.
     pub(crate) fn get_by_index(
         &self,
@@ -174,6 +183,7 @@ impl Default for ReplicationRegistry {
             components: Default::default(),
             rules: Default::default(),
             marker_slots: 0,
+            needs_history: false,
         }
     }
 }

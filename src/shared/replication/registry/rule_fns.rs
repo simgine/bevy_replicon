@@ -22,6 +22,7 @@ pub(crate) struct UntypedRuleFns {
     deserialize: unsafe fn(),
     deserialize_in_place: unsafe fn(),
     consume: unsafe fn(),
+    needs_history: bool,
 }
 
 impl UntypedRuleFns {
@@ -48,7 +49,12 @@ impl UntypedRuleFns {
                 mem::transmute::<unsafe fn(), DeserializeInPlaceFn<C>>(self.deserialize_in_place)
             },
             consume: unsafe { mem::transmute::<unsafe fn(), ConsumeFn<C>>(self.consume) },
+            needs_history: self.needs_history,
         }
+    }
+
+    pub(super) fn needs_history(&self) -> bool {
+        self.needs_history
     }
 }
 
@@ -66,6 +72,7 @@ impl<C: Component> From<RuleFns<C>> for UntypedRuleFns {
                 mem::transmute::<DeserializeInPlaceFn<C>, unsafe fn()>(value.deserialize_in_place)
             },
             consume: unsafe { mem::transmute::<ConsumeFn<C>, unsafe fn()>(value.consume) },
+            needs_history: value.needs_history,
         }
     }
 }
@@ -79,6 +86,7 @@ pub struct RuleFns<C> {
     deserialize: DeserializeFn<C>,
     deserialize_in_place: DeserializeInPlaceFn<C>,
     consume: ConsumeFn<C>,
+    needs_history: bool,
 }
 
 impl<C: Component> RuleFns<C> {
@@ -91,6 +99,7 @@ impl<C: Component> RuleFns<C> {
             deserialize,
             deserialize_in_place: in_place_as_deserialize::<C>,
             consume: consume_as_deserialize,
+            needs_history: false,
         }
     }
 
@@ -120,8 +129,9 @@ impl<C: Component> RuleFns<C> {
     /// This function will be called to handle stale component updates for entities
     /// with a marker that indicates the entity's history should be consumed instead of discarded.
     ///
-    /// If no markers on an entity request history, then stale updates will be skipped entirely
-    /// by just advancing the cursor (without calling any consume functions).
+    /// If no markers on an entity request history and no registered rules need history,
+    /// then stale updates will be skipped entirely by just advancing the cursor
+    /// (without calling any consume functions).
     ///
     /// If you want to ignore a component, just use its expected size to advance the cursor
     /// without deserializing (but be careful if the component is dynamically sized).
@@ -170,9 +180,17 @@ impl<C: Component> RuleFns<C> {
 
 impl<C: Diffable> RuleFns<C> {
     /// Creates a new instance for diff-based replication.
+    ///
+    /// Older mutations are also passed to receive functions because they may contain
+    /// missing diffs, but only while the component exists.
+    /// Custom receive functions should use [`Self::deserialize_in_place`] for existing
+    /// components to ignore obsolete data and buffer and apply diffs in order.
     pub fn new_diff() -> Self {
-        Self::new(serialize_diff::<C>, deserialize_diff::<C>)
+        let mut fns = Self::new(serialize_diff::<C>, deserialize_diff::<C>)
             .with_in_place(deserialize_diff_in_place)
+            .with_consume(consume_diff);
+        fns.needs_history = true;
+        fns
     }
 }
 
@@ -300,8 +318,9 @@ pub fn deserialize_diff<C: Diffable>(ctx: &mut WriteCtx, message: &mut Bytes) ->
             index,
             mut component,
         } => {
+            let tick = ctx.message_tick;
             let buffer = ctx.get_or_default::<DiffBuffer<C>>();
-            buffer.set_last_applied(index);
+            buffer.reset_snapshot(index, tick);
 
             C::map_entities(&mut component, ctx);
             Ok(component)
@@ -325,24 +344,40 @@ pub fn deserialize_diff_in_place<C: Diffable>(
     component: &mut C,
     message: &mut Bytes,
 ) -> Result<()> {
-    match postcard_utils::from_buf(message)? {
+    let delta = postcard_utils::from_buf(message)?;
+    let tick = ctx.message_tick;
+    if !ctx.get_or_default::<DiffBuffer<C>>().accepts_tick(tick) {
+        return Ok(());
+    }
+    match delta {
         ComponentDelta::<C>::Snapshot {
             index,
             component: new_component,
         } => {
             let buffer = ctx.get_or_default::<DiffBuffer<C>>();
-            buffer.set_last_applied(index);
-
+            if !buffer.apply_snapshot(index, tick) {
+                return Ok(());
+            }
             *component = new_component;
             C::map_entities(component, ctx);
         }
         ComponentDelta::<C>::Diffs { index, diffs } => {
             let buffer = ctx.get_or_default::<DiffBuffer<C>>();
-            buffer.push(index, diffs);
-            for diff in buffer.drain_ready() {
-                component.apply_diff(&diff)?;
-            }
+            buffer.push_at(index, diffs, tick);
         }
     }
+    for diff in ctx.get_or_default::<DiffBuffer<C>>().drain_ready() {
+        component.apply_diff(&diff)?;
+    }
+    Ok(())
+}
+
+/// Discarding a delta must not change the diff buffer or map entities.
+fn consume_diff<C: Diffable>(
+    _deserialize: DeserializeFn<C>,
+    _ctx: &mut WriteCtx,
+    message: &mut Bytes,
+) -> Result<()> {
+    let _: ComponentDelta<C> = postcard_utils::from_buf(message)?;
     Ok(())
 }
