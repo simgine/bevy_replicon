@@ -2,6 +2,7 @@ use core::time::Duration;
 
 use bevy::{
     ecs::component::Mutable, platform::time::Instant, prelude::*, state::app::StatesPlugin,
+    time::TimeUpdateStrategy,
 };
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
@@ -184,13 +185,14 @@ fn mutations_receive<C: BenchmarkComponent>(iter: u64) -> Duration {
 
 fn create_app<C: BenchmarkComponent>() -> App {
     let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        StatesPlugin,
-        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-    ))
-    .replicate::<C>()
-    .finish();
+    app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1))
+        .add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<C>()
+        .finish();
 
     app
 }
