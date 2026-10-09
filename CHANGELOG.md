@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Update to Bevy 0.20.0-rc.2.
+- Update to Bevy 0.20.
 
 ## [0.44.2] - 2026-09-22
 
