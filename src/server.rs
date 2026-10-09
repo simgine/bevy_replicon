@@ -322,9 +322,17 @@ fn buffer_removals(
     // Observers can't use run conditions. We return early on the client, but system parameters
     // are validated before the observer runs. Because of this, resources removed during
     // replication receive may not be present, so they need to be optional.
-    let registry = registry.expect("registry should always exist on the server");
-    let receive_markers =
-        receive_markers.expect("receive markers should always exist on the server");
+    //
+    // When the server and client run in the same app, the client takes these resources out of
+    // the world while it applies received replication. Removals applied to client-side entities
+    // during that window still trigger this observer, but they must not be sent back, so skip them.
+    let (Some(registry), Some(receive_markers)) = (registry, receive_markers) else {
+        trace!(
+            "ignoring removals for `{}` during replication receive",
+            remove.entity
+        );
+        return;
+    };
 
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
     let location = entities.get_spawned(remove.entity).unwrap();

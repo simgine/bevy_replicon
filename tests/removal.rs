@@ -327,6 +327,55 @@ fn with_client_despawn() {
 }
 
 #[test]
+fn with_running_server_on_client() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    // Simulate an app that hosts a server and is connected as a client at the same time.
+    client_app
+        .world_mut()
+        .resource_mut::<NextState<ServerState>>()
+        .set(ServerState::Running);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    assert_eq!(
+        *client_app.world().resource::<State<ServerState>>(),
+        ServerState::Running
+    );
+
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<A>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 0);
+}
+
+#[test]
 fn after_insertion() {
     let mut server_app = App::new();
     let mut client_app = App::new();
