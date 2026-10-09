@@ -18,6 +18,10 @@ criterion_group!(
 );
 
 const ENTITIES: usize = 1000;
+/// Large enough for a pass over a world the clients already hold to take milliseconds.
+const WORLD_ENTITIES: usize = 50_000;
+/// Share of the world mutated per tick in the sparse case.
+const SPARSE_MUTATIONS: usize = WORLD_ENTITIES / 100;
 
 fn replicate<C: BenchmarkComponent>(c: &mut Criterion) {
     let mut g = c.benchmark_group(C::NAME);
@@ -29,6 +33,13 @@ fn replicate<C: BenchmarkComponent>(c: &mut Criterion) {
         g.bench_function(BenchmarkId::new("mutations_send", clients_count), |b| {
             b.iter_custom(|iter| mutations_send::<C>(iter, clients_count))
         });
+        g.bench_function(BenchmarkId::new("idle_send", clients_count), |b| {
+            b.iter_custom(|iter| world_send::<C>(iter, clients_count, 0))
+        });
+        g.bench_function(
+            BenchmarkId::new("sparse_mutations_send", clients_count),
+            |b| b.iter_custom(|iter| world_send::<C>(iter, clients_count, SPARSE_MUTATIONS)),
+        );
     }
 
     g.bench_function("changes_receive", |b| {
@@ -113,6 +124,53 @@ fn mutations_send<C: BenchmarkComponent>(iter: u64, clients_count: usize) -> Dur
 
             let mut remote = client_app.world_mut().query::<&Remote>();
             assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+        }
+    }
+
+    elapsed
+}
+
+/// Sends from a world the clients already hold, with `mutated` of its
+/// entities changed per tick. Zero is a tick where nothing happened; a small
+/// number is the usual case for a game with mostly static content.
+fn world_send<C: BenchmarkComponent>(iter: u64, clients_count: usize, mutated: usize) -> Duration {
+    let mut server_app = create_app::<C>();
+    let mut client_apps = Vec::new();
+    for _ in 0..clients_count {
+        client_apps.push(create_app::<C>());
+    }
+
+    for client_app in &mut client_apps {
+        server_app.connect_client(client_app);
+    }
+
+    server_app
+        .world_mut()
+        .spawn_batch(vec![(Replicated, C::default()); WORLD_ENTITIES]);
+    let mut query = server_app.world_mut().query::<&mut C>();
+
+    server_app.update();
+    for client_app in &mut client_apps {
+        server_app.exchange_with_client(client_app);
+        client_app.update();
+
+        let mut remote = client_app.world_mut().query::<&Remote>();
+        assert_eq!(remote.iter(client_app.world()).len(), WORLD_ENTITIES);
+    }
+
+    let mut elapsed = Duration::ZERO;
+    for _ in 0..iter {
+        for mut component in query.iter_mut(server_app.world_mut()).take(mutated) {
+            component.set_changed();
+        }
+
+        let instant = Instant::now();
+        server_app.update();
+        elapsed += instant.elapsed();
+
+        for client_app in &mut client_apps {
+            server_app.exchange_with_client(client_app);
+            client_app.update();
         }
     }
 
