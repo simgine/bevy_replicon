@@ -1,6 +1,7 @@
 pub mod client_ticks;
 pub mod deferred_entity;
 pub mod diff;
+pub(crate) mod entity_bits;
 pub mod message_flags;
 pub(crate) mod mutate_index;
 pub mod receive_markers;

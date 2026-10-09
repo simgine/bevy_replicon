@@ -4,7 +4,7 @@ use bevy::{
         change_detection::{ComponentTicks, Tick},
         component::{ComponentId, StorageType},
         query::FilteredAccess,
-        storage::{Column, ComponentSparseSet, TableId},
+        storage::{Column, ComponentSparseSet, Table, TableId},
         system::{
             ReadOnlySystemParam, SystemAccess, SystemMeta, SystemParam, SystemParamValidationError,
         },
@@ -48,6 +48,32 @@ impl<'w> ReplicationQuery<'w, '_> {
         // SAFETY: `priority_id` is registered for `ReplicatePriority`.
         let priority = unsafe { ptr.deref::<ReplicatePriority>() };
         Some(**priority)
+    }
+
+    /// Returns a table.
+    ///
+    /// # Safety
+    ///
+    /// Only replicated components may be read from it.
+    pub(super) unsafe fn table(&self, table_id: TableId) -> &'w Table {
+        // SAFETY: caller ensured that only replicated components are accessed.
+        let storages = unsafe { self.world.storages() };
+        // SAFETY: table IDs come from archetypes of this world.
+        unsafe { storages.tables.get(table_id).unwrap_unchecked() }
+    }
+
+    /// Returns a sparse set of a replicated component.
+    ///
+    /// # Safety
+    ///
+    /// The component must be previously marked for replication and use sparse set storage.
+    pub(super) unsafe fn sparse_set(&self, component_id: ComponentId) -> &'w ComponentSparseSet {
+        debug_assert!(self.state.component_access.access().has_read(component_id));
+
+        // SAFETY: caller ensured the component is replicated.
+        let storages = unsafe { self.world.storages() };
+        // SAFETY: caller ensured the component uses sparse set storage.
+        unsafe { storages.sparse_sets.get(component_id).unwrap_unchecked() }
     }
 
     /// Returns component storage for reuse across entities in an archetype.

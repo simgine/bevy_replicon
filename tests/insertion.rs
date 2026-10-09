@@ -483,6 +483,80 @@ fn marker_from_same_update() {
 }
 
 #[test]
+fn filter_component_removed() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_filtered::<A, Without<B>>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A, B)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query_filtered::<(), With<A>>();
+    assert_eq!(components.iter(client_app.world()).len(), 0);
+
+    // The filter component isn't replicated, so only its removal can make the rule apply.
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<B>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+}
+
+#[test]
+fn filter_component_inserted() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate_filtered::<A, With<B>>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query_filtered::<(), With<A>>();
+    assert_eq!(components.iter(client_app.world()).len(), 0);
+
+    server_app.world_mut().entity_mut(server_entity).insert(B);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+}
+
+#[test]
 fn group() {
     let mut server_app = App::new();
     let mut client_app = App::new();

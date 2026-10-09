@@ -1,4 +1,8 @@
-use bevy::{ecs::entity::EntityHashMap, platform::collections::hash_map::Entry, prelude::*};
+use bevy::{
+    ecs::entity::{EntityHashMap, EntityHashSet},
+    platform::collections::hash_map::Entry,
+    prelude::*,
+};
 
 use super::filters_mask::{FilterBit, FiltersMask};
 
@@ -21,6 +25,11 @@ pub struct ClientVisibility {
     /// Stored redundantly to quickly iterate only over entities
     /// with newly hidden data.
     lost: EntityHashMap<FiltersMask>,
+
+    /// Entities that regained any visibility since the last replication.
+    ///
+    /// Their data may need to be sent even if nothing on them changed.
+    gained: EntityHashSet,
 }
 
 impl ClientVisibility {
@@ -34,10 +43,16 @@ impl ClientVisibility {
         self.lost.drain()
     }
 
+    /// Clears all entities that regained any visibility since the last replication, returning them as an iterator.
+    pub(crate) fn drain_gained(&mut self) -> impl Iterator<Item = Entity> {
+        self.gained.drain()
+    }
+
     /// Removes a despawned entity tracked by this client.
     pub(crate) fn remove_despawned(&mut self, entity: Entity) {
         self.hidden.remove(&entity);
         self.lost.remove(&entity);
+        self.gained.remove(&entity);
     }
 
     /**
@@ -143,10 +158,14 @@ impl ClientVisibility {
     pub fn set(&mut self, entity: Entity, bit: FilterBit, visible: bool) {
         if visible {
             if let Entry::Occupied(mut mask) = self.hidden.entry(entity) {
+                if !mask.get().contains(bit) {
+                    return;
+                }
                 mask.get_mut().remove(bit);
                 if mask.get().is_empty() {
                     mask.remove();
                 }
+                self.gained.insert(entity);
 
                 if let Entry::Occupied(mut lost_mask) = self.lost.entry(entity) {
                     lost_mask.get_mut().remove(bit);

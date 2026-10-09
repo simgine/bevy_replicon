@@ -11,12 +11,14 @@ use core::time::Duration;
 
 use bevy::{
     ecs::{
-        archetype::{ArchetypeEntity, Archetypes},
+        archetype::{Archetype, ArchetypeEntity, Archetypes},
         change_detection::{CheckChangeTicks, Tick},
-        entity::{Entities, EntityHash, EntityHashMap},
+        component::{ComponentId, StorageType},
+        entity::{Entities, EntityHash, EntityHashMap, EntityHashSet},
         intern::Interned,
         schedule::ScheduleLabel,
-        system::SystemChangeTick,
+        storage::Table,
+        system::{SystemChangeTick, SystemParam},
     },
     platform::collections::{HashSet, hash_map::Entry},
     prelude::*,
@@ -30,7 +32,7 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replicated_archetypes::{ComponentMetadata, ReplicatedArchetypes},
+        replicated_archetypes::{ComponentMetadata, ReplicatedArchetype, ReplicatedArchetypes},
         replication_messages::{mutations::MutationsSplit, serialized_data::ErasedComponent},
         visibility::registry::FilterRegistry,
     },
@@ -39,12 +41,13 @@ use crate::{
         message::server_message::message_buffer::MessageBuffer,
         replication::{
             client_ticks::{ClientTicks, DiffCursors, EntityTicks},
+            entity_bits::EntityBits,
             receive_markers::ReceiveMarkers,
             registry::{
                 ComponentIndex, ReplicationRegistry, component_mask::ComponentMask,
                 ctx::SerializeCtx,
             },
-            rules::ReplicationRules,
+            rules::{ReplicationRules, filter::FilterRule},
             storage::ReplicationStorage,
             visibility::VisibilityScope,
         },
@@ -136,6 +139,8 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<ServerChangeTick>()
+            .init_resource::<CollectedTick>()
+            .init_resource::<FilterBuffer>()
             .init_resource::<ReplicatedArchetypes>()
             .init_resource::<ReplicationUserdata>()
             .init_resource::<MessageBuffer>()
@@ -226,6 +231,10 @@ impl Plugin for ServerPlugin {
             .flat_map(|rule| &rule.components)
             .map(|component| component.id)
             .collect();
+        let mut filter_ids = HashSet::new();
+        for filter in rules.iter().flat_map(|rule| &rule.filters) {
+            collect_filter_ids(filter, &mut filter_ids);
+        }
 
         // Removal observer without any components will trigger on any removal.
         if !replicated_ids.is_empty() {
@@ -233,6 +242,19 @@ impl Plugin for ServerPlugin {
             for id in replicated_ids {
                 remove_observer = remove_observer.with_component(id);
             }
+            app.world_mut().spawn(remove_observer);
+        }
+
+        // Filter components aren't replicated themselves, but their presence decides
+        // which rules apply, so the change scan needs to hear about them.
+        if !filter_ids.is_empty() {
+            let mut insert_observer = Observer::new(buffer_filter_inserts);
+            let mut remove_observer = Observer::new(buffer_filter_removals);
+            for id in filter_ids {
+                insert_observer = insert_observer.with_component(id);
+                remove_observer = remove_observer.with_component(id);
+            }
+            app.world_mut().spawn(insert_observer);
             app.world_mut().spawn(remove_observer);
         }
 
@@ -281,11 +303,18 @@ fn check_protocol(
     }
 }
 
-fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
+fn check_mutation_ticks(
+    check: On<CheckChangeTicks>,
+    mut collected_tick: ResMut<CollectedTick>,
+    mut clients: Query<&mut ClientTicks>,
+) {
     debug!(
         "checking mutation ticks for overflow for {:?}",
         check.present_tick()
     );
+    if let Some(tick) = &mut **collected_tick {
+        tick.check_tick(*check);
+    }
     for mut ticks in &mut clients {
         for entity_ticks in ticks.entities.values_mut() {
             entity_ticks.system_tick.check_tick(*check);
@@ -297,6 +326,39 @@ fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut Cli
 pub fn increment_tick(mut server_tick: ResMut<ServerTick>) {
     trace!("incrementing `{:?}`", *server_tick);
     server_tick.increment();
+}
+
+fn collect_filter_ids(filter: &FilterRule, ids: &mut HashSet<ComponentId>) {
+    match filter {
+        FilterRule::With(id) | FilterRule::Without(id) => {
+            ids.insert(*id);
+        }
+        FilterRule::Or(children) => {
+            for child in children {
+                collect_filter_ids(child, ids);
+            }
+        }
+    }
+}
+
+fn buffer_filter_inserts(
+    insert: On<Insert<()>>,
+    state: Res<State<ServerState>>,
+    mut buffer: ResMut<FilterBuffer>,
+) {
+    if *state == ServerState::Running {
+        buffer.insert(insert.entity);
+    }
+}
+
+fn buffer_filter_removals(
+    remove: On<Remove<()>>,
+    state: Res<State<ServerState>>,
+    mut buffer: ResMut<FilterBuffer>,
+) {
+    if *state == ServerState::Running {
+        buffer.insert(remove.entity);
+    }
 }
 
 fn buffer_removals(
@@ -362,6 +424,7 @@ fn cleanup_unreplicated(
         trace!("cleaning up ticks for despawned `{}`", despawn.entity);
         for mut ticks in &mut clients {
             ticks.entities.remove(&despawn.entity);
+            ticks.pending.remove(despawn.entity);
         }
     }
 }
@@ -492,6 +555,7 @@ fn collect_despawns(
         let entity_range = serialized.write_entity(entity)?;
         for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
             let hidden_lifetime = visibility.get(entity).hidden_entity_lifetime(&registry);
+            ticks.pending.remove(entity);
             if ticks.entities.remove(&entity).is_some() && hidden_lifetime.is_none() {
                 // Write despawn only if the entity is not currently hidden and was
                 // previously sent because spawn and despawn could happen during the same tick.
@@ -510,6 +574,7 @@ fn collect_despawns(
                 continue;
             }
 
+            ticks.pending.remove(entity);
             if ticks.entities.remove(&entity).is_some() {
                 trace!("writing visibility lost for `{entity}` for client `{client}`");
                 let entity_range = serialized.write_entity(entity)?;
@@ -663,6 +728,11 @@ fn collect_removals(
                     }
                 }
             }
+
+            // Removals bypass the change scan, but the next update must still carry them.
+            if entity_ticks.has_removals {
+                ticks.pending.insert(entity);
+            }
         }
     }
 
@@ -675,12 +745,11 @@ fn collect_changes(
     query: ReplicationQuery,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
+    mut scan: ChangeScan,
     registry: Res<ReplicationRegistry>,
     filter_registry: Res<FilterRegistry>,
     type_registry: Res<AppTypeRegistry>,
     related_entities: Res<RelatedEntities>,
-    rules: Res<ReplicationRules>,
-    receive_markers: Res<ReceiveMarkers>,
     mut replication_storage: ResMut<ReplicationStorage>,
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
@@ -694,7 +763,10 @@ fn collect_changes(
         &mut ClientVisibility,
     )>,
 ) -> Result<()> {
-    replicated_archetypes.update(archetypes, &rules, &receive_markers);
+    replicated_archetypes.update(archetypes, &scan.rules, &scan.receive_markers);
+
+    let last_tick = scan.start_pass(&removal_buffer, &mut clients);
+    let candidates = &mut *scan.candidates;
 
     let mut component_storages: SmallVec<[ComponentMetadata; 8]> = SmallVec::new();
 
@@ -702,11 +774,29 @@ fn collect_changes(
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
         let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
 
-        component_storages.clear();
-        component_storages
-            .extend(replicated_archetype.iter_components(archetype, &query, &registry));
+        if let Some(last_tick) = last_tick {
+            candidates.insert_changed(
+                archetype,
+                replicated_archetype,
+                &query,
+                &registry,
+                replicated_archetypes.marker_id(),
+                last_tick,
+                **change_tick,
+            );
+        }
 
+        let mut resolved = false;
         for entity in archetype.entities() {
+            if last_tick.is_some() && !candidates.contains(entity.id()) {
+                continue;
+            }
+            if !resolved {
+                component_storages.clear();
+                component_storages
+                    .extend(replicated_archetype.iter_components(archetype, &query, &registry));
+                resolved = true;
+            }
             if !needs_replication(
                 entity,
                 &component_storages,
@@ -714,6 +804,12 @@ fn collect_changes(
                 **change_tick,
                 &clients,
             ) {
+                if last_tick.is_some() {
+                    // Whatever made it a candidate is delivered by now.
+                    for (_, _, _, mut ticks, ..) in &mut clients {
+                        ticks.bypass_change_detection().pending.remove(entity.id());
+                    }
+                }
                 continue;
             }
 
@@ -771,6 +867,10 @@ fn collect_changes(
                         {
                             continue;
                         }
+
+                        // Needs another look until acknowledged, even when
+                        // held back by priority this tick.
+                        mutations.mark_entity_pending();
 
                         let base_priority = priority_map
                             .get(&entity.id())
@@ -856,7 +956,8 @@ fn collect_changes(
                 let starts_replication = new_for_client
                     && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
 
-                if starts_replication || has_insertions || has_removals {
+                let merged = starts_replication || has_insertions || has_removals;
+                if merged {
                     // If there is any insertion, removal, or it's a new entity for a client, include all mutations
                     // into update message and bump the last acknowledged tick to keep entity updates atomic.
                     if mutations.entity_added() {
@@ -876,6 +977,13 @@ fn collect_changes(
                     );
                 }
 
+                // Updates are reliable, so only a standalone mutation waits for an acknowledgment.
+                if mutations.entity_pending() && !merged {
+                    ticks.pending.insert(entity.id());
+                } else {
+                    ticks.pending.remove(entity.id());
+                }
+
                 if starts_replication && !has_insertions {
                     trace!("writing empty `{}` for client `{client}`", entity.id());
 
@@ -888,6 +996,7 @@ fn collect_changes(
         }
     }
 
+    **scan.collected_tick = Some(**change_tick);
     removal_buffer.clear();
 
     Ok(())
@@ -1039,11 +1148,13 @@ fn reset(
     mut messages: ResMut<ServerMessages>,
     mut server_tick: ResMut<ServerTick>,
     mut related_entities: ResMut<RelatedEntities>,
+    mut collected_tick: ResMut<CollectedTick>,
     clients: Query<Entity, With<ConnectedClient>>,
     mut message_buffer: ResMut<MessageBuffer>,
 ) {
     messages.clear();
     *server_tick = Default::default();
+    *collected_tick = Default::default();
     message_buffer.clear();
     related_entities.clear();
     for client in &clients {
@@ -1092,6 +1203,135 @@ pub enum ServerSystems {
 /// Used to share the same tick in [`collect_changes`] and [`send_messages`].
 #[derive(Resource, Deref, DerefMut, Default)]
 struct ServerChangeTick(Tick);
+
+/// State of [`collect_changes`] for visiting only entities that can need replication.
+#[derive(SystemParam)]
+struct ChangeScan<'w, 's> {
+    rules: Res<'w, ReplicationRules>,
+    receive_markers: Res<'w, ReceiveMarkers>,
+    collected_tick: ResMut<'w, CollectedTick>,
+    filter_buffer: ResMut<'w, FilterBuffer>,
+    candidates: Local<'s, Candidates>,
+}
+
+impl ChangeScan<'_, '_> {
+    /// Collects candidates known before the archetype walk and returns the tick to scan
+    /// changes from, or [`None`] if the pass has to visit every entity.
+    fn start_pass(
+        &mut self,
+        removal_buffer: &RemovalBuffer,
+        clients: &mut Query<(
+            Entity,
+            &mut Updates,
+            &mut Mutations,
+            &mut ClientTicks,
+            &mut PriorityMap,
+            &mut ClientVisibility,
+        )>,
+    ) -> Option<Tick> {
+        // Once every client holds the world as of the last pass, only entities with changes
+        // since then, or with something left to send to a client, need a visit.
+        let synced = clients.iter().all(|(_, _, _, ticks, ..)| ticks.synced);
+        let last_tick = self.collected_tick.filter(|_| synced);
+        self.candidates.clear();
+        if last_tick.is_some() {
+            for &entity in removal_buffer.keys() {
+                self.candidates.insert(entity);
+            }
+            for entity in self.filter_buffer.drain() {
+                self.candidates.insert(entity);
+            }
+            for (_, _, _, mut ticks, _, mut visibility) in clients {
+                self.candidates
+                    .union_with(&ticks.bypass_change_detection().pending);
+                for entity in visibility.bypass_change_detection().drain_gained() {
+                    self.candidates.insert(entity);
+                }
+            }
+        } else {
+            // A full pass collects everything left to send by itself.
+            self.filter_buffer.clear();
+            for (_, _, _, mut ticks, _, mut visibility) in clients {
+                ticks.pending.clear();
+                ticks.synced = true;
+                visibility.drain_gained().for_each(drop);
+            }
+        }
+
+        last_tick
+    }
+}
+
+/// System tick of the last completed [`collect_changes`] pass.
+///
+/// Components changed after it are the only ones that can need replication
+/// to a client that already holds the world.
+#[derive(Resource, Deref, DerefMut, Default)]
+struct CollectedTick(Option<Tick>);
+
+/// Entities that gained or lost a component used in a rule filter since the last pass.
+#[derive(Resource, Deref, DerefMut, Default)]
+struct FilterBuffer(EntityHashSet);
+
+/// Entities to visit in a pass.
+#[derive(Default, Deref, DerefMut)]
+struct Candidates(EntityBits);
+
+impl Candidates {
+    /// Adds entities of an archetype whose replicated data changed since `last_tick`.
+    fn insert_changed(
+        &mut self,
+        archetype: &Archetype,
+        replicated_archetype: &ReplicatedArchetype,
+        query: &ReplicationQuery,
+        registry: &ReplicationRegistry,
+        marker_id: ComponentId,
+        last_tick: Tick,
+        this_tick: Tick,
+    ) {
+        // SAFETY: only ticks of replicated components are read.
+        let table = unsafe { query.table(archetype.table_id()) };
+        self.insert_changed_rows(table, marker_id, last_tick, this_tick);
+        for &(rule, storage) in &replicated_archetype.components {
+            let (_, component_id, _) = registry.get(rule.fns_id);
+            match storage {
+                StorageType::Table => {
+                    self.insert_changed_rows(table, component_id, last_tick, this_tick)
+                }
+                StorageType::SparseSet => {
+                    // SAFETY: the component is replicated and uses sparse set storage.
+                    let sparse_set = unsafe { query.sparse_set(component_id) };
+                    for entity in archetype.entities() {
+                        // SAFETY: the component is present in this archetype.
+                        let ticks = unsafe { sparse_set.get_ticks(entity.id()).unwrap_unchecked() };
+                        if ticks.changed.is_newer_than(last_tick, this_tick) {
+                            self.insert(entity.id());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn insert_changed_rows(
+        &mut self,
+        table: &Table,
+        component_id: ComponentId,
+        last_tick: Tick,
+        this_tick: Tick,
+    ) {
+        let Some(ticks) = table.get_changed_ticks_slice_for(component_id) else {
+            return;
+        };
+        for (tick, &entity) in ticks.iter().zip(table.entities()) {
+            // SAFETY: the system has read access to the component and nothing writes it during the pass.
+            let tick = unsafe { *tick.get() };
+            if tick.is_newer_than(last_tick, this_tick) {
+                self.insert(entity);
+            }
+        }
+    }
+}
 
 /// Buffer with all despawned entities.
 #[derive(Resource, Deref, DerefMut, Default)]

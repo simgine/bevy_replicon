@@ -41,6 +41,9 @@ pub(crate) struct Mutations {
 
     /// Location of the last written entity since the last call of [`Self::start_entity_mutations`].
     entity_location: Option<EntityLocation>,
+
+    /// Whether the entity has a changed component the client didn't acknowledge yet.
+    entity_pending: bool,
 }
 
 impl Mutations {
@@ -50,6 +53,19 @@ impl Mutations {
     /// See [`Self::add_entity`] and [`Self::add_component`].
     pub(crate) fn start_entity(&mut self) {
         self.entity_location = None;
+        self.entity_pending = false;
+    }
+
+    /// Marks the entity as having a mutation the client didn't acknowledge yet,
+    /// whether or not it's written this tick.
+    pub(crate) fn mark_entity_pending(&mut self) {
+        self.entity_pending = true;
+    }
+
+    /// Returns `true` if [`Self::mark_entity_pending`] were called since the last
+    /// call of [`Self::start_entity`].
+    pub(crate) fn entity_pending(&self) -> bool {
+        self.entity_pending
     }
 
     /// Returns `true` if [`Self::add_entity`] were called since the last

@@ -109,6 +109,43 @@ fn multiple_components() {
 }
 
 #[test]
+fn second_client_after_idle_ticks() {
+    let mut server_app = App::new();
+    let mut client_app1 = App::new();
+    let mut client_app2 = App::new();
+    for app in [&mut server_app, &mut client_app1, &mut client_app2] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app1);
+    server_app.world_mut().spawn((Replicated, A));
+
+    // Let the first client receive the entity and then idle for a while.
+    for _ in 0..5 {
+        server_app.update();
+        server_app.exchange_with_client(&mut client_app1);
+        client_app1.update();
+        server_app.exchange_with_client(&mut client_app1);
+    }
+
+    // A client connecting later should still receive the entity even though nothing changed on it.
+    server_app.connect_client(&mut client_app2);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app2);
+    client_app2.update();
+
+    let mut components = client_app2.world_mut().query::<(&Remote, &A)>();
+    assert_eq!(components.iter(client_app2.world()).len(), 1);
+}
+
+#[test]
 fn old_component() {
     let mut server_app = App::new();
     let mut client_app = App::new();
