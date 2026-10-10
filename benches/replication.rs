@@ -37,12 +37,8 @@ fn replicate(c: &mut Criterion) {
         );
     }
 
-    c.bench_function("changes_receive", |b| {
-        b.iter_custom(|iter| changes_receive(iter))
-    });
-    c.bench_function("mutations_receive", |b| {
-        b.iter_custom(|iter| mutations_receive(iter))
-    });
+    c.bench_function("changes_receive", |b| b.iter_custom(changes_receive));
+    c.bench_function("mutations_receive", |b| b.iter_custom(mutations_receive));
 }
 
 fn changes_send(iter: u64, clients_count: usize) -> Duration {
