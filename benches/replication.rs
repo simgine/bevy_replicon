@@ -232,14 +232,14 @@ fn mutations_receive(iter: u64) -> Duration {
 
 fn create_app() -> App {
     let mut app = App::new();
-    app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1))
-        .add_plugins((
-            MinimalPlugins,
-            StatesPlugin,
-            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
-        ))
-        .replicate::<Position>()
-        .finish();
+    app.add_plugins((
+        MinimalPlugins,
+        StatesPlugin,
+        RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+    ))
+    .insert_resource(TimeUpdateStrategy::FixedTimesteps(1))
+    .replicate::<Position>()
+    .finish();
 
     app
 }
