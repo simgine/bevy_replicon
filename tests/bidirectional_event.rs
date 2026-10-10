@@ -1,4 +1,4 @@
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use bevy_replicon::{
     prelude::*, shared::message::registry::RemoteMessageRegistry, test_app::ServerTestAppExt,
 };
@@ -10,10 +10,15 @@ fn message() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
-        app.add_plugins((MinimalPlugins, StatesPlugin, RepliconPlugins))
-            .add_client_message::<Test>(Channel::Ordered)
-            .add_server_message::<Test>(Channel::Ordered)
-            .finish();
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .insert_resource(TimeUpdateStrategy::FixedTimesteps(1))
+        .add_client_message::<Test>(Channel::Ordered)
+        .add_server_message::<Test>(Channel::Ordered)
+        .finish();
     }
 
     let registry = server_app.world().resource::<RemoteMessageRegistry>();
