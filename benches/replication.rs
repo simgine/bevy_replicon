@@ -11,7 +11,7 @@ criterion_main!(benches);
 
 criterion_group!(benches, replicate);
 
-const ENTITIES: usize = 1000;
+const ENTITIES: usize = 500;
 /// Large enough for a pass over a world the clients already hold to take milliseconds.
 const WORLD_ENTITIES: usize = 50_000;
 /// Share of the world mutated per tick in the sparse case.
