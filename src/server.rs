@@ -54,7 +54,7 @@ use removal_buffer::RemovalBuffer;
 use replication_messages::{
     mutations::Mutations, serialized_data::SerializedData, updates::Updates,
 };
-use replication_query::ReplicationQuery;
+use replication_query::{ComponentStorage, ReplicationQuery};
 use server_tick::ServerTick;
 use visibility::client_visibility::ClientVisibility;
 
@@ -695,11 +695,58 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
+    let mut component_storages: Vec<(_, _, _, ComponentStorage)> = Vec::new();
+    let mut components = Vec::new();
+
     for replicated_archetype in replicated_archetypes.iter() {
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
         let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
 
+        component_storages.clear();
+        for &(rule, storage) in &replicated_archetype.components {
+            let (component_index, component_id, _) = registry.get(rule.fns_id);
+
+            // SAFETY: component and storage were obtained from this archetype.
+            let storage =
+                unsafe { query.component_storage(archetype.table_id(), storage, component_id) };
+
+            component_storages.push((rule, component_index, component_id, storage));
+        }
+
         for entity in archetype.entities() {
+            components.clear();
+            for &(rule, component_index, component_id, storage) in &component_storages {
+                // SAFETY: the entity belongs to the archetype the storage was resolved for.
+                let (ptr, ticks) = unsafe { storage.get(entity) };
+
+                components.push((rule, component_index, component_id, ptr, ticks));
+            }
+
+            // Most entities don't change between ticks, so clients that already have
+            // the entity with all its components and nothing hidden can be skipped
+            // without serializing anything.
+            let has_removals = removal_buffer.contains_key(&entity.id());
+            let needs_send = clients
+                .iter()
+                .any(|(_, _, _, client_ticks, _, visibility)| {
+                    let hidden = visibility.get(entity.id());
+                    if !hidden.is_empty() {
+                        return hidden.hidden_entity_lifetime(&filter_registry)
+                            != Some(ScopeLifetime::WhileVisible);
+                    }
+                    let Some(entity_ticks) = client_ticks.entities.get(&entity.id()) else {
+                        return true;
+                    };
+                    has_removals
+                        || components.iter().any(|&(_, component_index, .., ticks)| {
+                            !entity_ticks.components.contains(component_index)
+                                || ticks.is_changed(entity_ticks.system_tick, **change_tick)
+                        })
+                });
+            if !needs_send {
+                continue;
+            }
+
             let mut entity_range = None;
             let entity_priority = query.get_priority(entity, archetype.table_id());
             for (_, mut updates, mut mutations, ..) in &mut clients {
@@ -707,18 +754,8 @@ fn collect_changes(
                 mutations.start_entity();
             }
 
-            for &(rule, storage) in &replicated_archetype.components {
-                let (component_index, component_id, fns) = registry.get(rule.fns_id);
-
-                // SAFETY: component and storage were obtained from this archetype.
-                let (ptr, ticks) = unsafe {
-                    query.get_component_unchecked(
-                        entity,
-                        archetype.table_id(),
-                        storage,
-                        component_id,
-                    )
-                };
+            for &(rule, component_index, component_id, ptr, ticks) in &components {
+                let (.., fns) = registry.get(rule.fns_id);
 
                 // SAFETY: `fns` and `ptr` were created for the same component type.
                 let mut component = unsafe { ErasedComponent::new(fns, ptr, rule.fns_id) };
@@ -831,7 +868,6 @@ fn collect_changes(
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
                 let has_insertions = updates.changed_entity_added();
-                let has_removals = removal_buffer.contains_key(&entity.id());
                 let starts_replication = new_for_client
                     && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
 

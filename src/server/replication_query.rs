@@ -4,7 +4,7 @@ use bevy::{
         change_detection::{ComponentTicks, Tick},
         component::{ComponentId, StorageType},
         query::{FilteredAccess, FilteredAccessSet},
-        storage::TableId,
+        storage::{Column, ComponentSparseSet, TableId},
         system::{ReadOnlySystemParam, SystemMeta, SystemParam, SystemParamValidationError},
         world::unsafe_world_cell::UnsafeWorldCell,
     },
@@ -48,18 +48,20 @@ impl<'w> ReplicationQuery<'w, '_> {
         Some(**priority)
     }
 
-    /// Extracts a component as [`Ptr`] and its ticks from a table or sparse set, depending on its storage type.
+    /// Resolves where a replicated component of an archetype is stored.
+    ///
+    /// Looking the column or sparse set up once per archetype makes per-entity
+    /// access a row index instead of a map lookup.
     ///
     /// # Safety
     ///
     /// The component must be present in this archetype, have the specified storage type, and be previously marked for replication.
-    pub(super) unsafe fn get_component_unchecked(
+    pub(super) unsafe fn component_storage(
         &self,
-        entity: &ArchetypeEntity,
         table_id: TableId,
         storage: StorageType,
         component_id: ComponentId,
-    ) -> (Ptr<'w>, ComponentTicks) {
+    ) -> ComponentStorage<'w> {
         debug_assert!(self.state.component_access.access().has_read(component_id));
 
         // SAFETY: caller ensured the component is replicated.
@@ -67,21 +69,42 @@ impl<'w> ReplicationQuery<'w, '_> {
         match storage {
             StorageType::Table => unsafe {
                 let table = storages.tables.get(table_id).unwrap_unchecked();
-                // TODO: re-use column lookup, asked in https://github.com/bevyengine/bevy/issues/16593.
-                let component: Ptr<'w> = table
-                    .get_component(component_id, entity.table_row())
-                    .unwrap_unchecked();
-                let ticks = table
-                    .get_ticks_unchecked(component_id, entity.table_row())
-                    .unwrap_unchecked();
-
-                (component, ticks)
+                ComponentStorage::Table(table.get_column(component_id).unwrap_unchecked())
             },
             StorageType::SparseSet => unsafe {
-                let sparse_set = storages.sparse_sets.get(component_id).unwrap_unchecked();
+                ComponentStorage::SparseSet(
+                    storages.sparse_sets.get(component_id).unwrap_unchecked(),
+                )
+            },
+        }
+    }
+}
+
+/// Storage of a replicated component resolved for a specific archetype.
+#[derive(Clone, Copy)]
+pub(super) enum ComponentStorage<'w> {
+    Table(&'w Column),
+    SparseSet(&'w ComponentSparseSet),
+}
+
+impl<'w> ComponentStorage<'w> {
+    /// Extracts the component as [`Ptr`] with its ticks.
+    ///
+    /// # Safety
+    ///
+    /// The entity must belong to the archetype this storage was resolved for.
+    pub(super) unsafe fn get(self, entity: &ArchetypeEntity) -> (Ptr<'w>, ComponentTicks) {
+        match self {
+            ComponentStorage::Table(column) => unsafe {
+                let row = entity.table_row();
+                (
+                    column.get_data_unchecked(row),
+                    column.get_ticks_unchecked(row),
+                )
+            },
+            ComponentStorage::SparseSet(sparse_set) => unsafe {
                 let component = sparse_set.get(entity.id()).unwrap_unchecked();
                 let ticks = sparse_set.get_ticks(entity.id()).unwrap_unchecked();
-
                 (component, ticks)
             },
         }
