@@ -11,11 +11,14 @@ criterion_main!(benches);
 
 criterion_group!(benches, replicate);
 
-const ENTITIES: usize = 500;
-/// Large enough for a pass over a world the clients already hold to take milliseconds.
-const WORLD_ENTITIES: usize = 50_000;
-/// Share of the world mutated per tick in the sparse case.
-const SPARSE_MUTATIONS: usize = WORLD_ENTITIES / 100;
+/// Entities replicated together in the changes and dense-mutation benchmarks.
+const BATCH_ENTITY_COUNT: usize = 500;
+
+/// Already-replicated entities scanned by the idle and sparse-mutation benchmarks.
+const WORLD_ENTITY_COUNT: usize = 50_000;
+
+/// Entities mutated per tick in the sparse benchmark (1% of the world).
+const SPARSE_MUTATION_COUNT: usize = WORLD_ENTITY_COUNT / 100;
 
 fn replicate(c: &mut Criterion) {
     for clients_count in [1, 20] {
@@ -30,7 +33,7 @@ fn replicate(c: &mut Criterion) {
         });
         c.bench_function(
             &format!("sparse_mutations_send/{clients_count}_clients"),
-            |b| b.iter_custom(|iter| world_send(iter, clients_count, SPARSE_MUTATIONS)),
+            |b| b.iter_custom(|iter| world_send(iter, clients_count, SPARSE_MUTATION_COUNT)),
         );
     }
 
@@ -57,7 +60,7 @@ fn changes_send(iter: u64, clients_count: usize) -> Duration {
 
         server_app
             .world_mut()
-            .spawn_batch(vec![(Replicated, Position::default()); ENTITIES]);
+            .spawn_batch(vec![(Replicated, Position::default()); BATCH_ENTITY_COUNT]);
 
         let instant = Instant::now();
         server_app.update();
@@ -68,7 +71,7 @@ fn changes_send(iter: u64, clients_count: usize) -> Duration {
             client_app.update();
 
             let mut remote = client_app.world_mut().query::<&Remote>();
-            assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+            assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
         }
     }
 
@@ -88,7 +91,7 @@ fn mutations_send(iter: u64, clients_count: usize) -> Duration {
 
     server_app
         .world_mut()
-        .spawn_batch(vec![(Replicated, Position::default()); ENTITIES]);
+        .spawn_batch(vec![(Replicated, Position::default()); BATCH_ENTITY_COUNT]);
     let mut query = server_app.world_mut().query::<&mut Position>();
 
     server_app.update();
@@ -97,7 +100,7 @@ fn mutations_send(iter: u64, clients_count: usize) -> Duration {
         client_app.update();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
     }
 
     let mut elapsed = Duration::ZERO;
@@ -115,7 +118,7 @@ fn mutations_send(iter: u64, clients_count: usize) -> Duration {
             client_app.update();
 
             let mut remote = client_app.world_mut().query::<&Remote>();
-            assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+            assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
         }
     }
 
@@ -135,7 +138,7 @@ fn world_send(iter: u64, clients_count: usize, mutated: usize) -> Duration {
 
     server_app
         .world_mut()
-        .spawn_batch(vec![(Replicated, Position::default()); WORLD_ENTITIES]);
+        .spawn_batch(vec![(Replicated, Position::default()); WORLD_ENTITY_COUNT]);
     let mut query = server_app.world_mut().query::<&mut Position>();
 
     server_app.update();
@@ -144,7 +147,7 @@ fn world_send(iter: u64, clients_count: usize, mutated: usize) -> Duration {
         client_app.update();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).len(), WORLD_ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), WORLD_ENTITY_COUNT);
     }
 
     let mut elapsed = Duration::ZERO;
@@ -176,7 +179,7 @@ fn changes_receive(iter: u64) -> Duration {
 
         server_app
             .world_mut()
-            .spawn_batch(vec![(Replicated, Position::default()); ENTITIES]);
+            .spawn_batch(vec![(Replicated, Position::default()); BATCH_ENTITY_COUNT]);
 
         server_app.update();
         server_app.exchange_with_client(&mut client_app);
@@ -186,7 +189,7 @@ fn changes_receive(iter: u64) -> Duration {
         elapsed += instant.elapsed();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
     }
 
     elapsed
@@ -200,14 +203,14 @@ fn mutations_receive(iter: u64) -> Duration {
 
     server_app
         .world_mut()
-        .spawn_batch(vec![(Replicated, Position::default()); ENTITIES]);
+        .spawn_batch(vec![(Replicated, Position::default()); BATCH_ENTITY_COUNT]);
     let mut query = server_app.world_mut().query::<&mut Position>();
 
     server_app.update();
     server_app.exchange_with_client(&mut client_app);
     client_app.update();
     let mut remote = client_app.world_mut().query::<&Remote>();
-    assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+    assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
 
     let mut elapsed = Duration::ZERO;
     for _ in 0..iter {
@@ -224,7 +227,7 @@ fn mutations_receive(iter: u64) -> Duration {
         elapsed += instant.elapsed();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).len(), ENTITIES);
+        assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
     }
 
     elapsed
