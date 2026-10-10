@@ -4,7 +4,7 @@ use bevy::{
     platform::time::Instant, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy,
 };
 use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use serde::{Deserialize, Serialize};
 
 criterion_main!(benches);
@@ -18,28 +18,26 @@ const WORLD_ENTITIES: usize = 50_000;
 const SPARSE_MUTATIONS: usize = WORLD_ENTITIES / 100;
 
 fn replicate(c: &mut Criterion) {
-    let mut g = c.benchmark_group("position");
-
     for clients_count in [1, 20] {
-        g.bench_function(BenchmarkId::new("changes_send", clients_count), |b| {
+        c.bench_function(&format!("changes_send/{clients_count}_clients"), |b| {
             b.iter_custom(|iter| changes_send(iter, clients_count))
         });
-        g.bench_function(BenchmarkId::new("mutations_send", clients_count), |b| {
+        c.bench_function(&format!("mutations_send/{clients_count}_clients"), |b| {
             b.iter_custom(|iter| mutations_send(iter, clients_count))
         });
-        g.bench_function(BenchmarkId::new("idle_send", clients_count), |b| {
+        c.bench_function(&format!("idle_send/{clients_count}_clients"), |b| {
             b.iter_custom(|iter| world_send(iter, clients_count, 0))
         });
-        g.bench_function(
-            BenchmarkId::new("sparse_mutations_send", clients_count),
+        c.bench_function(
+            &format!("sparse_mutations_send/{clients_count}_clients"),
             |b| b.iter_custom(|iter| world_send(iter, clients_count, SPARSE_MUTATIONS)),
         );
     }
 
-    g.bench_function("changes_receive", |b| {
+    c.bench_function("changes_receive", |b| {
         b.iter_custom(|iter| changes_receive(iter))
     });
-    g.bench_function("mutations_receive", |b| {
+    c.bench_function("mutations_receive", |b| {
         b.iter_custom(|iter| mutations_receive(iter))
     });
 }
