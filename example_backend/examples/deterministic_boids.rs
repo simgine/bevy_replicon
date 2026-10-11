@@ -133,7 +133,7 @@ fn spawn_boids(commands: &mut Commands) {
 /// is inserted. This way, visuals are applied automatically both when a boid is spawned
 /// manually on the server (or in singleplayer) and when it is replicated to a client.
 fn init_boid(
-    insert: On<Insert, Boid>,
+    insert: On<Insert<Boid>>,
     boid_mesh: Local<BoidMesh>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut boids: Query<(&Boid, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,

@@ -4,7 +4,9 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 
-use bevy::{ecs::entity::MapEntities, prelude::*};
+use bevy::{
+    ecs::entity::MapEntities, picking::hover::Hovered, prelude::*, ui::Pressed, ui_widgets::Button,
+};
 use bevy_replicon::prelude::*;
 use bevy_replicon_example_backend::{ExampleClient, ExampleServer, RepliconExampleBackendPlugins};
 use clap::Parser;
@@ -68,7 +70,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>) -> Result<()> {
 }
 
 /// Since we can't include hierarchy into required components, initialize it on insertion.
-fn init_toggle_button(add: On<Add, ToggleButton>, mut commands: Commands) {
+fn init_toggle_button(add: On<Add<ToggleButton>>, mut commands: Commands) {
     commands.entity(add.entity).with_child((
         Text::default(),
         TextShadow::default(),
@@ -85,7 +87,7 @@ fn init_toggle_button(add: On<Add, ToggleButton>, mut commands: Commands) {
 /// Used on both the server and the clients.
 /// Triggering this on the server will emit [`FromClient`] with [`ClientId::Server`].
 fn trigger_remote_toggle(
-    click: On<Pointer<Click>>,
+    click: On<PointerClick>,
     mut commands: Commands,
     buttons: Query<(), With<ToggleButton>>,
 ) {
@@ -110,13 +112,13 @@ fn apply_remote_toggle(
 }
 
 fn update_button_background(
-    mut buttons: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,
+    mut buttons: Query<(Has<Pressed>, Has<Hovered>, &mut BackgroundColor), With<Button>>,
 ) {
-    for (interaction, mut background_color) in &mut buttons {
-        *background_color = match interaction {
-            Interaction::Pressed => Color::srgb(0.35, 0.75, 0.35).into(),
-            Interaction::Hovered => Color::srgb(0.25, 0.25, 0.25).into(),
-            Interaction::None => Color::srgb(0.15, 0.15, 0.15).into(),
+    for (pressed, hovered, mut background_color) in &mut buttons {
+        *background_color = match (pressed, hovered) {
+            (true, _) => Color::srgb(0.35, 0.75, 0.35).into(),
+            (false, true) => Color::srgb(0.25, 0.25, 0.25).into(),
+            (false, false) => Color::srgb(0.15, 0.15, 0.15).into(),
         }
     }
 }
@@ -130,7 +132,7 @@ fn update_toggle_text(
     mut texts: Query<&mut Text>,
 ) {
     for (&toggle, children) in buttons {
-        if let Some(mut text) = texts.iter_many_mut(children).fetch_next() {
+        if let Some(mut text) = texts.iter_many_mut(children).matched().fetch_next() {
             text.clear();
             if *toggle {
                 text.push_str("On");

@@ -247,7 +247,7 @@ fn read_relations<C: Relationship>(
 }
 
 fn add_relation<C: Relationship>(
-    insert: On<Insert, C>,
+    insert: On<Insert<C>>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     components: Query<&C, With<Replicated>>,
@@ -260,7 +260,7 @@ fn add_relation<C: Relationship>(
 }
 
 fn remove_relation<C: Relationship>(
-    discard: On<Discard, C>,
+    discard: On<Discard<C>>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     relationships: Query<&C, With<Replicated>>,
@@ -273,7 +273,7 @@ fn remove_relation<C: Relationship>(
 }
 
 fn start_replication<C: Relationship>(
-    insert: On<Insert, Replicated>,
+    insert: On<Insert<Replicated>>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     components: Query<&C, With<Replicated>>,
@@ -286,7 +286,7 @@ fn start_replication<C: Relationship>(
 }
 
 fn stop_replication<C: Relationship>(
-    discard: On<Discard, Replicated>,
+    discard: On<Discard<Replicated>>,
     mut related_entities: ResMut<RelatedEntities>,
     state: Res<State<ServerState>>,
     relationships: Query<&C, With<Replicated>>,

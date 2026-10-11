@@ -107,7 +107,7 @@ impl AppVisibilityExt for App {
 }
 
 fn update_for_new_clients<F: VisibilityFilter>(
-    insert: On<Insert, ClientVisibility>,
+    insert: On<Insert<ClientVisibility>>,
     registry: Res<FilterRegistry>,
     mut clients: Query<(&mut ClientVisibility, Option<&F::ClientComponent>)>,
     entities: Query<(Entity, &F)>,
@@ -127,7 +127,7 @@ fn update_for_new_clients<F: VisibilityFilter>(
 }
 
 fn on_insert<F: VisibilityFilter>(
-    insert: On<Insert, F>,
+    insert: On<Insert<F>>,
     registry: Res<FilterRegistry>,
     entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
     mut clients: Query<(Entity, Option<&F::ClientComponent>, &mut ClientVisibility)>,
@@ -151,7 +151,7 @@ fn on_insert<F: VisibilityFilter>(
 }
 
 fn on_client_insert<F: VisibilityFilter>(
-    insert: On<Insert, F::ClientComponent>,
+    insert: On<Insert<F::ClientComponent>>,
     registry: Res<FilterRegistry>,
     mut clients: Query<(&F::ClientComponent, &mut ClientVisibility)>,
     entities: Query<(Entity, &F), Without<ClientVisibility>>,
@@ -173,7 +173,7 @@ fn on_client_insert<F: VisibilityFilter>(
 }
 
 fn on_remove<F: VisibilityFilter>(
-    remove: On<Remove, F>,
+    remove: On<Remove<F>>,
     registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility>,
 ) {
@@ -202,7 +202,7 @@ fn on_remove<F: VisibilityFilter>(
 }
 
 fn on_client_remove<F: VisibilityFilter>(
-    remove: On<Remove, F::ClientComponent>,
+    remove: On<Remove<F::ClientComponent>>,
     registry: Res<FilterRegistry>,
     mut clients: Query<&mut ClientVisibility>,
     entities: Query<(Entity, &F), Without<ClientVisibility>>,

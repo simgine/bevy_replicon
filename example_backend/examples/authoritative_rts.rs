@@ -166,7 +166,7 @@ fn apply_team_request(
 /// This also makes the logic independent of camera position - even though in
 /// this demo the camera cannot move.
 fn trigger_unit_spawn(
-    press: On<Pointer<Press>>,
+    press: On<PointerPress>,
     mut commands: Commands,
     camera: Single<(&Camera, &GlobalTransform)>,
 ) -> Result<()> {
@@ -175,7 +175,7 @@ fn trigger_unit_spawn(
     }
 
     let (camera, transform) = *camera;
-    let position = camera.viewport_to_world_2d(transform, press.pointer_location.position)?;
+    let position = camera.viewport_to_world_2d(transform, press.pointer.position)?;
 
     commands.client_trigger(UnitSpawn { position });
 
@@ -219,7 +219,7 @@ fn apply_unit_spawn(
 /// Works for initialization on both the server (when a unit
 /// is spawned) and the client (when the unit is replicated).
 fn init_unit(
-    insert: On<Insert, Unit>,
+    insert: On<Insert<Unit>>,
     unit_mesh: Local<UnitMesh>,
     unit_materials: Local<UnitMaterials>,
     mut units: Query<(&Team, &mut Mesh2d, &mut MeshMaterial2d<ColorMaterial>)>,
@@ -233,7 +233,7 @@ fn init_unit(
 ///
 /// The selection is local to the player and is not networked.
 fn select_units(
-    drag: On<Pointer<Drag>>,
+    drag: On<PointerDrag>,
     mut commands: Commands,
     mut selection: ResMut<Selection>,
     local_team: Res<LocalTeam>,
@@ -246,9 +246,8 @@ fn select_units(
 
     let (camera, transform) = *camera;
 
-    let origin =
-        camera.viewport_to_world_2d(transform, drag.pointer_location.position - drag.distance)?;
-    let end = camera.viewport_to_world_2d(transform, drag.pointer_location.position)?;
+    let origin = camera.viewport_to_world_2d(transform, drag.pointer.position - drag.distance)?;
+    let end = camera.viewport_to_world_2d(transform, drag.pointer.position)?;
 
     selection.rect = Rect::from_corners(origin, end);
     selection.active = true;
@@ -270,12 +269,12 @@ fn select_units(
 }
 
 /// Stops displaying the selection rectangle.
-fn end_selection(_on: On<Pointer<DragEnd>>, mut rect: ResMut<Selection>) {
+fn end_selection(_on: On<PointerDragEnd>, mut rect: ResMut<Selection>) {
     rect.active = false;
 }
 
 fn clear_selection(
-    press: On<Pointer<Press>>,
+    press: On<PointerPress>,
     mut commands: Commands,
     units: Query<Entity, With<Selected>>,
 ) {
@@ -289,7 +288,7 @@ fn clear_selection(
 
 /// Requests movement into a location for previously the selected units.
 fn trigger_units_move(
-    press: On<Pointer<Press>>,
+    press: On<PointerPress>,
     mut commands: Commands,
     camera: Single<(&Camera, &GlobalTransform)>,
     units: Populated<Entity, With<Selected>>,
@@ -299,7 +298,7 @@ fn trigger_units_move(
     }
 
     let (camera, transform) = *camera;
-    let position = camera.viewport_to_world_2d(transform, press.pointer_location.position)?;
+    let position = camera.viewport_to_world_2d(transform, press.pointer.position)?;
 
     commands.client_trigger(MoveUnits {
         units: units.iter().collect(),
@@ -341,7 +340,7 @@ fn apply_units_move(
 
     positions.clear();
     positions.reserve(move_units.units.len());
-    for (&unit_team, transform, _) in units.iter_many(&move_units.units) {
+    for (&unit_team, transform, _) in units.iter_many(&move_units.units).matched() {
         if unit_team != team {
             error!(
                 "`{}` has team `{team:?}`, but tried to move unit with team `{unit_team:?}`",
@@ -388,7 +387,7 @@ fn apply_units_move(
         .collect();
     let (_, unit_to_slot) = kuhn_munkres_min(&weights);
 
-    let mut iter = units.iter_many_mut(&move_units.units);
+    let mut iter = units.iter_many_mut(&move_units.units).matched();
     for &slot_index in &unit_to_slot {
         let (.., mut command) = iter.fetch_next().unwrap();
         *command = Command::Move(slots[slot_index]);

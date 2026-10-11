@@ -46,7 +46,7 @@ These entities are automatically spawned and despawned by the messaging backend.
 also despawn them yourself to trigger a disconnect or use the [`DisconnectRequest`] message
 to disconnect after sending messages.
 
-You can use [`On<Add, ConnectedClient>`] to react to new connections,
+You can use [`On<Add<ConnectedClient>>`] to react to new connections,
 or use backend-provided events if you need the disconnect reason.
 
 ## States
@@ -197,7 +197,7 @@ app.replicate::<Transform>()
     .add_observer(init_player_mesh);
 
 fn init_player_mesh(
-    add: On<Add, Mesh2d>,
+    add: On<Add<Mesh2d>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut players: Query<&mut Mesh2d>,
 ) {

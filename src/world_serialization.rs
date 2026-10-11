@@ -39,7 +39,7 @@ let mut dyn_world = world_deserializer.deserialize(&mut deserializer).unwrap();
 
 // Re-insert `Replicated` component if you want to replicate them.
 for entity in &mut dyn_world.entities {
-    entity.components.push(Replicated.to_dynamic());
+    entity.components.push(Replicated.to_dynamic().unwrap());
 }
 ```
 */
