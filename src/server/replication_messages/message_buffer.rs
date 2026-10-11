@@ -29,7 +29,7 @@ impl MessageBuffer {
                 match buff.try_into_mut() {
                     Ok(mut buff) => {
                         buff.clear();
-                        buff.reserve(message_size.saturating_sub(buff.capacity()));
+                        buff.reserve(message_size);
                         return buff;
                     }
                     Err(buff) => {
