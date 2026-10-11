@@ -11,7 +11,7 @@ use core::time::Duration;
 
 use bevy::{
     ecs::{
-        archetype::Archetypes,
+        archetype::{Archetype, ArchetypeEntity, Archetypes},
         change_detection::{CheckChangeTicks, Tick},
         entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
@@ -29,7 +29,7 @@ use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replicated_archetypes::ReplicatedArchetypes,
+        replicated_archetypes::{ReplicatedArchetype, ReplicatedArchetypes},
         replication_messages::{mutations::MutationsSplit, serialized_data::ErasedComponent},
         visibility::registry::FilterRegistry,
     },
@@ -700,6 +700,21 @@ fn collect_changes(
         let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
 
         for entity in archetype.entities() {
+            let has_removals = removal_buffer.contains_key(&entity.id());
+            if !needs_replication(
+                entity,
+                archetype,
+                replicated_archetype,
+                &query,
+                &registry,
+                &filter_registry,
+                **change_tick,
+                has_removals,
+                &clients,
+            ) {
+                continue;
+            }
+
             let mut entity_range = None;
             let entity_priority = query.get_priority(entity, archetype.table_id());
             for (_, mut updates, mut mutations, ..) in &mut clients {
@@ -831,7 +846,6 @@ fn collect_changes(
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
                 let has_insertions = updates.changed_entity_added();
-                let has_removals = removal_buffer.contains_key(&entity.id());
                 let starts_replication = new_for_client
                     && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
 
@@ -870,6 +884,63 @@ fn collect_changes(
     removal_buffer.clear();
 
     Ok(())
+}
+
+/// Returns whether any client may need entity changes or tick bookkeeping.
+fn needs_replication(
+    entity: &ArchetypeEntity,
+    archetype: &Archetype,
+    replicated_archetype: &ReplicatedArchetype,
+    query: &ReplicationQuery,
+    registry: &ReplicationRegistry,
+    filter_registry: &FilterRegistry,
+    change_tick: Tick,
+    has_removals: bool,
+    clients: &Query<(
+        Entity,
+        &mut Updates,
+        &mut Mutations,
+        &mut ClientTicks,
+        &mut PriorityMap,
+        &mut ClientVisibility,
+    )>,
+) -> bool {
+    clients
+        .iter()
+        .any(|(_, _, _, client_ticks, _, visibility)| {
+            let hidden = visibility.get(entity.id());
+            if !hidden.is_empty() {
+                return hidden.hidden_entity_lifetime(filter_registry)
+                    != Some(ScopeLifetime::WhileVisible);
+            }
+            let Some(entity_ticks) = client_ticks.entities.get(&entity.id()) else {
+                return true;
+            };
+            if has_removals {
+                return true;
+            }
+
+            replicated_archetype
+                .components
+                .iter()
+                .any(|&(rule, storage)| {
+                    let (component_index, component_id, _) = registry.get(rule.fns_id);
+
+                    // SAFETY: component and storage were obtained from this archetype.
+                    let (_, ticks) = unsafe {
+                        query.get_component_unchecked(
+                            entity,
+                            archetype.table_id(),
+                            storage,
+                            component_id,
+                        )
+                    };
+
+                    let missing_component = !entity_ticks.components.contains(component_index);
+                    let component_changed = ticks.is_changed(entity_ticks.system_tick, change_tick);
+                    missing_component || component_changed
+                })
+        })
 }
 
 fn update_ticks(
