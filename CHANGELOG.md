@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.44.3] - 2026-10-06
 
+### Changed
+
+- Skip entities that didn't change early.
+- Cache component storage per archetype.
+
 ### Fixed
 
 - Diff replication no longer loses intermediate diffs when a mutation is acknowledged before the state it depends on reaches the client. Such diffs are now buffered and applied in order once that state arrives.
