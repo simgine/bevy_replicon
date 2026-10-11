@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-10-11
+
 ### Changed
 
 - Update to Bevy 0.20.
@@ -1213,7 +1215,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.44.3..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.0..HEAD
+[0.45.0]: https://github.com/simgine/bevy_replicon/compare/v0.44.3...v0.45.0
 [0.44.3]: https://github.com/simgine/bevy_replicon/compare/v0.44.2...v0.44.3
 [0.44.2]: https://github.com/simgine/bevy_replicon/compare/v0.44.1...v0.44.2
 [0.44.1]: https://github.com/simgine/bevy_replicon/compare/v0.44.0...v0.44.1
