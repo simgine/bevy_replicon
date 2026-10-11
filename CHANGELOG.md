@@ -10,13 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Update to Bevy 0.20.
-
-## [0.44.3] - 2026-10-06
-
-### Changed
-
 - Skip entities that didn't change early.
 - Cache component storage per archetype.
+
+## [0.44.3] - 2026-10-06
 
 ### Fixed
 
