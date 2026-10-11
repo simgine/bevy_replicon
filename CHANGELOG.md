@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Skip entities that didn't change early.
+- Cache component storage per archetype.
 
 ### Fixed
 

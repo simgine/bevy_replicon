@@ -11,7 +11,7 @@ use core::time::Duration;
 
 use bevy::{
     ecs::{
-        archetype::{Archetype, ArchetypeEntity, Archetypes},
+        archetype::{ArchetypeEntity, Archetypes},
         change_detection::{CheckChangeTicks, Tick},
         entity::{Entities, EntityHash, EntityHashMap},
         intern::Interned,
@@ -24,12 +24,13 @@ use bevy::{
 };
 use bytes::Buf;
 use log::{Level, debug, log_enabled, trace, warn};
+use smallvec::SmallVec;
 
 use crate::{
     postcard_utils,
     prelude::*,
     server::{
-        replicated_archetypes::{ReplicatedArchetype, ReplicatedArchetypes},
+        replicated_archetypes::{ComponentMetadata, ReplicatedArchetypes},
         replication_messages::{mutations::MutationsSplit, serialized_data::ErasedComponent},
         visibility::registry::FilterRegistry,
     },
@@ -695,18 +696,21 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
+    let mut component_storages: SmallVec<[ComponentMetadata; 8]> = SmallVec::new();
+
     for replicated_archetype in replicated_archetypes.iter() {
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
         let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
+
+        component_storages.clear();
+        component_storages
+            .extend(replicated_archetype.iter_components(archetype, &query, &registry));
 
         for entity in archetype.entities() {
             let has_removals = removal_buffer.contains_key(&entity.id());
             if !needs_replication(
                 entity,
-                archetype,
-                replicated_archetype,
-                &query,
-                &registry,
+                &component_storages,
                 &filter_registry,
                 **change_tick,
                 has_removals,
@@ -722,18 +726,16 @@ fn collect_changes(
                 mutations.start_entity();
             }
 
-            for &(rule, storage) in &replicated_archetype.components {
-                let (component_index, component_id, fns) = registry.get(rule.fns_id);
-
-                // SAFETY: component and storage were obtained from this archetype.
-                let (ptr, ticks) = unsafe {
-                    query.get_component_unchecked(
-                        entity,
-                        archetype.table_id(),
-                        storage,
-                        component_id,
-                    )
-                };
+            for &ComponentMetadata {
+                rule,
+                component_index,
+                component_id,
+                storage,
+            } in &component_storages
+            {
+                // SAFETY: entity belongs to the archetype this storage was resolved for.
+                let (ptr, ticks) = unsafe { storage.get(entity) };
+                let (.., fns) = registry.get(rule.fns_id);
 
                 // SAFETY: `fns` and `ptr` were created for the same component type.
                 let mut component = unsafe { ErasedComponent::new(fns, ptr, rule.fns_id) };
@@ -889,10 +891,7 @@ fn collect_changes(
 /// Returns whether any client may need entity changes or tick bookkeeping.
 fn needs_replication(
     entity: &ArchetypeEntity,
-    archetype: &Archetype,
-    replicated_archetype: &ReplicatedArchetype,
-    query: &ReplicationQuery,
-    registry: &ReplicationRegistry,
+    components: &[ComponentMetadata<'_>],
     filter_registry: &FilterRegistry,
     change_tick: Tick,
     has_removals: bool,
@@ -920,26 +919,15 @@ fn needs_replication(
                 return true;
             }
 
-            replicated_archetype
-                .components
-                .iter()
-                .any(|&(rule, storage)| {
-                    let (component_index, component_id, _) = registry.get(rule.fns_id);
+            components.iter().any(|component| {
+                // SAFETY: entity belongs to the archetype this storage was resolved for.
+                let (_, ticks) = unsafe { component.storage.get(entity) };
 
-                    // SAFETY: component and storage were obtained from this archetype.
-                    let (_, ticks) = unsafe {
-                        query.get_component_unchecked(
-                            entity,
-                            archetype.table_id(),
-                            storage,
-                            component_id,
-                        )
-                    };
-
-                    let missing_component = !entity_ticks.components.contains(component_index);
-                    let component_changed = ticks.is_changed(entity_ticks.system_tick, change_tick);
-                    missing_component || component_changed
-                })
+                let missing_component =
+                    !entity_ticks.components.contains(component.component_index);
+                let component_changed = ticks.is_changed(entity_ticks.system_tick, change_tick);
+                missing_component || component_changed
+            })
         })
 }
 

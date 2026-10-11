@@ -2,7 +2,7 @@ use core::mem;
 
 use bevy::{
     ecs::{
-        archetype::{ArchetypeGeneration, ArchetypeId, Archetypes},
+        archetype::{Archetype, ArchetypeGeneration, ArchetypeId, Archetypes},
         component::{ComponentId, StorageType},
     },
     platform::collections::HashMap,
@@ -12,8 +12,10 @@ use log::trace;
 
 use crate::{
     prelude::*,
+    server::replication_query::{ComponentStorage, ReplicationQuery},
     shared::replication::{
         receive_markers::ReceiveMarkers,
+        registry::{ComponentIndex, ReplicationRegistry},
         rules::{ReplicationRules, component::ComponentRule},
     },
 };
@@ -121,9 +123,42 @@ impl ReplicatedArchetype {
         }
     }
 
+    /// Returns an iterator over metadata for this archetype's replicated components.
+    pub(super) fn iter_components<'a, 'w>(
+        &'a self,
+        archetype: &Archetype,
+        query: &'a ReplicationQuery<'w, '_>,
+        registry: &'a ReplicationRegistry,
+    ) -> impl Iterator<Item = ComponentMetadata<'w>> + 'a {
+        debug_assert_eq!(self.id, archetype.id());
+        let table_id = archetype.table_id();
+
+        self.components.iter().map(move |&(rule, storage)| {
+            let (component_index, component_id, _) = registry.get(rule.fns_id);
+
+            // SAFETY: component and storage were obtained from this archetype.
+            let storage = unsafe { query.component_storage(table_id, storage, component_id) };
+
+            ComponentMetadata {
+                rule,
+                component_index,
+                component_id,
+                storage,
+            }
+        })
+    }
+
     pub(super) fn find_rule(&self, id: ComponentId) -> Option<&ComponentRule> {
         self.components.iter().map(|(r, _)| r).find(|r| r.id == id)
     }
+}
+
+/// Replication metadata and storage for a component in an archetype.
+pub(super) struct ComponentMetadata<'w> {
+    pub(super) rule: ComponentRule,
+    pub(super) component_index: ComponentIndex,
+    pub(super) component_id: ComponentId,
+    pub(super) storage: ComponentStorage<'w>,
 }
 
 #[cfg(test)]
@@ -132,7 +167,6 @@ mod tests {
     use test_log::test;
 
     use super::*;
-    use crate::shared::replication::registry::ReplicationRegistry;
 
     #[test]
     fn empty() {
