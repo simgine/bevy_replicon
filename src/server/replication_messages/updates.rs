@@ -1,6 +1,6 @@
 use core::{mem, ops::Range};
 
-use bevy::prelude::*;
+use bevy::{ecs::entity::hash_set::EntityHashSet, prelude::*};
 use postcard::experimental::serialized_size;
 
 use super::{entity_ranges::EntityRanges, mutations::Mutations, serialized_data::SerializedData};
@@ -58,6 +58,12 @@ pub(crate) struct Updates {
     /// Indicates that an entity has been written since the
     /// last call of [`Self::start_entity_removals`].
     removals_entity_added: bool,
+
+    /// Entities from [`Self::removals`].
+    ///
+    /// Removals come from the removal buffer and from components that lost visibility for this client,
+    /// so [`Self::has_removals`] answers for both.
+    removal_entities: EntityHashSet,
 
     /// Component insertions or mutations that happened in this tick.
     ///
@@ -120,12 +126,18 @@ impl Updates {
     }
 
     /// Adds an entity chunk for removals.
-    pub(crate) fn add_removals_entity(&mut self, entity: Range<usize>) {
+    pub(crate) fn add_removals_entity(&mut self, entity: Entity, entity_range: Range<usize>) {
         self.removals.push(EntityRanges {
-            entity,
+            entity: entity_range,
             data: Default::default(),
         });
+        self.removal_entities.insert(entity);
         self.removals_entity_added = true;
+    }
+
+    /// Returns `true` if removals were written for the entity in this tick.
+    pub(crate) fn has_removals(&self, entity: Entity) -> bool {
+        self.removal_entities.contains(&entity)
     }
 
     /// Adds a chunk with removal to the last added entity from [`Self::add_removals_entity`].
@@ -383,5 +395,6 @@ impl Updates {
         self.despawns_len = 0;
         self.changes.clear();
         self.removals.clear();
+        self.removal_entities.clear();
     }
 }

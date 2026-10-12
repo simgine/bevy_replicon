@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Mutations from the tick a component loses visibility for a client are no longer dropped for that client. They are now sent in the update message with the removal, as for other removals.
+
 ## [0.45.0] - 2026-10-11
 
 ### Changed

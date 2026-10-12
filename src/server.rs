@@ -576,7 +576,7 @@ fn collect_removals(
                 trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client}`");
                 if !message.removals_entity_added() {
                     let entity_range = serialized.write_cached_entity(&mut entity_range, entity)?;
-                    message.add_removals_entity(entity_range);
+                    message.add_removals_entity(entity, entity_range);
                 }
                 let fns_id_range = serialized.write_cached_fns_id(&mut fns_id_range, fns_id)?;
                 message.add_removal(fns_id_range);
@@ -628,7 +628,7 @@ fn collect_removals(
                 );
                 if !message.removals_entity_added() {
                     let entity_range = serialized.write_cached_entity(&mut entity_range, entity)?;
-                    message.add_removals_entity(entity_range);
+                    message.add_removals_entity(entity, entity_range);
                 }
                 let fns_id_range = serialized.write_fns_id(rule.fns_id)?;
                 message.add_removal(fns_id_range);
@@ -848,6 +848,9 @@ fn collect_changes(
                 let entity_ticks = ticks.entities.entry(entity.id());
                 let new_for_client = matches!(entity_ticks, Entry::Vacant(_));
                 let has_insertions = updates.changed_entity_added();
+                // Removals of this client only: from the removal buffer, and from components
+                // that lost visibility, which the removal buffer doesn't hold.
+                let has_removals = updates.has_removals(entity.id());
                 let starts_replication = new_for_client
                     && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::AlwaysPresent);
 
