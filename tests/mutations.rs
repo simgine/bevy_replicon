@@ -836,6 +836,72 @@ fn with_removal() {
 }
 
 #[test]
+fn with_visibility_lose() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .replicate::<VecComponent>()
+        .add_visibility_filter::<ComponentVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(ComponentVisibility);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((
+            Replicated,
+            BoolComponent(false),
+            VecComponent::default(),
+            ComponentVisibility,
+        ))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Hide one component and mutate another on the same entity in the same tick.
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<ComponentVisibility>();
+    const VEC_VALUE: &[u8] = &[1];
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<VecComponent>(server_entity)
+        .unwrap();
+    component.0 = VEC_VALUE.to_vec();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = client_app
+        .world_mut()
+        .query_filtered::<&VecComponent, Without<BoolComponent>>()
+        .single(client_app.world())
+        .unwrap();
+    assert_eq!(
+        component.0, VEC_VALUE,
+        "mutations should be sent with removals to avoid being discarded as outdated"
+    );
+}
+
+#[test]
 fn with_despawn() {
     let mut server_app = App::new();
     let mut client_app = App::new();

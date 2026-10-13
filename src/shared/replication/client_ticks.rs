@@ -120,6 +120,11 @@ pub(crate) struct EntityTicks {
     /// The list of components that were replicated on this tick.
     pub(crate) components: ComponentMask,
 
+    /// Whether component removals were collected for this client since the last reliable tick update.
+    ///
+    /// Mutations must be merged into the update message before advancing the entity's ticks.
+    pub(crate) has_removals: bool,
+
     /// Last acknowledged diff cursor for components.
     ///
     /// This is separate from [`Self::server_tick`]: the server tick controls change
@@ -144,6 +149,7 @@ impl EntityTicks {
             server_tick,
             system_tick,
             components,
+            has_removals: false,
             diff_cursors: Default::default(),
         }
     }
@@ -170,6 +176,7 @@ impl EntityTicks {
     }
 
     pub(crate) fn remove_component(&mut self, component: ComponentIndex) {
+        self.has_removals = true;
         self.components.remove(component);
         // Component removal resets the entity's state for this component, so
         // its diff cursor becomes stale too.
