@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Avoid priority lookups for hidden, unchanged, and `Once` mutations when collecting changes.
+
 ## [0.45.1] - 2026-10-14
 
 ### Fixed
