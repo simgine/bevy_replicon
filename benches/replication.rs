@@ -35,6 +35,10 @@ fn replicate(c: &mut Criterion) {
             &format!("sparse_mutations_send/{clients_count}_clients"),
             |b| b.iter_custom(|iter| world_send(iter, clients_count, SPARSE_MUTATION_COUNT)),
         );
+        c.bench_function(
+            &format!("once_mutations_send/{clients_count}_clients"),
+            |b| b.iter_custom(|iter| once_mutations_send(iter, clients_count)),
+        );
     }
 
     c.bench_function("changes_receive", |b| b.iter_custom(changes_receive));
@@ -165,6 +169,61 @@ fn world_send(iter: u64, clients_count: usize, mutated: usize) -> Duration {
     elapsed
 }
 
+fn once_mutations_send(iter: u64, clients_count: usize) -> Duration {
+    let mut server_app = create_app_with_mode(ReplicationMode::Once);
+    let mut client_apps = Vec::new();
+    for _ in 0..clients_count {
+        client_apps.push(create_app_with_mode(ReplicationMode::Once));
+    }
+
+    for client_app in &mut client_apps {
+        server_app.connect_client(client_app);
+    }
+
+    server_app
+        .world_mut()
+        .spawn_batch(vec![(Replicated, Position::default()); WORLD_ENTITY_COUNT]);
+    let mut query = server_app.world_mut().query::<&mut Position>();
+
+    server_app.update();
+    for client_app in &mut client_apps {
+        server_app.exchange_with_client(client_app);
+        client_app.update();
+        server_app.exchange_with_client(client_app);
+
+        let mut remote = client_app.world_mut().query::<&Remote>();
+        assert_eq!(remote.iter(client_app.world()).len(), WORLD_ENTITY_COUNT);
+    }
+
+    // A `Once` mutation remains newer than the client's tick even on later idle ticks.
+    for mut component in query.iter_mut(server_app.world_mut()) {
+        component.x += 1.0;
+    }
+
+    let mut elapsed = Duration::ZERO;
+    for _ in 0..iter {
+        let instant = Instant::now();
+        server_app.update();
+        elapsed += instant.elapsed();
+
+        for client_app in &mut client_apps {
+            server_app.exchange_with_client(client_app);
+            client_app.update();
+        }
+    }
+
+    for client_app in &mut client_apps {
+        let mut positions = client_app.world_mut().query::<&Position>();
+        assert!(
+            positions
+                .iter(client_app.world())
+                .all(|position| position.x == 1.0)
+        );
+    }
+
+    elapsed
+}
+
 fn changes_receive(iter: u64) -> Duration {
     let mut elapsed = Duration::ZERO;
     for _ in 0..iter {
@@ -230,6 +289,10 @@ fn mutations_receive(iter: u64) -> Duration {
 }
 
 fn create_app() -> App {
+    create_app_with_mode(ReplicationMode::OnChange)
+}
+
+fn create_app_with_mode(mode: ReplicationMode) -> App {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
@@ -237,7 +300,7 @@ fn create_app() -> App {
         RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
     ))
     .insert_resource(TimeUpdateStrategy::FixedTimesteps(1))
-    .replicate::<Position>()
+    .replicate_with((RuleFns::<Position>::default(), mode))
     .finish();
 
     app

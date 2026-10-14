@@ -924,13 +924,16 @@ fn needs_replication(
             }
 
             components.iter().any(|component| {
+                if !entity_ticks.components.contains(component.component_index) {
+                    return true;
+                }
+                if component.rule.mode == ReplicationMode::Once {
+                    return false;
+                }
+
                 // SAFETY: entity belongs to the archetype this storage was resolved for.
                 let (_, ticks) = unsafe { component.storage.get(entity) };
-
-                let missing_component =
-                    !entity_ticks.components.contains(component.component_index);
-                let component_changed = ticks.is_changed(entity_ticks.system_tick, change_tick);
-                missing_component || component_changed
+                ticks.is_changed(entity_ticks.system_tick, change_tick)
             })
         })
 }
