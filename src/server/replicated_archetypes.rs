@@ -90,8 +90,8 @@ impl ReplicatedArchetypes {
         self.list.get(index)
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = &ReplicatedArchetype> {
-        self.list.iter()
+    pub(super) fn iter_mut(&mut self) -> impl Iterator<Item = &mut ReplicatedArchetype> {
+        self.list.iter_mut()
     }
 }
 
@@ -113,6 +113,9 @@ pub(super) struct ReplicatedArchetype {
 
     /// Components marked as replicated.
     pub(super) components: Vec<(ComponentRule, StorageType)>,
+
+    /// Keeps the normal pass active until mutations are acknowledged or no longer needed.
+    pub(super) has_pending_replication: bool,
 }
 
 impl ReplicatedArchetype {
@@ -120,6 +123,7 @@ impl ReplicatedArchetype {
         Self {
             id,
             components: Default::default(),
+            has_pending_replication: true,
         }
     }
 

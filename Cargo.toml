@@ -96,6 +96,10 @@ name = "related_entities"
 harness = false
 
 [[test]]
+name = "archetype_skip"
+required-features = ["client", "server"]
+
+[[test]]
 name = "mutations"
 required-features = ["client", "server"]
 

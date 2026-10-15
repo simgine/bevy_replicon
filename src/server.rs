@@ -11,9 +11,11 @@ use core::time::Duration;
 
 use bevy::{
     ecs::{
-        archetype::{ArchetypeEntity, Archetypes},
+        archetype::{Archetype, ArchetypeEntity, Archetypes},
         change_detection::{CheckChangeTicks, Tick},
+        component::ComponentId,
         entity::{Entities, EntityHash, EntityHashMap},
+        event::EventPattern,
         intern::Interned,
         schedule::ScheduleLabel,
         system::SystemChangeTick,
@@ -136,6 +138,7 @@ impl Plugin for ServerPlugin {
             .init_resource::<ServerMessages>()
             .init_resource::<ServerTick>()
             .init_resource::<ServerChangeTick>()
+            .init_resource::<ReplicationScan>()
             .init_resource::<ReplicatedArchetypes>()
             .init_resource::<ReplicationUserdata>()
             .init_resource::<MessageBuffer>()
@@ -159,6 +162,10 @@ impl Plugin for ServerPlugin {
             .add_observer(handle_connect)
             .add_observer(handle_disconnect)
             .add_observer(check_mutation_ticks)
+            .add_observer(invalidate_scan::<Insert<(Replicated, ClientTicks, ClientVisibility)>>)
+            .add_observer(invalidate_scan::<Remove<(Replicated, ClientTicks, ClientVisibility)>>)
+            .add_observer(invalidate_on_insert)
+            .add_observer(invalidate_on_remove)
             .add_observer(buffer_despawn)
             .add_observer(cleanup_unreplicated)
             .add_observer(cleanup_storage)
@@ -281,16 +288,36 @@ fn check_protocol(
     }
 }
 
-fn check_mutation_ticks(check: On<CheckChangeTicks>, mut clients: Query<&mut ClientTicks>) {
+fn check_mutation_ticks(
+    check: On<CheckChangeTicks>,
+    mut scan: ResMut<ReplicationScan>,
+    mut clients: Query<&mut ClientTicks>,
+) {
     debug!(
         "checking mutation ticks for overflow for {:?}",
         check.present_tick()
     );
+    if let Some(last_tick) = &mut scan.last_tick {
+        last_tick.check_tick(*check);
+    }
     for mut ticks in &mut clients {
         for entity_ticks in ticks.entities.values_mut() {
             entity_ticks.system_tick.check_tick(*check);
         }
     }
+}
+
+/// Changes to replication/client components require a full pass.
+fn invalidate_scan<E: EventPattern>(_: On<E>, mut scan: ResMut<ReplicationScan>) {
+    scan.invalidated = true;
+}
+
+fn invalidate_on_insert(insert: On<Insert<()>>, mut scan: ResMut<ReplicationScan>) {
+    scan.invalidate_archetype(insert.trigger().new_archetype);
+}
+
+fn invalidate_on_remove(remove: On<Remove<()>>, mut scan: ResMut<ReplicationScan>) {
+    scan.invalidate_archetype(remove.trigger().old_archetype);
 }
 
 /// Increments current server tick which causes the server to replicate this frame.
@@ -685,6 +712,7 @@ fn collect_changes(
     mut replicated_archetypes: ResMut<ReplicatedArchetypes>,
     mut serialized: ResMut<SerializedData>,
     mut removal_buffer: ResMut<RemovalBuffer>,
+    mut scan: ResMut<ReplicationScan>,
     mut clients: Query<(
         Entity,
         &mut Updates,
@@ -696,9 +724,12 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
+    let force_full_pass =
+        scan.invalidated || clients.iter().any(|(.., visibility)| visibility.changed);
+
     let mut component_storages: SmallVec<[ComponentMetadata; 8]> = SmallVec::new();
 
-    for replicated_archetype in replicated_archetypes.iter() {
+    for replicated_archetype in replicated_archetypes.iter_mut() {
         // SAFETY: all IDs from replicated archetypes obtained from real archetypes.
         let archetype = unsafe { archetypes.get(replicated_archetype.id).unwrap_unchecked() };
 
@@ -706,6 +737,22 @@ fn collect_changes(
         component_storages
             .extend(replicated_archetype.iter_components(archetype, &query, &registry));
 
+        if !force_full_pass
+            && !replicated_archetype.has_pending_replication
+            && let Some(last_tick) = scan.last_tick
+            && !component_storages.iter().any(|component| {
+                // SAFETY: these entities belong to the archetype used to resolve the storage.
+                unsafe {
+                    component
+                        .storage
+                        .any_changed(archetype.entities(), last_tick, **change_tick)
+                }
+            })
+        {
+            continue;
+        }
+
+        let mut has_pending_replication = false;
         for entity in archetype.entities() {
             if !needs_replication(
                 entity,
@@ -772,6 +819,10 @@ fn collect_changes(
                             continue;
                         }
 
+                        // This client still needs this change.
+                        // Revisit the archetype even without new changes:
+                        // priority may delay sending, or a mutation packet/ACK may be lost.
+                        has_pending_replication = true;
                         let base_priority = priority_map
                             .get(&entity.id())
                             .copied()
@@ -886,8 +937,14 @@ fn collect_changes(
                 }
             }
         }
+        replicated_archetype.has_pending_replication = has_pending_replication;
     }
 
+    scan.last_tick = Some(**change_tick);
+    scan.invalidated = false;
+    for (.., mut visibility) in &mut clients {
+        visibility.changed = false;
+    }
     removal_buffer.clear();
 
     Ok(())
@@ -1038,12 +1095,15 @@ fn reset(
     mut commands: Commands,
     mut messages: ResMut<ServerMessages>,
     mut server_tick: ResMut<ServerTick>,
+    mut scan: ResMut<ReplicationScan>,
     mut related_entities: ResMut<RelatedEntities>,
     clients: Query<Entity, With<ConnectedClient>>,
     mut message_buffer: ResMut<MessageBuffer>,
 ) {
     messages.clear();
     *server_tick = Default::default();
+    scan.last_tick = None;
+    scan.invalidated = true;
     message_buffer.clear();
     related_entities.clear();
     for client in &clients {
@@ -1092,6 +1152,40 @@ pub enum ServerSystems {
 /// Used to share the same tick in [`collect_changes`] and [`send_messages`].
 #[derive(Resource, Deref, DerefMut, Default)]
 struct ServerChangeTick(Tick);
+
+/// Allows replication to skip archetypes with no changes or pending mutations.
+///
+/// Tracks the last pass's tick to check for changes. Structural or visibility changes
+/// force a full pass because clients may need data even when component values haven't changed.
+#[derive(Resource)]
+struct ReplicationScan {
+    marker_id: ComponentId,
+    client_ticks_id: ComponentId,
+    last_tick: Option<Tick>,
+    invalidated: bool,
+}
+
+impl ReplicationScan {
+    fn invalidate_archetype(&mut self, archetype: Option<&Archetype>) {
+        // Client archetype moves can also change query membership, e.g. `Disabled`.
+        if archetype.is_some_and(|archetype| {
+            archetype.contains(self.marker_id) || archetype.contains(self.client_ticks_id)
+        }) {
+            self.invalidated = true;
+        }
+    }
+}
+
+impl FromWorld for ReplicationScan {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            marker_id: world.register_component::<Replicated>(),
+            client_ticks_id: world.register_component::<ClientTicks>(),
+            last_tick: None,
+            invalidated: false,
+        }
+    }
+}
 
 /// Buffer with all despawned entities.
 #[derive(Resource, Deref, DerefMut, Default)]

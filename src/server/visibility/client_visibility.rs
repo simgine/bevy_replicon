@@ -21,6 +21,9 @@ pub struct ClientVisibility {
     /// Stored redundantly to quickly iterate only over entities
     /// with newly hidden data.
     lost: EntityHashMap<FiltersMask>,
+
+    /// Invalidates the archetype fast path, including when visibility is regained.
+    pub(crate) changed: bool,
 }
 
 impl ClientVisibility {
@@ -143,6 +146,7 @@ impl ClientVisibility {
     pub fn set(&mut self, entity: Entity, bit: FilterBit, visible: bool) {
         if visible {
             if let Entry::Occupied(mut mask) = self.hidden.entry(entity) {
+                self.changed |= mask.get().contains(bit);
                 mask.get_mut().remove(bit);
                 if mask.get().is_empty() {
                     mask.remove();
@@ -158,6 +162,7 @@ impl ClientVisibility {
         } else {
             let mask = self.hidden.entry(entity).or_default();
             if !mask.contains(bit) {
+                self.changed = true;
                 mask.insert(bit);
                 self.lost.entry(entity).or_default().insert(bit);
             }

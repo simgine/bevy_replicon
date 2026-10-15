@@ -87,6 +87,31 @@ pub(super) enum ComponentStorage<'w> {
 }
 
 impl<'w> ComponentStorage<'w> {
+    /// Returns whether this component changed for any of `entities` since `last_run`.
+    ///
+    /// # Safety
+    ///
+    /// All entities must belong to the archetype used to obtain this storage.
+    pub(super) unsafe fn any_changed(
+        self,
+        entities: &[ArchetypeEntity],
+        last_run: Tick,
+        this_run: Tick,
+    ) -> bool {
+        match self {
+            ComponentStorage::Table(column) => entities.iter().any(|entity| {
+                // SAFETY: entities belong to the archetype this column was resolved for.
+                let ticks = unsafe { column.get_ticks_unchecked(entity.table_row()) };
+                ticks.is_changed(last_run, this_run)
+            }),
+            ComponentStorage::SparseSet(sparse_set) => entities.iter().any(|entity| {
+                // SAFETY: entities belong to the archetype containing this component.
+                let ticks = unsafe { sparse_set.get_ticks(entity.id()).unwrap_unchecked() };
+                ticks.is_changed(last_run, this_run)
+            }),
+        }
+    }
+
     /// Extracts the component as [`Ptr`] with its ticks.
     ///
     /// # Safety
