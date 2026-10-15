@@ -14,10 +14,10 @@ criterion_group!(benches, replicate);
 /// Entities replicated together in the changes and dense-mutation benchmarks.
 const BATCH_ENTITY_COUNT: usize = 500;
 
-/// Already-replicated entities scanned by the idle and sparse-mutation benchmarks.
+/// Already-replicated entities scanned by the idle, sparse, and mixed-archetype benchmarks.
 const WORLD_ENTITY_COUNT: usize = 50_000;
 
-/// Entities mutated per tick in the sparse benchmark (1% of the world).
+/// Entities mutated per tick in the sparse and mixed-archetype benchmarks (1% of the world).
 const SPARSE_MUTATION_COUNT: usize = WORLD_ENTITY_COUNT / 100;
 
 fn replicate(c: &mut Criterion) {
@@ -34,6 +34,10 @@ fn replicate(c: &mut Criterion) {
         c.bench_function(
             &format!("sparse_mutations_send/{clients_count}_clients"),
             |b| b.iter_custom(|iter| world_send(iter, clients_count, SPARSE_MUTATION_COUNT)),
+        );
+        c.bench_function(
+            &format!("mixed_archetypes_send/{clients_count}_clients"),
+            |b| b.iter_custom(|iter| mixed_archetypes_send(iter, clients_count)),
         );
         c.bench_function(
             &format!("once_mutations_send/{clients_count}_clients"),
@@ -153,6 +157,60 @@ fn world_send(iter: u64, clients_count: usize, mutated: usize) -> Duration {
     let mut elapsed = Duration::ZERO;
     for _ in 0..iter {
         for mut component in query.iter_mut(server_app.world_mut()).take(mutated) {
+            component.x += 1.0;
+        }
+
+        let instant = Instant::now();
+        server_app.update();
+        elapsed += instant.elapsed();
+
+        for client_app in &mut client_apps {
+            server_app.exchange_with_client(client_app);
+            client_app.update();
+        }
+    }
+
+    elapsed
+}
+
+/// Same mutation count as the sparse benchmark, but isolates the active entities
+/// so the large static archetype can take the clean-archetype fast path.
+fn mixed_archetypes_send(iter: u64, clients_count: usize) -> Duration {
+    let mut server_app = create_app();
+    let mut client_apps = Vec::new();
+    for _ in 0..clients_count {
+        client_apps.push(create_app());
+    }
+
+    for client_app in &mut client_apps {
+        server_app.connect_client(client_app);
+    }
+
+    server_app.world_mut().spawn_batch(vec![
+        (Replicated, Position::default());
+        WORLD_ENTITY_COUNT - SPARSE_MUTATION_COUNT
+    ]);
+    server_app.world_mut().spawn_batch(vec![
+        (Replicated, Position::default(), Dynamic);
+        SPARSE_MUTATION_COUNT
+    ]);
+    let mut query = server_app
+        .world_mut()
+        .query_filtered::<&mut Position, With<Dynamic>>();
+    assert_eq!(query.iter(server_app.world()).len(), SPARSE_MUTATION_COUNT);
+
+    server_app.update();
+    for client_app in &mut client_apps {
+        server_app.exchange_with_client(client_app);
+        client_app.update();
+
+        let mut remote = client_app.world_mut().query::<&Remote>();
+        assert_eq!(remote.iter(client_app.world()).len(), WORLD_ENTITY_COUNT);
+    }
+
+    let mut elapsed = Duration::ZERO;
+    for _ in 0..iter {
+        for mut component in query.iter_mut(server_app.world_mut()) {
             component.x += 1.0;
         }
 
@@ -305,6 +363,9 @@ fn create_app_with_mode(mode: ReplicationMode) -> App {
 
     app
 }
+
+#[derive(Component, Clone)]
+struct Dynamic;
 
 #[derive(Component, Serialize, Deserialize, Clone)]
 struct Position {
