@@ -3,7 +3,12 @@ use core::time::Duration;
 use bevy::{
     platform::time::Instant, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy,
 };
-use bevy_replicon::{prelude::*, test_app::ServerTestAppExt};
+use bevy_replicon::{
+    prelude::*,
+    server::visibility::{client_visibility::ClientVisibility, registry::FilterRegistry},
+    shared::replication::registry::ReplicationRegistry,
+    test_app::{ServerTestAppExt, TestClientEntity},
+};
 use criterion::{Criterion, criterion_group, criterion_main};
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +43,14 @@ fn replicate(c: &mut Criterion) {
         c.bench_function(
             &format!("mixed_archetypes_send/{clients_count}_clients"),
             |b| b.iter_custom(|iter| mixed_archetypes_send(iter, clients_count)),
+        );
+        c.bench_function(
+            &format!("mixed_structural_send/{clients_count}_clients"),
+            |b| b.iter_custom(|iter| mixed_churn_send(iter, clients_count, Churn::Structural)),
+        );
+        c.bench_function(
+            &format!("mixed_visibility_send/{clients_count}_clients"),
+            |b| b.iter_custom(|iter| mixed_churn_send(iter, clients_count, Churn::Visibility)),
         );
         c.bench_function(
             &format!("once_mutations_send/{clients_count}_clients"),
@@ -227,6 +240,113 @@ fn mixed_archetypes_send(iter: u64, clients_count: usize) -> Duration {
     elapsed
 }
 
+/// The mixed-archetype benchmark with static entities spread over 16 archetypes, plus one
+/// static entity per tick that either moves between archetypes or swaps visibility for the first client.
+fn mixed_churn_send(iter: u64, clients_count: usize, churn: Churn) -> Duration {
+    let mut server_app = create_app();
+    let mut client_apps = Vec::new();
+    for _ in 0..clients_count {
+        client_apps.push(create_app());
+    }
+
+    let bit = server_app
+        .world_mut()
+        .resource_scope(|world, mut filters: Mut<FilterRegistry>| {
+            world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                filters.register_scope::<Entity>(world, &mut registry, ScopeLifetime::WhileVisible)
+            })
+        });
+
+    for client_app in &mut client_apps {
+        server_app.connect_client(client_app);
+    }
+
+    let statics: Vec<Entity> = server_app
+        .world_mut()
+        .spawn_batch(vec![
+            (Replicated, Position::default());
+            WORLD_ENTITY_COUNT - SPARSE_MUTATION_COUNT
+        ])
+        .collect();
+    spread_archetypes(server_app.world_mut(), &statics);
+    server_app.world_mut().spawn_batch(vec![
+        (Replicated, Position::default(), Dynamic);
+        SPARSE_MUTATION_COUNT
+    ]);
+    let mut query = server_app
+        .world_mut()
+        .query_filtered::<&mut Position, With<Dynamic>>();
+
+    server_app.update();
+    for client_app in &mut client_apps {
+        server_app.exchange_with_client(client_app);
+        client_app.update();
+    }
+
+    let first_client = **client_apps[0].world().resource::<TestClientEntity>();
+    let mut elapsed = Duration::ZERO;
+    for tick in 0..iter as usize {
+        for mut component in query.iter_mut(server_app.world_mut()) {
+            component.x += 1.0;
+        }
+
+        let entity = statics[tick % 2];
+        let flip = tick % 4 < 2;
+        match churn {
+            Churn::Structural => {
+                let mut entity = server_app.world_mut().entity_mut(entity);
+                if flip {
+                    entity.insert(Tag);
+                } else {
+                    entity.remove::<Tag>();
+                }
+            }
+            Churn::Visibility => {
+                let mut visibility = server_app
+                    .world_mut()
+                    .get_mut::<ClientVisibility>(first_client)
+                    .unwrap();
+                visibility.set(entity, bit, !flip);
+            }
+        }
+
+        let instant = Instant::now();
+        server_app.update();
+        elapsed += instant.elapsed();
+
+        for client_app in &mut client_apps {
+            server_app.exchange_with_client(client_app);
+            client_app.update();
+        }
+    }
+
+    elapsed
+}
+
+fn spread_archetypes(world: &mut World, entities: &[Entity]) {
+    for (index, &entity) in entities.iter().enumerate() {
+        let mut entity = world.entity_mut(entity);
+        if index & 1 != 0 {
+            entity.insert(Spread::<0>);
+        }
+        if index & 2 != 0 {
+            entity.insert(Spread::<1>);
+        }
+        if index & 4 != 0 {
+            entity.insert(Spread::<2>);
+        }
+        if index & 8 != 0 {
+            entity.insert(Spread::<3>);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Churn {
+    Structural,
+    Visibility,
+}
+
 fn once_mutations_send(iter: u64, clients_count: usize) -> Duration {
     let mut server_app = create_app_with_mode(ReplicationMode::Once);
     let mut client_apps = Vec::new();
@@ -366,6 +486,12 @@ fn create_app_with_mode(mode: ReplicationMode) -> App {
 
 #[derive(Component, Clone)]
 struct Dynamic;
+
+#[derive(Component)]
+struct Tag;
+
+#[derive(Component)]
+struct Spread<const BIT: u8>;
 
 #[derive(Component, Serialize, Deserialize, Clone)]
 struct Position {
