@@ -1,7 +1,8 @@
 use bevy::{ecs::entity_disabling::Disabled, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     prelude::*,
-    shared::server_entity_map::ServerEntityMap,
+    server::visibility::{client_visibility::ClientVisibility, registry::FilterRegistry},
+    shared::{replication::registry::ReplicationRegistry, server_entity_map::ServerEntityMap},
     test_app::{ServerTestAppExt, TestClientEntity},
 };
 use serde::{Deserialize, Serialize};
@@ -279,6 +280,68 @@ fn component_visibility_gain() {
     let (a, b) = components.single(client_app.world()).unwrap();
     assert_eq!(a.0, 7);
     assert_eq!(b.0, 11);
+}
+
+#[test]
+fn manual_visibility_gain() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    let bit =
+        server_app
+            .world_mut()
+            .resource_scope(|world, mut filter_registry: Mut<FilterRegistry>| {
+                world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                    filter_registry.register_scope::<Entity>(
+                        world,
+                        &mut registry,
+                        ScopeLifetime::WhileVisible,
+                    )
+                })
+            });
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    let server_entity = server_app.world_mut().spawn((Replicated, A(7))).id();
+    server_app
+        .world_mut()
+        .get_mut::<ClientVisibility>(client)
+        .unwrap()
+        .set(server_entity, bit, false);
+
+    for _ in 0..4 {
+        server_app.update();
+        server_app.exchange_with_client(&mut client_app);
+        client_app.update();
+        server_app.exchange_with_client(&mut client_app);
+    }
+
+    let mut remote = client_app.world_mut().query::<&Remote>();
+    assert_eq!(remote.iter(client_app.world()).len(), 0);
+
+    server_app
+        .world_mut()
+        .get_mut::<ClientVisibility>(client)
+        .unwrap()
+        .set(server_entity, bit, true);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let mut components = client_app.world_mut().query::<(&Remote, &A)>();
+    let (_, component) = components.single(client_app.world()).unwrap();
+    assert_eq!(component.0, 7);
 }
 
 #[test]

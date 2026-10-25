@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Skip archetypes untouched by structural and visibility changes instead of falling back to a full pass when collecting changes
+
 ## [0.45.2] - 2026-10-15
 
 ### Changed
