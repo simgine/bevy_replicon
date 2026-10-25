@@ -240,8 +240,8 @@ fn mixed_archetypes_send(iter: u64, clients_count: usize) -> Duration {
     elapsed
 }
 
-/// The mixed-archetype benchmark plus one static entity per tick that either moves
-/// between archetypes or swaps visibility for the first client.
+/// The mixed-archetype benchmark with static entities spread over 16 archetypes, plus one
+/// static entity per tick that either moves between archetypes or swaps visibility for the first client.
 fn mixed_churn_send(iter: u64, clients_count: usize, churn: Churn) -> Duration {
     let mut server_app = create_app();
     let mut client_apps = Vec::new();
@@ -268,6 +268,7 @@ fn mixed_churn_send(iter: u64, clients_count: usize, churn: Churn) -> Duration {
             WORLD_ENTITY_COUNT - SPARSE_MUTATION_COUNT
         ])
         .collect();
+    spread_archetypes(server_app.world_mut(), &statics);
     server_app.world_mut().spawn_batch(vec![
         (Replicated, Position::default(), Dynamic);
         SPARSE_MUTATION_COUNT
@@ -320,6 +321,24 @@ fn mixed_churn_send(iter: u64, clients_count: usize, churn: Churn) -> Duration {
     }
 
     elapsed
+}
+
+fn spread_archetypes(world: &mut World, entities: &[Entity]) {
+    for (index, &entity) in entities.iter().enumerate() {
+        let mut entity = world.entity_mut(entity);
+        if index & 1 != 0 {
+            entity.insert(Spread::<0>);
+        }
+        if index & 2 != 0 {
+            entity.insert(Spread::<1>);
+        }
+        if index & 4 != 0 {
+            entity.insert(Spread::<2>);
+        }
+        if index & 8 != 0 {
+            entity.insert(Spread::<3>);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -470,6 +489,9 @@ struct Dynamic;
 
 #[derive(Component)]
 struct Tag;
+
+#[derive(Component)]
+struct Spread<const BIT: u8>;
 
 #[derive(Component, Serialize, Deserialize, Clone)]
 struct Position {
