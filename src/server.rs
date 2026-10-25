@@ -164,7 +164,7 @@ impl Plugin for ServerPlugin {
             .add_observer(check_mutation_ticks)
             .add_observer(invalidate_scan::<Insert<(ClientTicks, ClientVisibility)>>)
             .add_observer(invalidate_scan::<Remove<(ClientTicks, ClientVisibility)>>)
-            // Bevy runs the `()` observers only on archetypes with a component observer, hence `Replicated`
+            // Bevy runs the `()` observers only on archetypes with a component observer, hence `Replicated`.
             .add_observer(invalidate_archetypes::<Insert<Replicated>>)
             .add_observer(invalidate_archetypes::<Remove<Replicated>>)
             .add_observer(invalidate_archetypes::<Insert<()>>)
@@ -1164,7 +1164,7 @@ struct ServerChangeTick(Tick);
 ///
 /// Tracks the last pass's tick to check for changes. Structural or visibility changes mark
 /// the affected archetypes because clients may need data even when component values haven't changed.
-/// Client changes force a full pass
+/// Client changes force a full pass.
 #[derive(Resource)]
 struct ReplicationScan {
     marker_id: ComponentId,
