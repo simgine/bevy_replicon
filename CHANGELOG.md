@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Return an error instead of reading out of bounds in `BufFlavor` when a read crosses a segment boundary of a multi-segment `Buf`.
+
 ### Changed
 
 - Skip archetypes untouched by structural and visibility changes instead of falling back to a full pass when collecting changes

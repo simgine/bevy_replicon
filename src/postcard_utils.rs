@@ -194,12 +194,14 @@ impl<'a, T: Buf> DeFlavor<'a> for BufFlavor<'a, T> {
     }
 
     fn try_take_n(&mut self, ct: usize) -> postcard::Result<&'a [u8]> {
-        if self.buf.remaining() < ct {
+        // `remaining` counts all segments, but we can only borrow from the current one.
+        let chunk = self.buf.chunk();
+        if chunk.len() < ct {
             return Err(postcard::Error::DeserializeUnexpectedEnd);
         }
 
-        // SAFETY: slice was validated and its lifetime is tied to the buffer.
-        let buf = unsafe { slice::from_raw_parts(self.buf.chunk().as_ptr(), ct) };
+        // SAFETY: slice was validated against the current chunk and its lifetime is tied to the buffer.
+        let buf = unsafe { slice::from_raw_parts(chunk.as_ptr(), ct) };
         self.buf.advance(ct);
 
         Ok(buf)
@@ -213,8 +215,21 @@ impl<'a, T: Buf> DeFlavor<'a> for BufFlavor<'a, T> {
 #[cfg(test)]
 mod tests {
     use bevy::ecs::entity::{EntityGeneration, EntityIndex};
+    use bytes::Bytes;
 
     use super::*;
+
+    #[test]
+    fn buf_across_segments() {
+        let mut encoded = Vec::new();
+        to_extend_mut("0123456789abcdef", &mut encoded).unwrap();
+
+        // The payload straddles the segment boundary, so it can't be borrowed.
+        let (head, tail) = encoded.split_at(2);
+        let mut buf = Bytes::copy_from_slice(head).chain(Bytes::copy_from_slice(tail));
+        let result: postcard::Result<String> = from_buf(&mut buf);
+        assert_eq!(result, Err(postcard::Error::DeserializeUnexpectedEnd));
+    }
 
     #[test]
     fn entity_without_generation() {
