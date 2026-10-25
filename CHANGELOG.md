@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Return an error instead of reading out of bounds in `BufFlavor` when a read crosses a segment boundary of a multi-segment `Buf`.
 
+## [0.45.3] - 2026-10-26
+
 ### Changed
 
 - Skip archetypes untouched by structural and visibility changes instead of falling back to a full pass when collecting changes
@@ -1236,7 +1238,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.2..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.3..HEAD
+[0.45.3]: https://github.com/simgine/bevy_replicon/compare/v0.45.2...v0.45.3
 [0.45.2]: https://github.com/simgine/bevy_replicon/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/simgine/bevy_replicon/compare/v0.45.0...v0.45.1
 [0.45.0]: https://github.com/simgine/bevy_replicon/compare/v0.44.3...v0.45.0
