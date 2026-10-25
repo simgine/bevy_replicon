@@ -320,7 +320,6 @@ where
     E: EventPattern,
     E::Event: for<'a> Event<Trigger<'a> = EntityComponentsTrigger<'a>>,
 {
-    scan.invalidate_archetype(event.trigger().old_archetype);
     scan.invalidate_archetype(event.trigger().new_archetype);
 }
 
