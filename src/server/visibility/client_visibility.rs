@@ -1,4 +1,8 @@
-use bevy::{ecs::entity::EntityHashMap, platform::collections::hash_map::Entry, prelude::*};
+use bevy::{
+    ecs::entity::{EntityHashMap, EntityHashSet},
+    platform::collections::hash_map::Entry,
+    prelude::*,
+};
 
 use super::filters_mask::{FilterBit, FiltersMask};
 
@@ -22,8 +26,10 @@ pub struct ClientVisibility {
     /// with newly hidden data.
     lost: EntityHashMap<FiltersMask>,
 
-    /// Invalidates the archetype fast path, including when visibility is regained.
-    pub(crate) changed: bool,
+    /// Entities whose visibility changed during this tick, including regained visibility.
+    ///
+    /// Their archetypes can't take the archetype fast path
+    pub(crate) changed: EntityHashSet,
 }
 
 impl ClientVisibility {
@@ -41,6 +47,7 @@ impl ClientVisibility {
     pub(crate) fn remove_despawned(&mut self, entity: Entity) {
         self.hidden.remove(&entity);
         self.lost.remove(&entity);
+        self.changed.remove(&entity);
     }
 
     /**
@@ -146,7 +153,9 @@ impl ClientVisibility {
     pub fn set(&mut self, entity: Entity, bit: FilterBit, visible: bool) {
         if visible {
             if let Entry::Occupied(mut mask) = self.hidden.entry(entity) {
-                self.changed |= mask.get().contains(bit);
+                if mask.get().contains(bit) {
+                    self.changed.insert(entity);
+                }
                 mask.get_mut().remove(bit);
                 if mask.get().is_empty() {
                     mask.remove();
@@ -162,7 +171,7 @@ impl ClientVisibility {
         } else {
             let mask = self.hidden.entry(entity).or_default();
             if !mask.contains(bit) {
-                self.changed = true;
+                self.changed.insert(entity);
                 mask.insert(bit);
                 self.lost.entry(entity).or_default().insert(bit);
             }

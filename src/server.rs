@@ -11,11 +11,11 @@ use core::time::Duration;
 
 use bevy::{
     ecs::{
-        archetype::{Archetype, ArchetypeEntity, Archetypes},
+        archetype::{Archetype, ArchetypeEntity, ArchetypeId, Archetypes},
         change_detection::{CheckChangeTicks, Tick},
         component::ComponentId,
         entity::{Entities, EntityHash, EntityHashMap},
-        event::EventPattern,
+        event::{EntityComponentsTrigger, EventPattern},
         intern::Interned,
         schedule::ScheduleLabel,
         system::SystemChangeTick,
@@ -162,10 +162,13 @@ impl Plugin for ServerPlugin {
             .add_observer(handle_connect)
             .add_observer(handle_disconnect)
             .add_observer(check_mutation_ticks)
-            .add_observer(invalidate_scan::<Insert<(Replicated, ClientTicks, ClientVisibility)>>)
-            .add_observer(invalidate_scan::<Remove<(Replicated, ClientTicks, ClientVisibility)>>)
-            .add_observer(invalidate_on_insert)
-            .add_observer(invalidate_on_remove)
+            .add_observer(invalidate_scan::<Insert<(ClientTicks, ClientVisibility)>>)
+            .add_observer(invalidate_scan::<Remove<(ClientTicks, ClientVisibility)>>)
+            // Bevy runs the `()` observers only on archetypes with a component observer, hence `Replicated`.
+            .add_observer(invalidate_archetypes::<Insert<Replicated>>)
+            .add_observer(invalidate_archetypes::<Remove<Replicated>>)
+            .add_observer(invalidate_archetypes::<Insert<()>>)
+            .add_observer(invalidate_archetypes::<Remove<()>>)
             .add_observer(buffer_despawn)
             .add_observer(cleanup_unreplicated)
             .add_observer(cleanup_storage)
@@ -307,17 +310,17 @@ fn check_mutation_ticks(
     }
 }
 
-/// Changes to replication/client components require a full pass.
+/// Changes to client components require a full pass
 fn invalidate_scan<E: EventPattern>(_: On<E>, mut scan: ResMut<ReplicationScan>) {
     scan.invalidated = true;
 }
 
-fn invalidate_on_insert(insert: On<Insert<()>>, mut scan: ResMut<ReplicationScan>) {
-    scan.invalidate_archetype(insert.trigger().new_archetype);
-}
-
-fn invalidate_on_remove(remove: On<Remove<()>>, mut scan: ResMut<ReplicationScan>) {
-    scan.invalidate_archetype(remove.trigger().old_archetype);
+fn invalidate_archetypes<E>(event: On<E>, mut scan: ResMut<ReplicationScan>)
+where
+    E: EventPattern,
+    E::Event: for<'a> Event<Trigger<'a> = EntityComponentsTrigger<'a>>,
+{
+    scan.invalidate_archetype(event.trigger().new_archetype);
 }
 
 /// Increments current server tick which causes the server to replicate this frame.
@@ -698,7 +701,7 @@ fn collect_removals(
 
 /// Collects component changes from this tick into update and mutate messages since the last entity tick.
 fn collect_changes(
-    archetypes: &Archetypes,
+    (archetypes, entities): (&Archetypes, &Entities),
     query: ReplicationQuery,
     server_tick: Res<ServerTick>,
     change_tick: Res<ServerChangeTick>,
@@ -724,8 +727,13 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
-    let force_full_pass =
-        scan.invalidated || clients.iter().any(|(.., visibility)| visibility.changed);
+    for (.., mut visibility) in &mut clients {
+        for entity in visibility.changed.drain() {
+            if let Ok(location) = entities.get_spawned(entity) {
+                scan.dirty.insert(location.archetype_id);
+            }
+        }
+    }
 
     let mut component_storages: SmallVec<[ComponentMetadata; 8]> = SmallVec::new();
 
@@ -737,7 +745,8 @@ fn collect_changes(
         component_storages
             .extend(replicated_archetype.iter_components(archetype, &query, &registry));
 
-        if !force_full_pass
+        if !scan.invalidated
+            && !scan.dirty.contains(&replicated_archetype.id)
             && !replicated_archetype.has_pending_replication
             && let Some(last_tick) = scan.last_tick
             && !component_storages.iter().any(|component| {
@@ -942,9 +951,7 @@ fn collect_changes(
 
     scan.last_tick = Some(**change_tick);
     scan.invalidated = false;
-    for (.., mut visibility) in &mut clients {
-        visibility.changed = false;
-    }
+    scan.dirty.clear();
     removal_buffer.clear();
 
     Ok(())
@@ -1155,23 +1162,28 @@ struct ServerChangeTick(Tick);
 
 /// Allows replication to skip archetypes with no changes or pending mutations.
 ///
-/// Tracks the last pass's tick to check for changes. Structural or visibility changes
-/// force a full pass because clients may need data even when component values haven't changed.
+/// Tracks the last pass's tick to check for changes. Structural or visibility changes mark
+/// the affected archetypes because clients may need data even when component values haven't changed.
+/// Client changes force a full pass.
 #[derive(Resource)]
 struct ReplicationScan {
     marker_id: ComponentId,
     client_ticks_id: ComponentId,
     last_tick: Option<Tick>,
     invalidated: bool,
+    dirty: HashSet<ArchetypeId>,
 }
 
 impl ReplicationScan {
     fn invalidate_archetype(&mut self, archetype: Option<&Archetype>) {
+        let Some(archetype) = archetype else {
+            return;
+        };
         // Client archetype moves can also change query membership, e.g. `Disabled`.
-        if archetype.is_some_and(|archetype| {
-            archetype.contains(self.marker_id) || archetype.contains(self.client_ticks_id)
-        }) {
+        if archetype.contains(self.client_ticks_id) {
             self.invalidated = true;
+        } else if archetype.contains(self.marker_id) {
+            self.dirty.insert(archetype.id());
         }
     }
 }
@@ -1183,6 +1195,7 @@ impl FromWorld for ReplicationScan {
             client_ticks_id: world.register_component::<ClientTicks>(),
             last_tick: None,
             invalidated: false,
+            dirty: Default::default(),
         }
     }
 }
