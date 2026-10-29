@@ -15,6 +15,7 @@ use bevy::{
         change_detection::{CheckChangeTicks, Tick},
         component::ComponentId,
         entity::{Entities, EntityHash, EntityHashMap},
+        entity_disabling::Disabled,
         event::{EntityComponentsTrigger, EventPattern},
         intern::Interned,
         schedule::ScheduleLabel,
@@ -43,7 +44,7 @@ use crate::{
             client_ticks::{ClientTicks, DiffCursors, EntityTicks},
             receive_markers::ReceiveMarkers,
             registry::{
-                ComponentIndex, ReplicationRegistry, component_mask::ComponentMask,
+                ComponentIndex, FnsId, ReplicationRegistry, component_mask::ComponentMask,
                 ctx::SerializeCtx,
             },
             rules::ReplicationRules,
@@ -294,7 +295,7 @@ fn check_protocol(
 fn check_mutation_ticks(
     check: On<CheckChangeTicks>,
     mut scan: ResMut<ReplicationScan>,
-    mut clients: Query<&mut ClientTicks>,
+    mut clients: Query<&mut ClientTicks, Allow<Disabled>>,
 ) {
     debug!(
         "checking mutation ticks for overflow for {:?}",
@@ -386,7 +387,7 @@ fn cleanup_unreplicated(
     despawn: On<Despawn<TicksTracked>>,
     state: Res<State<ServerState>>,
     replicated: Query<&Replicated>,
-    mut clients: Query<&mut ClientTicks>,
+    mut clients: Query<&mut ClientTicks, Allow<Disabled>>,
 ) {
     if *state == ServerState::Running && !replicated.contains(despawn.entity) {
         trace!("cleaning up ticks for despawned `{}`", despawn.entity);
@@ -398,8 +399,8 @@ fn cleanup_unreplicated(
 
 fn cleanup_acks(
     mutations_timeout: Duration,
-) -> impl FnMut(Query<&mut ClientTicks>, Res<Time<Real>>) {
-    move |mut clients: Query<&mut ClientTicks>, time: Res<Time<Real>>| {
+) -> impl FnMut(Query<&mut ClientTicks, Allow<Disabled>>, Res<Time<Real>>) {
+    move |mut clients: Query<&mut ClientTicks, Allow<Disabled>>, time: Res<Time<Real>>| {
         let min_timestamp = time.elapsed().saturating_sub(mutations_timeout);
         for mut ticks in &mut clients {
             ticks.cleanup_older_mutations(min_timestamp);
@@ -407,7 +408,10 @@ fn cleanup_acks(
     }
 }
 
-fn receive_acks(mut messages: ResMut<ServerMessages>, mut clients: Query<&mut ClientTicks>) {
+fn receive_acks(
+    mut messages: ResMut<ServerMessages>,
+    mut clients: Query<&mut ClientTicks, Allow<Disabled>>,
+) {
     for (client, mut message) in messages.drain_received(ClientChannel::MutationAcks) {
         let Ok(mut ticks) = clients.get_mut(client) else {
             debug!("ignoring acks for disconnected client `{client}`");
@@ -516,24 +520,54 @@ fn collect_despawns(
         &mut ClientTicks,
         &mut PriorityMap,
         &mut ClientVisibility,
+        &mut DeferredUpdates,
+        Has<Disabled>,
     )>,
 ) -> Result<()> {
+    for (client, mut message, .., mut deferred, disabled) in &mut clients {
+        if disabled {
+            continue;
+        }
+        for entity in deferred.despawns.drain(..) {
+            trace!("writing deferred despawn for `{entity}` for client `{client}`");
+            let entity_range = serialized.write_entity(entity)?;
+            message.add_despawn(entity_range);
+        }
+    }
+
     for entity in despawn_buffer.drain(..) {
         let entity_range = serialized.write_entity(entity)?;
-        for (client, mut message, mut ticks, mut priority, mut visibility) in &mut clients {
+        for (
+            client,
+            mut message,
+            mut ticks,
+            mut priority,
+            mut visibility,
+            mut deferred,
+            disabled,
+        ) in &mut clients
+        {
             let hidden_lifetime = visibility.get(entity).hidden_entity_lifetime(&registry);
             if ticks.entities.remove(&entity).is_some() && hidden_lifetime.is_none() {
                 // Write despawn only if the entity is not currently hidden and was
                 // previously sent because spawn and despawn could happen during the same tick.
-                trace!("writing despawn for `{entity}` for client `{client}`");
-                message.add_despawn(entity_range.clone());
+                if disabled {
+                    trace!("deferring despawn for `{entity}` for client `{client}`");
+                    deferred.despawns.push(entity);
+                } else {
+                    trace!("writing despawn for `{entity}` for client `{client}`");
+                    message.add_despawn(entity_range.clone());
+                }
             }
             visibility.remove_despawned(entity);
             priority.remove(&entity);
         }
     }
 
-    for (client, mut message, mut ticks, mut priority, visibility) in clients {
+    for (client, mut message, mut ticks, mut priority, visibility, _, disabled) in clients {
+        if disabled {
+            continue;
+        }
         for (entity, filter_mask) in visibility.iter_lost() {
             // Skip visibility changes that hide only components.
             if !filter_mask.hides_entity(&registry, ScopeLifetime::WhileVisible) {
@@ -571,19 +605,44 @@ fn collect_removals(
         &mut Updates,
         &mut ClientTicks,
         &mut ClientVisibility,
+        &mut DeferredUpdates,
+        Has<Disabled>,
     )>,
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
+    for (client, mut message, ticks, _, mut deferred, disabled) in &mut clients {
+        if disabled {
+            continue;
+        }
+        for (entity, fns_ids) in deferred.removals.drain() {
+            if !ticks.entities.contains_key(&entity) {
+                // Despawned or lost visibility while the client was disabled.
+                continue;
+            }
+            message.start_entity_removals();
+            let entity_range = serialized.write_entity(entity)?;
+            message.add_removals_entity(entity_range);
+            for fns_id in fns_ids {
+                trace!(
+                    "writing deferred `{fns_id:?}` removal for `{entity}` for client `{client}`"
+                );
+                let fns_id_range = serialized.write_fns_id(fns_id)?;
+                message.add_removal(fns_id_range);
+            }
+        }
+    }
+
     for (&entity, remove_ids) in removal_buffer.iter() {
         let mut entity_range = None;
-        for (_, mut message, _, _) in &mut clients {
+        for (_, mut message, ..) in &mut clients {
             message.start_entity_removals();
         }
 
         for &(component_index, fns_id) in remove_ids {
             let mut fns_id_range = None;
-            for (client, mut message, mut ticks, visibility) in &mut clients {
+            for (client, mut message, mut ticks, visibility, mut deferred, disabled) in &mut clients
+            {
                 let hidden_lifetime = visibility
                     .get(entity)
                     .hidden_component_lifetime(&filter_registry, component_index);
@@ -603,19 +662,28 @@ fn collect_removals(
                     continue;
                 }
 
-                trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client}`");
-                if !message.removals_entity_added() {
-                    let entity_range = serialized.write_cached_entity(&mut entity_range, entity)?;
-                    message.add_removals_entity(entity_range);
+                if disabled {
+                    trace!("deferring `{fns_id:?}` removal for `{entity}` for client `{client}`");
+                    deferred.removals.entry(entity).or_default().push(fns_id);
+                } else {
+                    trace!("writing `{fns_id:?}` removal for `{entity}` for client `{client}`");
+                    if !message.removals_entity_added() {
+                        let entity_range =
+                            serialized.write_cached_entity(&mut entity_range, entity)?;
+                        message.add_removals_entity(entity_range);
+                    }
+                    let fns_id_range = serialized.write_cached_fns_id(&mut fns_id_range, fns_id)?;
+                    message.add_removal(fns_id_range);
                 }
-                let fns_id_range = serialized.write_cached_fns_id(&mut fns_id_range, fns_id)?;
-                message.add_removal(fns_id_range);
                 entity_ticks.remove_component(component_index);
             }
         }
     }
 
-    for (client, mut message, mut ticks, mut visibility) in &mut clients {
+    for (client, mut message, mut ticks, mut visibility, _, disabled) in &mut clients {
+        if disabled {
+            continue;
+        }
         for (entity, filter_mask) in visibility.drain_lost() {
             if filter_mask.hides_entity(&filter_registry, ScopeLifetime::WhileVisible) {
                 // Was processed earlier during collecting despawns.
@@ -1204,6 +1272,15 @@ impl FromWorld for ReplicationScan {
 #[derive(Resource, Deref, DerefMut, Default)]
 struct DespawnBuffer(Vec<Entity>);
 
+/// Despawns and removals collected for a client while it has [`Disabled`].
+///
+/// Written into its [`Updates`] once the client is enabled again.
+#[derive(Component, Default)]
+struct DeferredUpdates {
+    despawns: Vec<Entity>,
+    removals: EntityHashMap<SmallVec<[FnsId; 4]>>,
+}
+
 /// Marker that enables replication and all events for a client.
 ///
 /// Until authorization happened, the client and server can still exchange network events that are marked as
@@ -1213,7 +1290,14 @@ struct DespawnBuffer(Vec<Entity>);
 /// See also [`ConnectedClient`] and [`RepliconSharedPlugin::auth_method`].
 #[derive(Component, Reflect, Default)]
 #[component(immutable)]
-#[require(ClientTicks, ClientVisibility, PriorityMap, Updates, Mutations)]
+#[require(
+    ClientTicks,
+    ClientVisibility,
+    PriorityMap,
+    Updates,
+    Mutations,
+    DeferredUpdates
+)]
 pub struct AuthorizedClient;
 
 /// Controls how often mutations are sent for a replicated entity.

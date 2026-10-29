@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Send despawns and removals that happen while a client is disabled once it's enabled again, as already done for mutations.
+- Keep tick checks, acknowledgments, and cleanup of despawned unreplicated entities running for disabled clients.
+
 ## [0.45.4] - 2026-10-26
 
 ### Fixed
