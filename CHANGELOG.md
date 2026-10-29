@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Evaluate visibility filters for disabled entities when a client connects or its client component is inserted or removed, as already done when a filter is inserted.
 - Keep visibility of disabled clients up to date. Filter changes used to skip them, and inserting a filter that is also its own client component on a disabled client panicked.
 - Don't evaluate filters on client entities when a client connects, as already done when a filter is inserted.
+- Evaluate visibility filters for entities and clients with custom disabling components registered via `register_disabling_component`, not only `Disabled`. Inserting a filter on such an entity used to panic.
 
 ## [0.45.4] - 2026-10-26
 
