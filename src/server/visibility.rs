@@ -109,8 +109,8 @@ impl AppVisibilityExt for App {
 fn update_for_new_clients<F: VisibilityFilter>(
     insert: On<Insert<ClientVisibility>>,
     registry: Res<FilterRegistry>,
-    mut clients: Query<(&mut ClientVisibility, Option<&F::ClientComponent>)>,
-    entities: Query<(Entity, &F)>,
+    mut clients: Query<(&mut ClientVisibility, Option<&F::ClientComponent>), Allow<Disabled>>,
+    entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
 ) {
     if let Ok((mut visibility, client_component)) = clients.get_mut(insert.entity) {
         let bit = registry.bit::<F>();
@@ -130,7 +130,10 @@ fn on_insert<F: VisibilityFilter>(
     insert: On<Insert<F>>,
     registry: Res<FilterRegistry>,
     entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
-    mut clients: Query<(Entity, Option<&F::ClientComponent>, &mut ClientVisibility)>,
+    mut clients: Query<
+        (Entity, Option<&F::ClientComponent>, &mut ClientVisibility),
+        Allow<Disabled>,
+    >,
 ) {
     // `F` and `F::ClientComponent` could be the same,
     // so we need to ensure that it was not inserted into a client
@@ -153,8 +156,8 @@ fn on_insert<F: VisibilityFilter>(
 fn on_client_insert<F: VisibilityFilter>(
     insert: On<Insert<F::ClientComponent>>,
     registry: Res<FilterRegistry>,
-    mut clients: Query<(&F::ClientComponent, &mut ClientVisibility)>,
-    entities: Query<(Entity, &F), Without<ClientVisibility>>,
+    mut clients: Query<(&F::ClientComponent, &mut ClientVisibility), Allow<Disabled>>,
+    entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
 ) {
     let Ok((client_component, mut visibility)) = clients.get_mut(insert.entity) else {
         return;
@@ -175,7 +178,7 @@ fn on_client_insert<F: VisibilityFilter>(
 fn on_remove<F: VisibilityFilter>(
     remove: On<Remove<F>>,
     registry: Res<FilterRegistry>,
-    mut clients: Query<&mut ClientVisibility>,
+    mut clients: Query<&mut ClientVisibility, Allow<Disabled>>,
 ) {
     // `F` and `F::ClientComponent` could be the same,
     // so we need to ensure that it wasn't removed from a client.
@@ -204,8 +207,8 @@ fn on_remove<F: VisibilityFilter>(
 fn on_client_remove<F: VisibilityFilter>(
     remove: On<Remove<F::ClientComponent>>,
     registry: Res<FilterRegistry>,
-    mut clients: Query<&mut ClientVisibility>,
-    entities: Query<(Entity, &F), Without<ClientVisibility>>,
+    mut clients: Query<&mut ClientVisibility, Allow<Disabled>>,
+    entities: Query<(Entity, &F), (Without<ClientVisibility>, Allow<Disabled>)>,
 ) {
     let Ok(mut visibility) = clients.get_mut(remove.entity) else {
         return;
@@ -525,6 +528,83 @@ mod tests {
                 .get(entity)
                 .hides_entity(registry, ScopeLifetime::WhileVisible)
         );
+    }
+
+    #[test]
+    fn disabled() {
+        let mut app = App::new();
+        app.init_resource::<FilterRegistry>()
+            .init_resource::<ReplicationRegistry>()
+            .add_visibility_filter::<SelfFilter>()
+            .add_visibility_filter::<EntityFilter>();
+
+        let entity1 = app.world_mut().spawn((SelfFilter, Disabled)).id();
+        let entity2 = app.world_mut().spawn((EntityFilter, Disabled)).id();
+        let client1 = app
+            .world_mut()
+            .spawn((
+                ClientVisibility::default(),
+                SelfFilter,
+                ClientFilter,
+                Disabled,
+            ))
+            .id();
+        let client2 = app
+            .world_mut()
+            .spawn((ClientVisibility::default(), Disabled))
+            .id();
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
+        assert!(
+            !visibility1
+                .get(entity1)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
+        assert!(
+            !visibility1
+                .get(entity2)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
+
+        let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
+        assert!(
+            visibility2
+                .get(entity1)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
+        assert!(
+            visibility2
+                .get(entity2)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
+
+        app.world_mut()
+            .entity_mut(client2)
+            .insert((SelfFilter, ClientFilter));
+        app.world_mut()
+            .entity_mut(client1)
+            .remove::<(SelfFilter, ClientFilter)>();
+        let entity3 = app.world_mut().spawn((SelfFilter, Disabled)).id();
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
+        for entity in [entity1, entity2, entity3] {
+            assert!(
+                visibility1
+                    .get(entity)
+                    .hides_entity(registry, ScopeLifetime::WhileVisible)
+            );
+        }
+
+        let visibility2 = app.world().get::<ClientVisibility>(client2).unwrap();
+        for entity in [entity1, entity2, entity3] {
+            assert!(
+                !visibility2
+                    .get(entity)
+                    .hides_entity(registry, ScopeLifetime::WhileVisible)
+            );
+        }
     }
 
     #[derive(Component)]
