@@ -605,6 +605,16 @@ mod tests {
                     .hides_entity(registry, ScopeLifetime::WhileVisible)
             );
         }
+
+        app.world_mut().entity_mut(entity2).remove::<EntityFilter>();
+
+        let registry = app.world().resource::<FilterRegistry>();
+        let visibility1 = app.world().get::<ClientVisibility>(client1).unwrap();
+        assert!(
+            !visibility1
+                .get(entity2)
+                .hides_entity(registry, ScopeLifetime::WhileVisible)
+        );
     }
 
     #[derive(Component)]
