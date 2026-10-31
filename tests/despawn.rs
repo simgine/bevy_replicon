@@ -303,6 +303,87 @@ fn reenabled_client() {
 }
 
 #[test]
+fn reenabled_client_with_pending_visibility_loss() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .add_visibility_filter::<EntityVisibility>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .insert(EntityVisibility);
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, EntityVisibility))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let client_entity = *client_app
+        .world()
+        .resource::<ServerEntityMap>()
+        .to_client()
+        .get(&server_entity)
+        .unwrap();
+
+    // Record the visibility loss before disabling the client so its despawn is pending.
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<EntityVisibility>()
+        .insert(Disabled);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(
+        client_app.world().get_entity(client_entity).is_ok(),
+        "disabled clients should not receive visibility-loss despawns"
+    );
+
+    server_app.world_mut().despawn(server_entity);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(
+        client_app.world().get_entity(client_entity).is_ok(),
+        "disabled clients should not receive despawns"
+    );
+
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<Disabled>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert!(client_app.world().get_entity(client_entity).is_err());
+
+    let entity_map = client_app.world().resource::<ServerEntityMap>();
+    assert!(entity_map.to_client().is_empty());
+    assert!(entity_map.to_server().is_empty());
+}
+
+#[test]
 fn signature() {
     let mut server_app = App::new();
     let mut client_app = App::new();

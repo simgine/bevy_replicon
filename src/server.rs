@@ -548,9 +548,13 @@ fn collect_despawns(
         ) in &mut clients
         {
             let hidden_lifetime = visibility.get(entity).hidden_entity_lifetime(&registry);
-            if ticks.entities.remove(&entity).is_some() && hidden_lifetime.is_none() {
-                // Write despawn only if the entity is not currently hidden and was
-                // previously sent because spawn and despawn could happen during the same tick.
+            if ticks.entities.remove(&entity).is_some()
+                && hidden_lifetime.is_none_or(|l| l == ScopeLifetime::WhileVisible)
+            {
+                // Write despawn only if the entity was previously sent because spawn and
+                // despawn could happen during the same tick. A hidden `WhileVisible` entity
+                // still needs its pending visibility-loss despawn. Longer lifetimes
+                // intentionally retain hidden entities.
                 if disabled {
                     trace!("deferring despawn for `{entity}` for client `{client}`");
                     deferred.despawns.push(entity);
