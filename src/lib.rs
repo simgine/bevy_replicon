@@ -563,6 +563,20 @@ after replication starts. See the required components for [`AuthorizedClient`] f
 By default, this component is automatically inserted when the client and server [`ProtocolHash`] matches.
 This behavior can be customized via [`RepliconSharedPlugin::auth_method`].
 
+### Disabling clients
+
+To temporarily pause replication to a client, insert Bevy's [`Disabled`](bevy::ecs::entity_disabling::Disabled)
+component on its server-side [`ConnectedClient`] entity. For example, this can be useful while the client loads
+assets or a level.
+
+Replication resumes on the next replication tick after removing [`Disabled`](bevy::ecs::entity_disabling::Disabled).
+New entities, components, and the latest component values will catch up. Despawn and component removal updates collected
+while the client was disabled are deferred until it's enabled again. Intermediate component values are not replayed.
+Network messages and events are not queued per disabled client for replay when it's enabled again.
+
+Bevy excludes disabled entities from queries by default. Systems that query clients to re-enable them need to
+explicitly include disabled entities, for example with [`Allow<Disabled>`].
+
 ### Client visibility
 
 You can control which parts of the world are visible to each authorized client by using components registered as visibility filters.
