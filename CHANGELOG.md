@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.5] - 2026-10-26
+
 ### Fixed
 
 - Send despawns and removals that happen while a client is disabled once it's enabled again, as already done for mutations.
@@ -1249,7 +1251,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.4..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.5..HEAD
+[0.45.5]: https://github.com/simgine/bevy_replicon/compare/v0.45.4...v0.45.5
 [0.45.4]: https://github.com/simgine/bevy_replicon/compare/v0.45.3...v0.45.4
 [0.45.3]: https://github.com/simgine/bevy_replicon/compare/v0.45.2...v0.45.3
 [0.45.2]: https://github.com/simgine/bevy_replicon/compare/v0.45.1...v0.45.2
