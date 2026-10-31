@@ -1,3 +1,4 @@
+mod allow_disabling;
 pub mod message;
 pub mod related_entities;
 pub(super) mod removal_buffer;
