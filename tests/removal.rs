@@ -1,4 +1,4 @@
-use bevy::{prelude::*, state::app::StatesPlugin};
+use bevy::{ecs::entity_disabling::Disabled, prelude::*, state::app::StatesPlugin};
 use bevy_replicon::{
     client::confirm_history::{ConfirmHistory, EntityReplicated},
     prelude::*,
@@ -447,6 +447,61 @@ fn after_pause() {
         1,
         "removals happened during replication pause shouldn't be replicated"
     );
+}
+
+#[test]
+fn reenabled_client() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<A>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app.world_mut().spawn((Replicated, A)).id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app.world_mut().query::<&A>();
+    assert_eq!(components.iter(client_app.world()).len(), 1);
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    server_app.world_mut().entity_mut(client).insert(Disabled);
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .remove::<A>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(
+        components.iter(client_app.world()).len(),
+        1,
+        "disabled clients should not receive removals"
+    );
+
+    server_app
+        .world_mut()
+        .entity_mut(client)
+        .remove::<Disabled>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(components.iter(client_app.world()).len(), 0);
 }
 
 #[test]
