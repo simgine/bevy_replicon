@@ -156,6 +156,8 @@ jobs:
         uses: endersonmenezes/free-disk-space@v4
         with:
           remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
           rm_cmd: "rmz"
 
       - name: Clone repo
