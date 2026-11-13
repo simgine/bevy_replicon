@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Don't lose mutations delayed by priority when the entity has an insertion or removal on the same tick.
+
 ## [0.45.5] - 2026-10-26
 
 ### Fixed

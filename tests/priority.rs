@@ -237,5 +237,130 @@ fn with_miss() {
     assert!(component.0, "change should be resent");
 }
 
+#[test]
+fn with_insertion() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .replicate::<TestComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    let mut priority = server_app
+        .world_mut()
+        .get_mut::<PriorityMap>(client)
+        .unwrap();
+    priority.insert(server_entity, 0.5);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Change value and insert a component on the same tick.
+    let mut entity = server_app.world_mut().entity_mut(server_entity);
+    entity.get_mut::<BoolComponent>().unwrap().0 = true;
+    entity.insert(TestComponent);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app
+        .world_mut()
+        .query_filtered::<&BoolComponent, With<TestComponent>>();
+    let component = components.single(client_app.world()).unwrap();
+    assert!(!component.0, "mutation should be deprioritized");
+
+    for _ in 0..2 {
+        server_app.update();
+        server_app.exchange_with_client(&mut client_app);
+        client_app.update();
+        server_app.exchange_with_client(&mut client_app);
+    }
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(component.0, "deprioritized mutation should still be sent");
+}
+
+#[test]
+fn with_removal() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .replicate::<TestComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), TestComponent))
+        .id();
+
+    let client = **client_app.world().resource::<TestClientEntity>();
+    let mut priority = server_app
+        .world_mut()
+        .get_mut::<PriorityMap>(client)
+        .unwrap();
+    priority.insert(server_entity, 0.5);
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Change value and remove a component on the same tick.
+    let mut entity = server_app.world_mut().entity_mut(server_entity);
+    entity.get_mut::<BoolComponent>().unwrap().0 = true;
+    entity.remove::<TestComponent>();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    let mut components = client_app
+        .world_mut()
+        .query_filtered::<&BoolComponent, Without<TestComponent>>();
+    let component = components.single(client_app.world()).unwrap();
+    assert!(!component.0, "mutation should be deprioritized");
+
+    for _ in 0..2 {
+        server_app.update();
+        server_app.exchange_with_client(&mut client_app);
+        client_app.update();
+        server_app.exchange_with_client(&mut client_app);
+    }
+
+    let component = components.single(client_app.world()).unwrap();
+    assert!(component.0, "deprioritized mutation should still be sent");
+}
+
 #[derive(Clone, Component, Copy, Deserialize, Serialize)]
 struct BoolComponent(bool);
+
+#[derive(Component, Deserialize, Serialize)]
+struct TestComponent;

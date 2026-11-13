@@ -942,6 +942,8 @@ fn collect_changes(
                                 mutations.add_diff_cursor(component_index, cursor);
                             }
                             mutations.add_component(component_range);
+                        } else {
+                            mutations.delay_entity();
                         }
                     } else if hidden_lifetime
                         .is_none_or(|l| l == ScopeLifetime::AlwaysPresent && new_for_client)
@@ -1000,9 +1002,18 @@ fn collect_changes(
                         updates.take_added_entity(&mut mutations);
                     }
 
+                    // A mutation delayed by priority wasn't written, so keep the old system tick.
+                    // Otherwise the change would be considered sent and never replicated.
+                    // Components inserted on this tick will be sent once more as mutations.
+                    let system_tick = match &entity_ticks {
+                        Entry::Occupied(entry) if mutations.entity_delayed() => {
+                            entry.get().system_tick
+                        }
+                        _ => **change_tick,
+                    };
                     update_ticks(
                         entity_ticks,
-                        **change_tick,
+                        system_tick,
                         **server_tick,
                         updates.take_changed_components(),
                         updates.take_changed_diff_cursors(),

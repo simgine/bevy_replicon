@@ -41,6 +41,9 @@ pub(crate) struct Mutations {
 
     /// Location of the last written entity since the last call of [`Self::start_entity_mutations`].
     entity_location: Option<EntityLocation>,
+
+    /// Whether a mutation was delayed by priority since the last call of [`Self::start_entity`].
+    entity_delayed: bool,
 }
 
 impl Mutations {
@@ -50,6 +53,18 @@ impl Mutations {
     /// See [`Self::add_entity`] and [`Self::add_component`].
     pub(crate) fn start_entity(&mut self) {
         self.entity_location = None;
+        self.entity_delayed = false;
+    }
+
+    /// Marks that a mutation for the current entity was delayed by priority.
+    pub(crate) fn delay_entity(&mut self) {
+        self.entity_delayed = true;
+    }
+
+    /// Returns `true` if [`Self::delay_entity`] was called since the last
+    /// call of [`Self::start_entity`].
+    pub(crate) fn entity_delayed(&self) -> bool {
+        self.entity_delayed
     }
 
     /// Returns `true` if [`Self::add_entity`] were called since the last
