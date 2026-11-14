@@ -848,9 +848,28 @@ fn collect_changes(
 
             let mut entity_range = None;
             let entity_priority = query.get_priority(entity, archetype.table_id());
-            for (_, mut updates, mut mutations, ..) in &mut clients {
+            for (_, mut updates, mut mutations, client_ticks, _, visibility) in &mut clients {
                 updates.start_entity_changes();
                 mutations.start_entity();
+
+                // Insertions must bypass mutation priority to keep entity updates atomic.
+                // Detect them up front so component order can't cause mutations to be skipped.
+                if let Some(entity_ticks) = client_ticks.entities.get(&entity.id())
+                    && component_storages.iter().any(|component| {
+                        if entity_ticks.components.contains(component.component_index) {
+                            return false;
+                        }
+
+                        let hidden_lifetime = visibility
+                            .get(entity.id())
+                            .hidden_component_lifetime(&filter_registry, component.component_index);
+                        hidden_lifetime.is_none()
+                    })
+                {
+                    let entity_range =
+                        serialized.write_cached_entity(&mut entity_range, entity.id())?;
+                    updates.add_changed_entity(entity_range);
+                }
             }
 
             for &ComponentMetadata {
@@ -912,7 +931,10 @@ fn collect_changes(
                             .unwrap_or(1.0);
 
                         let tick_diff = **server_tick - entity_ticks.server_tick;
-                        if base_priority * tick_diff as f32 >= 1.0 {
+                        if updates.changed_entity_added()
+                            || entity_ticks.has_removals
+                            || base_priority * tick_diff as f32 >= 1.0
+                        {
                             trace!(
                                 "writing `{:?}` mutation for `{}` for client `{client}`",
                                 rule.fns_id,
@@ -1323,9 +1345,10 @@ pub struct AuthorizedClient;
 /// no more often than once every 2 ticks. With the default priority of 1.0,
 /// all unacknowledged mutations will be sent every tick.
 ///
-/// All of this only affects mutations. For any component insertion or removal, the changes
-/// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
-/// See its documentation for more details.
+/// Priority is ignored when the entity has any component insertion or removal for the client.
+/// In that case, all changes are sent together using
+/// [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates)
+/// to keep entity updates atomic.
 #[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone, Copy)]
 pub struct ReplicatePriority(pub f32);
 
@@ -1348,9 +1371,10 @@ pub struct ReplicatePriority(pub f32);
 /// no more often than once every 2 ticks. With the default priority of 1.0,
 /// all unacknowledged mutations will be sent every tick.
 ///
-/// All of this only affects mutations. For any component insertion or removal, the changes
-/// will be sent using [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates).
-/// See its documentation for more details.
+/// Priority is ignored when the entity has any component insertion or removal for the client.
+/// In that case, all changes are sent together using
+/// [`ServerChannel::Updates`](crate::shared::backend::channels::ServerChannel::Updates)
+/// to keep entity updates atomic.
 #[derive(Component, Reflect, Deref, DerefMut, Default, Debug, Clone)]
 pub struct PriorityMap(EntityHashMap<f32>);
 
