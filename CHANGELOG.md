@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Speedup changes collection by caching client component lookups.
+
 ### Fixed
 
 - Don't lose deprioritized mutations on insertion or removal.

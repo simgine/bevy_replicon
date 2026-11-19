@@ -8,7 +8,7 @@ mod replication_query;
 pub mod server_tick;
 pub mod visibility;
 
-use core::time::Duration;
+use core::{mem, time::Duration};
 
 use bevy::{
     ecs::{
@@ -776,8 +776,7 @@ fn collect_removals(
 fn collect_changes(
     (archetypes, entities): (&Archetypes, &Entities),
     query: ReplicationQuery,
-    server_tick: Res<ServerTick>,
-    change_tick: Res<ServerChangeTick>,
+    (server_tick, change_tick): (Res<ServerTick>, Res<ServerChangeTick>),
     registry: Res<ReplicationRegistry>,
     filter_registry: Res<FilterRegistry>,
     type_registry: Res<AppTypeRegistry>,
@@ -789,7 +788,8 @@ fn collect_changes(
     mut serialized: ResMut<SerializedData>,
     mut removal_buffer: ResMut<RemovalBuffer>,
     mut scan: ResMut<ReplicationScan>,
-    mut clients: Query<(
+    mut clients_cache: Local<Vec<ReplicationClient<'static>>>,
+    mut clients_query: Query<(
         Entity,
         &mut Updates,
         &mut Mutations,
@@ -800,7 +800,13 @@ fn collect_changes(
 ) -> Result<()> {
     replicated_archetypes.update(archetypes, &rules, &receive_markers);
 
-    for (.., mut visibility) in &mut clients {
+    // Iterating over the query is slower than over a slice. Since we need to iterate
+    // over client components for every entity, according to our benchmarks it's much
+    // faster to collect them once into a `Vec`.
+    let mut clients: Vec<ReplicationClient> = mem::take(&mut *clients_cache);
+    clients.extend(clients_query.iter_mut());
+
+    for (.., visibility) in &mut clients {
         for entity in visibility.changed.drain() {
             if let Ok(location) = entities.get_spawned(entity) {
                 scan.dirty.insert(location.archetype_id);
@@ -848,7 +854,7 @@ fn collect_changes(
 
             let mut entity_range = None;
             let entity_priority = query.get_priority(entity, archetype.table_id());
-            for (_, mut updates, mut mutations, client_ticks, _, visibility) in &mut clients {
+            for (_, updates, mutations, client_ticks, _, visibility) in &mut clients {
                 updates.start_entity_changes();
                 mutations.start_entity();
 
@@ -897,7 +903,7 @@ fn collect_changes(
                 };
 
                 let mut cached_component = None;
-                for (client, mut updates, mut mutations, client_ticks, priority_map, visibility) in
+                for (client, updates, mutations, client_ticks, priority_map, visibility) in
                     &mut clients
                 {
                     let hidden_lifetime = visibility
@@ -993,7 +999,7 @@ fn collect_changes(
                 }
             }
 
-            for (client, mut updates, mut mutations, mut ticks, _, visibility) in &mut clients {
+            for (client, updates, mutations, ticks, _, visibility) in &mut clients {
                 let hidden_lifetime = visibility
                     .get(entity.id())
                     .hidden_entity_lifetime(&filter_registry);
@@ -1019,7 +1025,7 @@ fn collect_changes(
                             "merging mutations for `{}` with updates for client `{client}`",
                             entity.id()
                         );
-                        updates.take_added_entity(&mut mutations);
+                        updates.take_added_entity(mutations);
                     }
 
                     update_ticks(
@@ -1049,8 +1055,31 @@ fn collect_changes(
     scan.dirty.clear();
     removal_buffer.clear();
 
+    // HACK: Drop borrows before changing the element lifetime back to 'static.
+    // `Vec::from_iter` has an in-place collection specialization. For compatible
+    // iterator pipelines and element layouts, it writes results into the source
+    // allocation and transfers that allocation to the resulting Vec.
+    clients.clear();
+    let old_capacity = clients.capacity();
+    let old_ptr = clients.as_ptr();
+
+    *clients_cache = clients.into_iter().map(|_| unreachable!()).collect();
+
+    debug_assert_eq!(clients_cache.capacity(), old_capacity);
+    debug_assert_eq!(clients_cache.as_ptr(), old_ptr);
+
     Ok(())
 }
+
+/// Client state borrowed for the change collection pass.
+type ReplicationClient<'w> = (
+    Entity,
+    Mut<'w, Updates>,
+    Mut<'w, Mutations>,
+    Mut<'w, ClientTicks>,
+    Mut<'w, PriorityMap>,
+    Mut<'w, ClientVisibility>,
+);
 
 /// Returns whether any client may need entity changes or tick bookkeeping.
 fn needs_replication(
@@ -1058,14 +1087,7 @@ fn needs_replication(
     components: &[ComponentMetadata<'_>],
     filter_registry: &FilterRegistry,
     change_tick: Tick,
-    clients: &Query<(
-        Entity,
-        &mut Updates,
-        &mut Mutations,
-        &mut ClientTicks,
-        &mut PriorityMap,
-        &mut ClientVisibility,
-    )>,
+    clients: &[ReplicationClient<'_>],
 ) -> bool {
     clients
         .iter()

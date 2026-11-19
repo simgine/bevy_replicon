@@ -19,6 +19,9 @@ criterion_group!(benches, replicate);
 /// Entities replicated together in the changes and dense-mutation benchmarks.
 const BATCH_ENTITY_COUNT: usize = 500;
 
+/// Entities visible per client in the dense-mutation visibility benchmarks.
+const VISIBLE_ENTITY_COUNT: usize = 390;
+
 /// Already-replicated entities scanned by the idle, sparse, and mixed-archetype benchmarks.
 const WORLD_ENTITY_COUNT: usize = 50_000;
 
@@ -31,8 +34,12 @@ fn replicate(c: &mut Criterion) {
             b.iter_custom(|iter| changes_send(iter, clients_count))
         });
         c.bench_function(&format!("mutations_send/{clients_count}_clients"), |b| {
-            b.iter_custom(|iter| mutations_send(iter, clients_count))
+            b.iter_custom(|iter| mutations_send(iter, clients_count, BATCH_ENTITY_COUNT))
         });
+        c.bench_function(
+            &format!("mutations_visibility_send/{clients_count}_clients"),
+            |b| b.iter_custom(|iter| mutations_send(iter, clients_count, VISIBLE_ENTITY_COUNT)),
+        );
         c.bench_function(&format!("idle_send/{clients_count}_clients"), |b| {
             b.iter_custom(|iter| world_send(iter, clients_count, 0))
         });
@@ -95,20 +102,49 @@ fn changes_send(iter: u64, clients_count: usize) -> Duration {
     elapsed
 }
 
-fn mutations_send(iter: u64, clients_count: usize) -> Duration {
+fn mutations_send(iter: u64, clients_count: usize, visible_count: usize) -> Duration {
+    assert!(visible_count <= BATCH_ENTITY_COUNT);
     let mut server_app = create_app();
     let mut client_apps = Vec::new();
     for _ in 0..clients_count {
         client_apps.push(create_app());
     }
 
+    let visibility_bit = (visible_count < BATCH_ENTITY_COUNT).then(|| {
+        server_app
+            .world_mut()
+            .resource_scope(|world, mut filters: Mut<FilterRegistry>| {
+                world.resource_scope(|world, mut registry: Mut<ReplicationRegistry>| {
+                    filters.register_scope::<Entity>(
+                        world,
+                        &mut registry,
+                        ScopeLifetime::WhileVisible,
+                    )
+                })
+            })
+    });
+
     for client_app in &mut client_apps {
         server_app.connect_client(client_app);
     }
 
-    server_app
+    let entities: Vec<Entity> = server_app
         .world_mut()
-        .spawn_batch(vec![(Replicated, Position::default()); BATCH_ENTITY_COUNT]);
+        .spawn_batch(vec![(Replicated, Position::default()); BATCH_ENTITY_COUNT])
+        .collect();
+    if let Some(bit) = visibility_bit {
+        for (client_index, client_app) in client_apps.iter().enumerate() {
+            let client = **client_app.world().resource::<TestClientEntity>();
+            let mut visibility = server_app
+                .world_mut()
+                .get_mut::<ClientVisibility>(client)
+                .unwrap();
+            for offset in 0..BATCH_ENTITY_COUNT - visible_count {
+                let entity = entities[(client_index + offset) % BATCH_ENTITY_COUNT];
+                visibility.set(entity, bit, false);
+            }
+        }
+    }
     let mut query = server_app.world_mut().query::<&mut Position>();
 
     server_app.update();
@@ -117,7 +153,7 @@ fn mutations_send(iter: u64, clients_count: usize) -> Duration {
         client_app.update();
 
         let mut remote = client_app.world_mut().query::<&Remote>();
-        assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
+        assert_eq!(remote.iter(client_app.world()).len(), visible_count);
     }
 
     let mut elapsed = Duration::ZERO;
@@ -135,7 +171,7 @@ fn mutations_send(iter: u64, clients_count: usize) -> Duration {
             client_app.update();
 
             let mut remote = client_app.world_mut().query::<&Remote>();
-            assert_eq!(remote.iter(client_app.world()).len(), BATCH_ENTITY_COUNT);
+            assert_eq!(remote.iter(client_app.world()).len(), visible_count);
         }
     }
 
