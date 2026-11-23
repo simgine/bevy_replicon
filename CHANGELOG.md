@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.7] - 2026-11-23
+
 ### Fixed
 
 - Ask for serde's `derive` feature directly. Postcard 1.2.0 no longer enables it, which breaks builds when no other crate enables it.
@@ -1265,7 +1267,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.6..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.7..HEAD
+[0.45.7]: https://github.com/simgine/bevy_replicon/compare/v0.45.6...v0.45.7
 [0.45.6]: https://github.com/simgine/bevy_replicon/compare/v0.45.5...v0.45.6
 [0.45.5]: https://github.com/simgine/bevy_replicon/compare/v0.45.4...v0.45.5
 [0.45.4]: https://github.com/simgine/bevy_replicon/compare/v0.45.3...v0.45.4
