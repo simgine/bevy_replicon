@@ -36,7 +36,7 @@ petgraph = { version = "0.8", default-features = false, features = [
 variadics_please = "2.0"
 typeid = "1.0"
 bytes = { version = "1.10", default-features = false }
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 bitflags = { version = "2.6", features = ["serde"] }
 smallbitvec = "2.6"
 smallvec = "1.15"

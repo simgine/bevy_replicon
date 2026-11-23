@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Ask for serde's `derive` feature directly. Postcard 1.2.0 no longer enables it, which breaks builds when no other crate enables it.
+
 ## [0.45.6] - 2026-11-19
 
 ### Changed
