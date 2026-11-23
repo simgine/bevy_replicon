@@ -264,8 +264,9 @@ fn apply_replication(
     buffered_updates: &mut BufferedUpdates,
     buffered_mutations: &mut BufferedMutations,
 ) {
-    // Before and after each update: a newer update would mark them as outdated.
-    apply_buffered_mutations(world, params, buffered_mutations);
+    for mutate in buffered_mutations.iter_mut() {
+        mutate.deferred = false;
+    }
 
     // Update messages are ordered, so a deferred update blocks all later ones.
     // It also stalls `ServerUpdateTick`, which holds back mutations waiting for a
@@ -277,6 +278,7 @@ fn apply_replication(
     {
         let mut update = buffered_updates.pop_front().unwrap();
         try_apply_update(world, params, &mut update);
+        // A newer update would mark the mutations that waited for this one as outdated.
         apply_buffered_mutations(world, params, buffered_mutations);
     }
 
@@ -331,7 +333,12 @@ fn apply_buffered_mutations(
             return true;
         }
 
+        if mutate.deferred {
+            return true;
+        }
+
         if !should_apply_mutate(world, mutate) {
+            mutate.deferred = true;
             return true;
         }
 
@@ -498,6 +505,7 @@ fn buffer_mutate_message(
     buffered_mutations.insert(BufferedMutate {
         flags,
         receive: buffered_mutations.receive,
+        deferred: false,
         update_tick,
         message_tick,
         userdata,
@@ -1188,6 +1196,11 @@ pub(super) struct BufferedMutate {
 
     /// The receive it arrived in, see [`BufferedMutations`].
     receive: u64,
+
+    /// Whether [`ShouldApplyReplication`] deferred it during the current receive.
+    ///
+    /// Mutations are checked after each update, but the user is asked only once per receive.
+    deferred: bool,
 
     /// Required tick to wait for.
     update_tick: RepliconTick,
