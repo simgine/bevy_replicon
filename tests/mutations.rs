@@ -10,6 +10,7 @@ use bevy_replicon::{
     prelude::*,
     server::server_tick::ServerTick,
     shared::{
+        backend::channels::ServerChannel,
         replication::{
             deferred_entity::DeferredEntity,
             receive_markers::MarkerConfig,
@@ -1119,6 +1120,136 @@ fn buffering() {
 
     let component = components.single(client_app.world()).unwrap();
     assert!(component.0, "buffered mutation should be applied");
+}
+
+#[test]
+fn buffering_across_receives() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .replicate::<VecComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false), VecComponent::default()))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // Buffer and acknowledge the mutation, as if its update message were lost.
+    let mut update_tick = client_app.world_mut().resource_mut::<ServerUpdateTick>();
+    let previous_tick = *update_tick;
+    *update_tick = Default::default();
+    server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap()
+        .0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    server_app
+        .world_mut()
+        .get_mut::<VecComponent>(server_entity)
+        .unwrap()
+        .0 = vec![1];
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    *client_app.world_mut().resource_mut::<ServerUpdateTick>() = previous_tick;
+    client_app.update();
+
+    let (bool_component, vec_component) = client_app
+        .world_mut()
+        .query::<(&BoolComponent, &VecComponent)>()
+        .single(client_app.world())
+        .unwrap();
+    assert!(bool_component.0);
+    assert_eq!(vec_component.0, [1]);
+}
+
+#[test]
+fn buffering_with_insertion() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<BoolComponent>()
+        .replicate::<TestComponent>()
+        .finish();
+    }
+
+    server_app.connect_client(&mut client_app);
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, BoolComponent(false)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // An update and a mutation on the same tick. The update is lost,
+    // so the mutation is buffered and acknowledged.
+    server_app.world_mut().spawn(Replicated);
+    server_app
+        .world_mut()
+        .get_mut::<BoolComponent>(server_entity)
+        .unwrap()
+        .0 = true;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    let mut messages = client_app.world_mut().resource_mut::<ClientMessages>();
+    let lost_updates: Vec<_> = messages.drain_received(ServerChannel::Updates).collect();
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    server_app
+        .world_mut()
+        .entity_mut(server_entity)
+        .insert(TestComponent);
+
+    server_app.update();
+
+    // The lost update is resent and arrives together with the newer one.
+    let mut messages = client_app.world_mut().resource_mut::<ClientMessages>();
+    for message in lost_updates {
+        messages.insert_received(ServerChannel::Updates, message);
+    }
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    let component = client_app
+        .world_mut()
+        .query_filtered::<&BoolComponent, With<TestComponent>>()
+        .single(client_app.world())
+        .unwrap();
+    assert!(component.0);
 }
 
 #[test]

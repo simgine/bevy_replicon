@@ -243,6 +243,72 @@ struct ReceivedUserdata(Option<u32>);
 #[derive(Resource, Deref, DerefMut, Default)]
 struct ReadyUserdata(u32);
 
+#[test]
+fn deferred_mutation_once_per_receive() {
+    let mut server_app = App::new();
+    let mut client_app = App::new();
+    for app in [&mut server_app, &mut client_app] {
+        app.add_plugins((
+            MinimalPlugins,
+            StatesPlugin,
+            RepliconPlugins.set(ServerPlugin::new(PostUpdate)),
+        ))
+        .replicate::<ValueComponent>()
+        .finish();
+    }
+    client_app
+        .init_resource::<DeferCount>()
+        .add_observer(count_deferred);
+
+    server_app.connect_client(&mut client_app);
+
+    let mut userdata = server_app.world_mut().resource_mut::<ReplicationUserdata>();
+    userdata.extend_from_slice(&0u32.to_le_bytes());
+
+    let server_entity = server_app
+        .world_mut()
+        .spawn((Replicated, ValueComponent(0)))
+        .id();
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // The observer defers this mutation.
+    let mut userdata = server_app.world_mut().resource_mut::<ReplicationUserdata>();
+    userdata.clear();
+    userdata.extend_from_slice(&1u32.to_le_bytes());
+
+    let mut component = server_app
+        .world_mut()
+        .get_mut::<ValueComponent>(server_entity)
+        .unwrap();
+    **component = 1;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+    server_app.exchange_with_client(&mut client_app);
+
+    // An update arrives while the mutation is still deferred.
+    let mut userdata = server_app.world_mut().resource_mut::<ReplicationUserdata>();
+    userdata.clear();
+    userdata.extend_from_slice(&0u32.to_le_bytes());
+    server_app.world_mut().spawn(Replicated);
+    **client_app.world_mut().resource_mut::<DeferCount>() = 0;
+
+    server_app.update();
+    server_app.exchange_with_client(&mut client_app);
+    client_app.update();
+
+    assert_eq!(
+        **client_app.world().resource::<DeferCount>(),
+        1,
+        "a deferred mutation should be asked about once per receive"
+    );
+}
+
 fn receive_userdata(received: On<UserdataReceived>, mut storage: ResMut<ReceivedUserdata>) {
     let bytes = received.bytes.as_ref().try_into().unwrap();
     storage.0 = Some(u32::from_le_bytes(bytes));
@@ -256,5 +322,20 @@ fn apply_when_ready(mut trigger: On<ShouldApplyReplication>, ready: Res<ReadyUse
     let value = u32::from_le_bytes(userdata.as_ref().try_into().unwrap());
     if value > ready.0 {
         trigger.should_apply = false;
+    }
+}
+
+#[derive(Resource, Deref, DerefMut, Default)]
+struct DeferCount(usize);
+
+/// Defers messages with userdata `1` and counts how often it's asked about them.
+fn count_deferred(mut trigger: On<ShouldApplyReplication>, mut count: ResMut<DeferCount>) {
+    let Some(userdata) = &trigger.userdata else {
+        return;
+    };
+
+    if u32::from_le_bytes(userdata.as_ref().try_into().unwrap()) == 1 {
+        trigger.should_apply = false;
+        **count += 1;
     }
 }

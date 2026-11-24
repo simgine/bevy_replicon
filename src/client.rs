@@ -264,6 +264,10 @@ fn apply_replication(
     buffered_updates: &mut BufferedUpdates,
     buffered_mutations: &mut BufferedMutations,
 ) {
+    for mutate in buffered_mutations.iter_mut() {
+        mutate.deferred = false;
+    }
+
     // Update messages are ordered, so a deferred update blocks all later ones.
     // It also stalls `ServerUpdateTick`, which holds back mutations waiting for a
     // newer update tick. This is intended: a mutation can only be applied after
@@ -274,6 +278,8 @@ fn apply_replication(
     {
         let mut update = buffered_updates.pop_front().unwrap();
         try_apply_update(world, params, &mut update);
+        // A newer update would mark the mutations that waited for this one as outdated.
+        apply_buffered_mutations(world, params, buffered_mutations);
     }
 
     for message in messages.drain_received(ServerChannel::Updates) {
@@ -287,6 +293,7 @@ fn apply_replication(
 
         if buffered_updates.is_empty() && should_apply_update(world, &update) {
             try_apply_update(world, params, &mut update);
+            apply_buffered_mutations(world, params, buffered_mutations);
         } else {
             trace!("buffering update message for {:?}", update.message_tick);
             buffered_updates.push_back(update);
@@ -294,13 +301,14 @@ fn apply_replication(
     }
 
     // Unlike update messages, we read all mutate messages first, sort them by tick
-    // in descending order to ensure that the last mutation will be applied first.
+    // in descending order to ensure that the last mutation will be applied first
+    // (per receive, see `BufferedMutations`).
     // Since mutate messages manually split by packet size, we apply all messages,
     // but skip outdated data per-entity unless a marker or rule needs history.
     // Older mutations may still contain missing diffs even if they were already acknowledged.
-    let update_tick = *world.resource::<ServerUpdateTick>();
     let mutations_count = messages.received_count(ServerChannel::Mutations);
     if mutations_count != 0 {
+        buffered_mutations.receive += 1;
         let mut acks = Vec::with_capacity(MutateIndex::POSTCARD_MAX_SIZE * mutations_count);
         for message in messages.drain_received(ServerChannel::Mutations) {
             if let Err(e) = buffer_mutate_message(params, buffered_mutations, message, &mut acks) {
@@ -310,12 +318,27 @@ fn apply_replication(
         messages.send(ClientChannel::MutationAcks, acks);
     }
 
+    apply_buffered_mutations(world, params, buffered_mutations);
+}
+
+/// Applies the buffered mutate messages whose update has been applied.
+fn apply_buffered_mutations(
+    world: &mut World,
+    params: &mut ReceiveParams,
+    buffered_mutations: &mut BufferedMutations,
+) {
+    let update_tick = *world.resource::<ServerUpdateTick>();
     buffered_mutations.retain_mut(|mutate| {
         if mutate.update_tick.is_newer(*update_tick) {
             return true;
         }
 
+        if mutate.deferred {
+            return true;
+        }
+
         if !should_apply_mutate(world, mutate) {
+            mutate.deferred = true;
             return true;
         }
 
@@ -481,6 +504,8 @@ fn buffer_mutate_message(
     trace!("received mutate message for {message_tick:?}");
     buffered_mutations.insert(BufferedMutate {
         flags,
+        receive: buffered_mutations.receive,
+        deferred: false,
         update_tick,
         message_tick,
         userdata,
@@ -1128,14 +1153,26 @@ struct BufferedUpdate {
 }
 
 /// Cached buffered mutate messages, used to synchronize mutations with update messages.
+///
+/// Sorted by receive, then by message tick descending. Messages from an earlier receive were
+/// acknowledged, so newer ones may lack their data and they're applied first.
+/// Within a receive, outdated data is skipped per entity.
 #[derive(Resource, Default, Deref, DerefMut)]
-pub(crate) struct BufferedMutations(Vec<BufferedMutate>);
+pub(crate) struct BufferedMutations {
+    #[deref]
+    messages: Vec<BufferedMutate>,
+
+    /// Counts receives with mutate messages.
+    receive: u64,
+}
 
 impl BufferedMutations {
-    /// Inserts a new buffered message, maintaining sorting by their message tick in descending order.
+    /// Inserts a new buffered message, maintaining sorting by receive, then by message tick in descending order.
     fn insert(&mut self, mutate: BufferedMutate) {
-        let index = self.partition_point(|other| mutate.message_tick.is_older(other.message_tick));
-        self.0.insert(index, mutate);
+        let index = self.partition_point(|other| {
+            other.receive < mutate.receive || mutate.message_tick.is_older(other.message_tick)
+        });
+        self.messages.insert(index, mutate);
     }
 }
 
@@ -1156,6 +1193,14 @@ struct ReplicatedDespawns(Vec<Entity>);
 pub(super) struct BufferedMutate {
     /// Flags for data in the message.
     flags: MutateFlags,
+
+    /// The receive it arrived in, see [`BufferedMutations`].
+    receive: u64,
+
+    /// Whether [`ShouldApplyReplication`] deferred it during the current receive.
+    ///
+    /// Mutations are checked after each update, but the user is asked only once per receive.
+    deferred: bool,
 
     /// Required tick to wait for.
     update_tick: RepliconTick,
