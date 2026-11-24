@@ -1123,7 +1123,7 @@ fn buffering() {
 }
 
 #[test]
-fn buffered_not_lost_to_newer() {
+fn buffering_across_receives() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
@@ -1187,7 +1187,7 @@ fn buffered_not_lost_to_newer() {
 }
 
 #[test]
-fn buffered_not_lost_to_insertion() {
+fn buffering_with_insertion() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {

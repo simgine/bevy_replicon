@@ -244,7 +244,7 @@ struct ReceivedUserdata(Option<u32>);
 struct ReadyUserdata(u32);
 
 #[test]
-fn deferred_mutation_asked_once() {
+fn deferred_mutation_once_per_receive() {
     let mut server_app = App::new();
     let mut client_app = App::new();
     for app in [&mut server_app, &mut client_app] {
