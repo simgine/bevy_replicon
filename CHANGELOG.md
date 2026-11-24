@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.8] - 2026-11-24
+
 ### Fixed
 
 - Don't lose acknowledged mutations that were buffered while waiting for their update message.
@@ -1271,7 +1273,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release after separation from [Project Harmonia](https://github.com/simgine/project_harmonia).
 
-[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.7..HEAD
+[unreleased]: https://github.com/simgine/bevy_replicon/compare/v0.45.8..HEAD
+[0.45.8]: https://github.com/simgine/bevy_replicon/compare/v0.45.7...v0.45.8
 [0.45.7]: https://github.com/simgine/bevy_replicon/compare/v0.45.6...v0.45.7
 [0.45.6]: https://github.com/simgine/bevy_replicon/compare/v0.45.5...v0.45.6
 [0.45.5]: https://github.com/simgine/bevy_replicon/compare/v0.45.4...v0.45.5
